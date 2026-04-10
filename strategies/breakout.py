@@ -71,6 +71,7 @@ class BreakoutStrategy(BaseStrategy):
         timeframe: str = None,
         lookback: int = 20,
         volume_mult: float = 2.0,   # Raised to 2.0× (research: 1.5× too many fake-outs)
+        volume_sma_period: int = 20, # Period for volume SMA baseline (independent of lookback)
         atr_period: int = 14,
         atr_stop_mult: float = 2.0,
         reward_ratio: float = 2.0,
@@ -93,6 +94,9 @@ class BreakoutStrategy(BaseStrategy):
             atr_stop_mult:  Stop placed this many ATRs from entry.
             reward_ratio:   Take profit = atr_stop_mult × reward_ratio ATRs from entry.
             max_leverage:   Maximum futures leverage (dynamically reduced by volatility).
+            volume_sma_period: Candles used to compute the volume SMA baseline for the
+                           volume surge filter. Kept separate from lookback so changing
+                           the S/R window doesn't silently alter the volume threshold.
             mtf_enabled:    If True, require 4h Supertrend to agree with breakout direction.
             adx_filter:     If True, require ADX > adx_threshold before signalling.
                             Filters out false breakouts in choppy/ranging markets.
@@ -111,9 +115,10 @@ class BreakoutStrategy(BaseStrategy):
             symbol=symbol or config.TRADING_PAIR,
             timeframe=timeframe or config.TIMEFRAME,
         )
-        self.lookback      = lookback
-        self.volume_mult   = volume_mult
-        self.atr_period    = atr_period
+        self.lookback         = lookback
+        self.volume_mult      = volume_mult
+        self.volume_sma_period = volume_sma_period
+        self.atr_period       = atr_period
         self.atr_stop_mult = atr_stop_mult
         self.reward_ratio  = reward_ratio
         self.max_leverage  = max_leverage
@@ -333,7 +338,9 @@ class BreakoutStrategy(BaseStrategy):
         current_rsi = float(rsi_series.iloc[-1])
 
         # ── Volume confirmation ────────────────────────────────────────────────
-        avg_volume = float(volume.iloc[-self.lookback - 1:-1].mean())
+        # Use volume_sma_period (fixed 20 by default), NOT lookback, so the S/R
+        # window and the volume baseline are independent parameters.
+        avg_volume = float(volume.iloc[-self.volume_sma_period - 1:-1].mean())
         volume_confirmed = current_volume >= (avg_volume * self.volume_mult)
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 0
 
