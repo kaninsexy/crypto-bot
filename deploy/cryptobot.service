@@ -1,0 +1,42 @@
+[Unit]
+Description=Crypto Trading Bot — Multi-Strategy Portfolio
+Documentation=https://github.com/your-repo/crypto_bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Run as the dedicated bot user (not root)
+User=botuser
+Group=botuser
+
+# Working directory — all relative paths (logs/, data/) resolve from here
+WorkingDirectory=/home/botuser/crypto_bot
+
+# Load environment variables from .env file
+EnvironmentFile=/home/botuser/crypto_bot/.env
+
+# The bot command — runs portfolio mode in continuous loop
+ExecStart=/home/botuser/crypto_bot/.venv/bin/python main.py --portfolio --loop --interval 30
+
+# Restart policy: restart on any failure, wait 30s between attempts
+# This handles: network timeouts, exchange maintenance, transient errors
+Restart=on-failure
+RestartSec=30
+
+# Give the process 60s to shut down cleanly (save checkpoint)
+TimeoutStopSec=60
+
+# Prevent the bot from accumulating zombie processes
+KillMode=mixed
+
+# Log to systemd journal (view with: journalctl -u cryptobot -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cryptobot
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
