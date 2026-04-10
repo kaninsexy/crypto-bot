@@ -108,6 +108,14 @@ RE_CB_RESETTING = re.compile(
 #   [Portfolio] Actions → DCA:HOLD | Supertrend:BUY | MeanReversion:HOLD | ...
 RE_ACTIONS = re.compile(r'\[Portfolio\]\s+Actions\s+→\s+(.+)')
 
+# Real candle tick — marks the end of the startup / replay phase:
+#   ▶ New 1h candle: 2026-04-10 03:00:00 | Close: 83240.5000
+RE_REAL_CANDLE = re.compile(r'▶ New \S+ candle:')
+
+# Replay-related messages that should always be tagged as startup events
+# even if they appear after the first candle (e.g. on subsequent restarts):
+RE_REPLAY_MSG = re.compile(r'replay|replayed|missed candle', re.IGNORECASE)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -134,20 +142,24 @@ def parse_log(log_path: Path, since: datetime) -> dict:
         closed_trades, open_positions_raw, regime_changes,
         errors, circuit_breaker_events, actions_timeline
     """
-    closed_trades:         list[dict] = []
-    paper_sells:           list[dict] = []  # [PAPER] SELL lines (no strategy name)
-    paper_buys:            list[dict] = []  # [PAPER] BUY lines  (no strategy name)
-    regime_changes:        list[dict] = []
-    errors:                list[dict] = []
+    closed_trades:          list[dict] = []
+    paper_sells:            list[dict] = []  # [PAPER] SELL lines (no strategy name)
+    paper_buys:             list[dict] = []  # [PAPER] BUY lines  (no strategy name)
+    regime_changes:         list[dict] = []
+    errors:                 list[dict] = []
+    startup_events:         list[dict] = []  # warnings/errors from startup & replay
     circuit_breaker_events: list[dict] = []
-    actions_timeline:      list[dict] = []  # [{ts, actions: {strat: action}}]
+    actions_timeline:       list[dict] = []  # [{line_num, ts, actions: {strat: action}}]
 
-    current_regime = None
-    prev_regime    = None
+    current_regime          = None
+    prev_regime             = None
+    first_real_candle_seen  = False  # becomes True after the first "▶ New … candle:" line
+    line_num                = 0      # file-order counter used for positional BUY matching
 
     try:
         with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
             for raw_line in fh:
+                line_num += 1
                 line = raw_line.rstrip("\n")
                 m = RE_LINE.match(line)
                 if not m:
@@ -162,6 +174,10 @@ def parse_log(log_path: Path, since: datetime) -> dict:
 
                 if ts < since:
                     continue  # outside our window
+
+                # Track startup/replay boundary
+                if RE_REAL_CANDLE.search(message):
+                    first_real_candle_seen = True
 
                 # ── [TradeLog] closed trade ────────────────────────────────
                 if "[TradeLog]" in message:
@@ -200,6 +216,7 @@ def parse_log(log_path: Path, since: datetime) -> dict:
                     buy_m = RE_PAPER_BUY.search(message)
                     if buy_m:
                         paper_buys.append({
+                            "line_num":    line_num,   # file order for positional matching
                             "ts":          ts,
                             "qty":         float(buy_m.group(1)),
                             "entry_price": float(buy_m.group(2)),
@@ -212,11 +229,14 @@ def parse_log(log_path: Path, since: datetime) -> dict:
                     ri_m = RE_REGIME_INIT.search(message)
                     if rc_m:
                         new_regime = rc_m.group(1)
-                        regime_changes.append({
-                            "timestamp":   _fmt_ts(ts),
-                            "from_regime": current_regime or "UNKNOWN",
-                            "to_regime":   new_regime,
-                        })
+                        # Only record genuine transitions (bot guarantees this,
+                        # but parser may see repeated regimes across restarts)
+                        if new_regime != current_regime:
+                            regime_changes.append({
+                                "timestamp":   _fmt_ts(ts),
+                                "from_regime": current_regime or "UNKNOWN",
+                                "to_regime":   new_regime,
+                            })
                         prev_regime    = current_regime
                         current_regime = new_regime
                     elif ri_m:
@@ -264,11 +284,23 @@ def parse_log(log_path: Path, since: datetime) -> dict:
 
                 # ── Errors and warnings ────────────────────────────────────
                 if level in ("ERROR", "WARNING", "CRITICAL"):
-                    errors.append({
+                    event = {
                         "timestamp": _fmt_ts(ts),
                         "level":     level,
                         "message":   message,
-                    })
+                    }
+                    # Route to startup_events if we haven't seen a real candle yet
+                    # (i.e. we're still in the startup / missed-candle-replay phase),
+                    # or if the message itself is replay-related (handles restarts
+                    # mid-session where replay fires after earlier candles).
+                    is_startup = (
+                        not first_real_candle_seen
+                        or RE_REPLAY_MSG.search(message) is not None
+                    )
+                    if is_startup:
+                        startup_events.append(event)
+                    else:
+                        errors.append(event)
 
                 # ── Portfolio actions timeline ─────────────────────────────
                 act_m = RE_ACTIONS.search(message)
@@ -281,7 +313,11 @@ def parse_log(log_path: Path, since: datetime) -> dict:
                             strat, action = part.split(":", 1)
                             actions[strat.strip()] = action.strip()
                     if actions:
-                        actions_timeline.append({"ts": ts, "actions": actions})
+                        actions_timeline.append({
+                            "line_num": line_num,   # file order for BUY matching
+                            "ts":       ts,
+                            "actions":  actions,
+                        })
 
     except FileNotFoundError:
         raise
@@ -289,18 +325,73 @@ def parse_log(log_path: Path, since: datetime) -> dict:
         print(f"[warn] Unexpected error reading log: {exc}", file=sys.stderr)
 
     return {
-        "closed_trades":         closed_trades,
-        "paper_sells":           paper_sells,
-        "paper_buys":            paper_buys,
-        "regime_changes":        regime_changes,
-        "errors":                errors,
+        "closed_trades":          closed_trades,
+        "paper_sells":            paper_sells,
+        "paper_buys":             paper_buys,
+        "regime_changes":         regime_changes,
+        "errors":                 errors,
+        "startup_events":         startup_events,
         "circuit_breaker_events": circuit_breaker_events,
-        "actions_timeline":      actions_timeline,
-        "current_regime":        current_regime,
+        "actions_timeline":       actions_timeline,
+        "current_regime":         current_regime,
     }
 
 
 # ── Open-position inference ───────────────────────────────────────────────────
+
+def _build_strategy_entry_prices(
+    actions_timeline: list[dict],
+    paper_buys: list[dict],
+) -> dict[str, float]:
+    """
+    Map each strategy's most recent BUY action to the price from the
+    corresponding [PAPER] BUY log entry, using file-line order.
+
+    Why this works: when the portfolio manager iterates _slots and executes
+    a BUY for each strategy, each simulator immediately logs its own
+    "[PAPER] ➕ BUY ... @ {price}" line in _slots iteration order — the
+    same order that strategies appear in the "Actions →" line.  So the Nth
+    strategy with BUY in the Actions line corresponds to the Nth [PAPER] BUY
+    line that follows it in the file.  File-line order (not timestamp) is
+    the correct tie-breaker because multiple simulators log within the same
+    second.
+    """
+    strategy_entry_price: dict[str, float] = {}
+    buy_idx = 0  # cursor into paper_buys; advances monotonically
+
+    for act_entry in actions_timeline:
+        act_line_num = act_entry["line_num"]
+        act_ts       = act_entry["ts"]
+
+        buying_strats = [
+            s for s, a in act_entry["actions"].items() if a == "BUY"
+        ]
+        if not buying_strats:
+            continue
+
+        # Advance cursor past any [PAPER] BUY entries that appeared before
+        # this Actions line — they belong to an earlier candle.
+        while buy_idx < len(paper_buys) and paper_buys[buy_idx]["line_num"] <= act_line_num:
+            buy_idx += 1
+
+        # Collect [PAPER] BUY entries that appear after this Actions line
+        # and within a 3-second window (one per simulator, in file order).
+        window_buys: list[dict] = []
+        j = buy_idx
+        while j < len(paper_buys) and len(window_buys) < len(buying_strats):
+            b     = paper_buys[j]
+            delta = (b["ts"] - act_ts).total_seconds()
+            if delta > 3:
+                break
+            window_buys.append(b)
+            j += 1
+
+        # Positional match: 1st buying strategy → 1st [PAPER] BUY, etc.
+        for strat, buy_data in zip(buying_strats, window_buys):
+            strategy_entry_price[strat] = buy_data["entry_price"]
+
+    return strategy_entry_price
+
 
 def infer_open_positions(parsed: dict) -> list[dict]:
     """
@@ -315,9 +406,14 @@ def infer_open_positions(parsed: dict) -> list[dict]:
         strategy, side, entry_price (best-effort), unrealized_pnl (null),
         unrealized_pnl_pct (null)
     """
-    # Last BUY timestamp per strategy
-    last_buy_ts:   dict[str, datetime] = {}
-    last_sell_ts:  dict[str, datetime] = {}
+    # Build strategy → entry_price map using positional file-order matching
+    strategy_entry_price = _build_strategy_entry_prices(
+        parsed["actions_timeline"], parsed["paper_buys"]
+    )
+
+    # Last BUY / SELL action timestamp per strategy
+    last_buy_ts:  dict[str, datetime] = {}
+    last_sell_ts: dict[str, datetime] = {}
 
     for entry in parsed["actions_timeline"]:
         ts      = entry["ts"]
@@ -328,7 +424,7 @@ def infer_open_positions(parsed: dict) -> list[dict]:
             elif action in ("SELL", "CLOSE"):
                 last_sell_ts[strat] = ts
 
-    # Also record the timestamp of each [TradeLog] close per strategy
+    # Timestamp of most recent [TradeLog] close per strategy
     last_close_ts: dict[str, datetime] = {}
     for trade in parsed["closed_trades"]:
         strat = trade["strategy"]
@@ -336,40 +432,22 @@ def infer_open_positions(parsed: dict) -> list[dict]:
         if strat not in last_close_ts or ts > last_close_ts[strat]:
             last_close_ts[strat] = ts
 
-    # Correlate BUY timestamps with [PAPER] BUY price data.
-    # Within the same candle tick (same second), the Actions log fires
-    # immediately before the [PAPER] BUY, so we match on ≤ 2s offset.
-    buy_prices: list[tuple[datetime, float]] = [
-        (b["ts"], b["entry_price"]) for b in parsed["paper_buys"]
-    ]
-
     open_positions: list[dict] = []
     for strat, buy_ts in last_buy_ts.items():
-        # Has this position been closed?
-        closed_after = last_close_ts.get(strat)
-        sold_after   = last_sell_ts.get(strat)
-        if closed_after and closed_after >= buy_ts:
+        # Skip if the position was closed after the last BUY
+        if last_close_ts.get(strat, datetime.min.replace(tzinfo=timezone.utc)) >= buy_ts:
             continue
-        if sold_after and sold_after >= buy_ts:
+        if last_sell_ts.get(strat, datetime.min.replace(tzinfo=timezone.utc)) >= buy_ts:
             continue
-
-        # Best-effort entry price: find nearest [PAPER] BUY within 3 seconds
-        entry_price = None
-        best_delta  = timedelta(seconds=3)
-        for bp_ts, bp_price in buy_prices:
-            delta = abs(bp_ts - buy_ts)
-            if delta <= best_delta:
-                best_delta  = delta
-                entry_price = bp_price
 
         open_positions.append({
-            "strategy":          strat,
-            "symbol":            STRATEGY_SYMBOLS.get(strat),
-            "side":              "long",       # BearShort would be "short"; log doesn't distinguish easily
-            "entry_price":       entry_price,
-            "unrealized_pnl":    None,         # not available in log files
+            "strategy":           strat,
+            "symbol":             STRATEGY_SYMBOLS.get(strat),
+            "side":               "long",   # BearShort would be "short"; not distinguishable from log
+            "entry_price":        strategy_entry_price.get(strat),
+            "unrealized_pnl":     None,     # runtime value; not available in log files
             "unrealized_pnl_pct": None,
-            "open_since":        buy_ts.isoformat(),
+            "open_since":         buy_ts.isoformat(),
         })
 
     return open_positions
@@ -434,8 +512,8 @@ def compute_summary(closed_trades: list[dict], open_positions: list[dict],
 
 def print_human_summary(summary: dict, closed_trades: list[dict],
                         open_positions: list[dict], regime_changes: list[dict],
-                        errors: list[dict], cb_events: list[dict],
-                        period_label: str) -> None:
+                        errors: list[dict], startup_events: list[dict],
+                        cb_events: list[dict], period_label: str) -> None:
     sep = "─" * 60
 
     print(f"\n{'═' * 60}")
@@ -517,6 +595,18 @@ def print_human_summary(summary: dict, closed_trades: list[dict],
     else:
         print("  (none)")
 
+    # ── Startup / replay events ──
+    print(f"\n{sep}")
+    print(f"  STARTUP & REPLAY EVENTS  ({len(startup_events)})")
+    print(sep)
+    if startup_events:
+        for e in startup_events[:10]:
+            print(f"  [{e['timestamp'][:19]}]  {e['level']:<8}  {e['message'][:120]}")
+        if len(startup_events) > 10:
+            print(f"  … and {len(startup_events) - 10} more (see JSON output)")
+    else:
+        print("  (none)")
+
     print(f"\n{'═' * 60}\n")
 
 
@@ -593,6 +683,7 @@ def main() -> None:
         "open_positions":        open_positions,
         "regime_changes":        parsed["regime_changes"],
         "errors":                parsed["errors"],
+        "startup_events":        parsed["startup_events"],
         "circuit_breaker_events": parsed["circuit_breaker_events"],
         "summary":               summary,
     }
@@ -610,6 +701,7 @@ def main() -> None:
             open_positions,
             parsed["regime_changes"],
             parsed["errors"],
+            parsed["startup_events"],
             parsed["circuit_breaker_events"],
             period_label,
         )
