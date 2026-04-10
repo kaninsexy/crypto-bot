@@ -110,7 +110,7 @@ class PaperTrading:
     """
 
     def __init__(self, initial_balance: float = None, symbol: str = None):
-        self.initial_balance = initial_balance or config.PAPER_BALANCE
+        self.initial_balance = initial_balance if initial_balance is not None else config.PAPER_BALANCE
         self.balance: float = self.initial_balance
         self.position: Optional[Position] = None
         self.trade_history: list[TradeRecord] = []

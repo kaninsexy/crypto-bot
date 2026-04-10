@@ -67,7 +67,7 @@ def fetch_ohlcv(
     """
     symbol    = symbol    or config.TRADING_PAIR
     timeframe = timeframe or config.TIMEFRAME
-    limit     = limit     or config.CANDLE_LIMIT
+    limit     = limit     if limit is not None else config.CANDLE_LIMIT
 
     logger.debug(f"Fetching {limit} × {timeframe} candles for {symbol}…")
 
