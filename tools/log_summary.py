@@ -21,9 +21,10 @@ from collections import defaultdict
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-ROOT     = Path(__file__).parent.parent
-LOG_FILE = ROOT / "logs" / "bot.log"
-OUT_FILE = ROOT / "logs" / "daily_summary.json"
+ROOT             = Path(__file__).parent.parent
+LOG_FILE         = ROOT / "logs" / "bot.log"
+OUT_FILE         = ROOT / "logs" / "daily_summary.json"
+PAPER_STATE_FILE = ROOT / "dashboard" / "data" / "paper_state.json"
 
 # ── Strategy → symbol mapping (mirrors config.py defaults) ───────────────────
 
@@ -453,6 +454,63 @@ def infer_open_positions(parsed: dict) -> list[dict]:
     return open_positions
 
 
+# ── Open-position enrichment from paper_state.json ───────────────────────────
+
+def enrich_open_positions_from_paper_state(
+    open_positions: list[dict],
+    paper_state_path: Path = PAPER_STATE_FILE,
+) -> None:
+    """
+    Enrich open positions inferred from the log with live data from
+    dashboard/data/paper_state.json.
+
+    This is necessary for positions restored from a checkpoint on restart:
+    no [PAPER] BUY line exists in the current log session, so entry_price,
+    stop_loss, and unrealized_pnl are all None after log-only inference.
+
+    Enrichment rules (modifies open_positions in place):
+      - entry_price:        filled only when None (log-inferred value takes
+                            precedence — it's exact; paper_state carries a
+                            running avg that shifts on DCA adds).
+      - stop_loss:          always taken from paper_state (not in log at all).
+      - unrealized_pnl:     always taken from paper_state (runtime value).
+      - unrealized_pnl_pct: always taken from paper_state.
+
+    Silently skips if the file is missing, unreadable, or malformed.
+    """
+    if not paper_state_path.exists():
+        return
+
+    try:
+        state = json.loads(paper_state_path.read_text(encoding="utf-8"))
+        strategies = state.get("strategies", {})
+    except Exception:
+        return  # malformed JSON — degrade gracefully
+
+    for pos in open_positions:
+        strat    = pos["strategy"]
+        strat_data = strategies.get(strat, {})
+        ps_pos   = strat_data.get("position")  # None when strategy has no open position
+
+        if not ps_pos:
+            continue
+
+        # entry_price: only fill the gap; don't overwrite a log-resolved value
+        if pos["entry_price"] is None:
+            raw = ps_pos.get("avg_entry_price")
+            pos["entry_price"] = float(raw) if raw is not None else None
+
+        # These fields have no log source at all — always use paper_state
+        raw_sl = ps_pos.get("stop_loss")
+        pos["stop_loss"]          = float(raw_sl) if raw_sl is not None else None
+
+        raw_upnl = ps_pos.get("unrealized_pnl")
+        pos["unrealized_pnl"]     = float(raw_upnl) if raw_upnl is not None else None
+
+        raw_upct = ps_pos.get("unrealized_pnl_pct")
+        pos["unrealized_pnl_pct"] = float(raw_upct) if raw_upct is not None else None
+
+
 # ── Entry-price enrichment ────────────────────────────────────────────────────
 
 def enrich_exit_prices(closed_trades: list[dict], paper_sells: list[dict]) -> None:
@@ -666,6 +724,9 @@ def main() -> None:
 
     # ── Infer open positions ───────────────────────────────────────────────
     open_positions = infer_open_positions(parsed)
+
+    # ── Enrich open positions with paper_state.json (checkpoint restores) ─
+    enrich_open_positions_from_paper_state(open_positions)
 
     # ── Compute summary stats ──────────────────────────────────────────────
     summary = compute_summary(
