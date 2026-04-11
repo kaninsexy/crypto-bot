@@ -1,0 +1,195 @@
+{
+  "generated_at": "2026-04-10T12:42:48.742861+00:00",
+  "period": "last 24 hours",
+  "since": "2026-04-09T12:42:48.736393+00:00",
+  "closed_trades": [
+    {
+      "strategy": "Supertrend",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "pnl": 1.25,
+      "pnl_pct": 1.75,
+      "exit_reason": "take_profit",
+      "exit_time": "2026-04-09T17:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 3098.75
+    },
+    {
+      "strategy": "GridTrading",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "pnl": 1.38,
+      "pnl_pct": 2.25,
+      "exit_reason": "GridTrading: grid level hit",
+      "exit_time": "2026-04-09T18:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 155.44
+    },
+    {
+      "strategy": "VWAP",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "pnl": -1.95,
+      "pnl_pct": -3.39,
+      "exit_reason": "stop_loss",
+      "exit_time": "2026-04-09T18:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 147.32
+    },
+    {
+      "strategy": "TrendFollowing",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "pnl": 3.08,
+      "pnl_pct": 3.14,
+      "exit_reason": "trailing_tp",
+      "exit_time": "2026-04-09T20:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 83900.0
+    },
+    {
+      "strategy": "DCA",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "pnl": 9.3,
+      "pnl_pct": 9.31,
+      "exit_reason": "take_profit",
+      "exit_time": "2026-04-09T22:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 85000.0
+    },
+    {
+      "strategy": "DualMomentum",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "pnl": -8.72,
+      "pnl_pct": -8.72,
+      "exit_reason": "stop_loss",
+      "exit_time": "2026-04-09T22:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 85000.0
+    },
+    {
+      "strategy": "Breakout",
+      "symbol": "AVAX/USDT",
+      "side": "long",
+      "pnl": 2.15,
+      "pnl_pct": 2.18,
+      "exit_reason": "take_profit",
+      "exit_time": "2026-04-09T23:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 85400.0
+    },
+    {
+      "strategy": "MeanReversion",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "pnl": 0.77,
+      "pnl_pct": 1.38,
+      "exit_reason": "take_profit",
+      "exit_time": "2026-04-10T00:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 3105.0
+    },
+    {
+      "strategy": "Supertrend",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "pnl": -3.71,
+      "pnl_pct": -4.88,
+      "exit_reason": "stop_loss",
+      "exit_time": "2026-04-10T01:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 3050.0
+    },
+    {
+      "strategy": "GridTrading",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "pnl": 0.52,
+      "pnl_pct": 0.84,
+      "exit_reason": "GridTrading: grid level hit",
+      "exit_time": "2026-04-10T02:43:49+00:00",
+      "entry_price": null,
+      "exit_price": 151.2
+    }
+  ],
+  "open_positions": [
+    {
+      "strategy": "TrendFollowing",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_price": 85400.0,
+      "unrealized_pnl": 212.4,
+      "unrealized_pnl_pct": 2.49,
+      "open_since": "2026-04-09T23:43:49+00:00",
+      "stop_loss": 83000.0
+    }
+  ],
+  "regime_changes": [
+    {
+      "timestamp": "2026-04-09T16:43:49+00:00",
+      "from_regime": "BULL",
+      "to_regime": "STRONG_BULL"
+    },
+    {
+      "timestamp": "2026-04-10T02:43:49+00:00",
+      "from_regime": "STRONG_BULL",
+      "to_regime": "BULL"
+    }
+  ],
+  "errors": [
+    {
+      "timestamp": "2026-04-09T15:43:49+00:00",
+      "level": "WARNING",
+      "message": "Rate limit hit for AVAX/USDT \u2014 retrying in 5s (attempt 1/3)"
+    },
+    {
+      "timestamp": "2026-04-09T19:43:49+00:00",
+      "level": "ERROR",
+      "message": "Network error fetching OHLCV for AVAX/USDT: ReadTimeout('Connection timed out after 10s')"
+    },
+    {
+      "timestamp": "2026-04-09T19:43:49+00:00",
+      "level": "WARNING",
+      "message": "[Portfolio] Could not fetch AVAX/USDT for Breakout: ReadTimeout('Connection timed out after 10s')"
+    },
+    {
+      "timestamp": "2026-04-09T21:43:49+00:00",
+      "level": "WARNING",
+      "message": "\u26a0 CIRCUIT BREAKER WARNING | Equity: $9,820 | Drawdown: -1.8% (warn: -15.0%) | Trade sizes reduced to 75%"
+    },
+    {
+      "timestamp": "2026-04-10T02:43:49+00:00",
+      "level": "ERROR",
+      "message": "Network error placing order: ConnectionResetError(104, 'Connection reset by peer')"
+    }
+  ],
+  "startup_events": [
+    {
+      "timestamp": "2026-04-09T14:28:49+00:00",
+      "level": "WARNING",
+      "message": "[PAPER] Panic: 2 consecutive SL hits for BTC/USDT during missed candle replay \u2014 entering 5-candle cooldown"
+    }
+  ],
+  "circuit_breaker_events": [
+    {
+      "timestamp": "2026-04-09T21:43:49+00:00",
+      "state": "WARNING",
+      "equity": 9820.0,
+      "peak": null,
+      "drawdown_pct": 1.8
+    }
+  ],
+  "summary": {
+    "total_closed_trades": 10,
+    "total_closed_pnl": 4.07,
+    "win_rate_pct": 70.0,
+    "most_active_strategy": "Supertrend",
+    "current_regime": "BULL",
+    "inactive_strategies": [
+      "BearShort",
+      "VolatilityBreakout"
+    ]
+  }
+}
