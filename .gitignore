@@ -32,3 +32,4 @@ data/*.parquet
 .vscode/
 .idea/
 *.swp
+logs/daily_summary.json
