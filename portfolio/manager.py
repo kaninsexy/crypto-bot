@@ -1305,12 +1305,106 @@ class PortfolioManager:
         tmp.write_text(json.dumps(data, indent=2))
         tmp.replace(path)   # atomic write — no half-written file on crash
 
-    def load_checkpoint(self) -> bool:
+    def _inject_atr_stop_if_missing(
+        self,
+        sname: str,
+        slot,
+        strategy_dfs: dict,
+    ) -> None:
+        """
+        Post-restore guard: if a position has no stop loss and the strategy
+        uses ATR trailing stops, compute ATR on the current df and inject
+        a sensible floor stop.
+
+        This handles the case where a position was opened before ATR stops
+        were implemented — the checkpoint has no SL, but the current code
+        expects one.  Strategies without ATR config (DCA, GridTrading, VWAP,
+        MeanReversion) are silently skipped — they manage stops differently.
+
+        Only injected when:
+          - position.stop_loss is None (already has a SL → untouched)
+          - strategy has _atr_trail_mult or _ATR_TRAIL_MULT attribute
+          - a valid OHLCV df with enough rows is available
+        """
+        pos = slot.simulator.position
+        if pos is None or pos.stop_loss is not None:
+            return  # Nothing to do — no position, or SL already set
+
+        strategy = slot.strategy
+
+        # Duck-type for ATR config: instance attrs (DualMomentum/Supertrend/Breakout)
+        # or class-level constants (TrendFollowing uses uppercase names).
+        mult = (
+            getattr(strategy, "_atr_trail_mult",  None)
+            or getattr(strategy, "_ATR_TRAIL_MULT", None)
+        )
+        if mult is None:
+            return  # Strategy doesn't use ATR stops → skip (DCA, Grid, VWAP, etc.)
+
+        period = int(
+            getattr(strategy, "_atr_trail_period",  None)
+            or getattr(strategy, "_ATR_TRAIL_PERIOD", 14)
+        )
+
+        df = strategy_dfs.get(sname)
+        min_rows = period + 5
+        if df is None or len(df) < min_rows:
+            logger.warning(
+                f"[{sname}] Cannot inject ATR SL on restore — "
+                f"no df or insufficient rows "
+                f"(need {min_rows}, got {len(df) if df is not None else 0})"
+            )
+            return
+
+        import ta as _ta
+        try:
+            atr_series = _ta.volatility.AverageTrueRange(
+                high=df["high"], low=df["low"], close=df["close"],
+                window=period,
+            ).average_true_range()
+            atr = float(atr_series.iloc[-1])
+        except Exception as exc:
+            logger.warning(f"[{sname}] ATR calculation failed on restore: {exc}")
+            return
+
+        if pd.isna(atr) or atr <= 0:
+            logger.warning(
+                f"[{sname}] ATR SL inject skipped — "
+                f"insufficient data (ATR={atr}, rows={len(df)})"
+            )
+            return
+
+        entry = pos.avg_entry_price
+        if pos.side == "long":
+            pos.stop_loss = entry - (mult * atr)
+        else:
+            pos.stop_loss = entry + (mult * atr)
+
+        # Arm trailing stop if the old checkpoint didn't have it set.
+        # (Positions opened before trailing-stop code shipped may lack these.)
+        if not pos.trailing_sl:
+            pos.trailing_sl  = True
+            pos.trail_sl_pct = (mult * atr) / entry if entry > 0 else 0.03
+
+        logger.warning(
+            f"[{sname}] ATR SL injected on restore | "
+            f"Entry={entry:.2f} | ATR({period})={atr:.2f} | "
+            f"Mult={mult}× | SL={pos.stop_loss:.2f}"
+        )
+
+    def load_checkpoint(self, strategy_dfs: dict | None = None) -> bool:
         """
         Try to restore state from the last saved checkpoint.
 
         Must be called AFTER initialize() so that all StrategySlots exist.
         Returns True if a checkpoint was found and loaded, False if starting fresh.
+
+        Args:
+            strategy_dfs: Optional {strategy_name: ohlcv_df} dict — the same
+                dict passed to run_candle().  When provided, any restored open
+                position that has no stop loss will have an ATR-based SL
+                injected automatically (covers positions opened before ATR
+                trailing stops were implemented).
 
         On success:
           - Each simulator's balance and open position are restored
@@ -1352,6 +1446,15 @@ class PortfolioManager:
 
                     if pos:
                         restored_positions += 1
+
+                        # ── ATR SL injection ──────────────────────────────────
+                        # If the checkpoint has no stop loss (position opened
+                        # before ATR trailing stops were implemented), inject one
+                        # now using the current candle's ATR.  Non-ATR strategies
+                        # (DCA, Grid, VWAP) are silently skipped by the helper.
+                        if pos.stop_loss is None and strategy_dfs:
+                            self._inject_atr_stop_if_missing(sname, slot, strategy_dfs)
+
                         sl_str = f"SL ${pos.stop_loss:,.2f}" if pos.stop_loss else "no SL"
                         logger.info(
                             f"[Portfolio]   ↩ {sname}: restored OPEN {pos.side} | "
