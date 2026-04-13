@@ -115,7 +115,9 @@ RE_REAL_CANDLE = re.compile(r'▶ New \S+ candle:')
 
 # Replay-related messages that should always be tagged as startup events
 # even if they appear after the first candle (e.g. on subsequent restarts):
-RE_REPLAY_MSG = re.compile(r'replay|replayed|missed candle', re.IGNORECASE)
+RE_REPLAY_MSG   = re.compile(r'replay|replayed|missed candle', re.IGNORECASE)
+RE_GRID_REENTRY = re.compile(r'SL triggered.*missed candle replay', re.IGNORECASE)
+STARTUP_REPLAY_WINDOW = timedelta(minutes=5)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -155,6 +157,7 @@ def parse_log(log_path: Path, since: datetime) -> dict:
     current_regime          = None
     prev_regime             = None
     first_real_candle_seen  = False  # becomes True after the first "▶ New … candle:" line
+    first_real_candle_ts    = None   # timestamp of that first candle
     line_num                = 0      # file-order counter used for positional BUY matching
 
     try:
@@ -178,6 +181,8 @@ def parse_log(log_path: Path, since: datetime) -> dict:
 
                 # Track startup/replay boundary
                 if RE_REAL_CANDLE.search(message):
+                    if not first_real_candle_seen:
+                        first_real_candle_ts = ts
                     first_real_candle_seen = True
 
                 # ── [TradeLog] closed trade ────────────────────────────────
@@ -290,14 +295,26 @@ def parse_log(log_path: Path, since: datetime) -> dict:
                         "level":     level,
                         "message":   message,
                     }
-                    # Route to startup_events if we haven't seen a real candle yet
-                    # (i.e. we're still in the startup / missed-candle-replay phase),
-                    # or if the message itself is replay-related (handles restarts
-                    # mid-session where replay fires after earlier candles).
+                    # Route to startup_events when:
+                    #   (a) no real candle seen yet (pure startup warnings), OR
+                    #   (b) message matches replay pattern AND is within 5 min of
+                    #       the first real candle (genuine missed-candle catch-up).
+                    #
+                    # GridTrading re-entry after an SL exit logs
+                    # "SL triggered (missed candle replay)" during normal trading —
+                    # it matches RE_REPLAY_MSG but must go to errors, tagged
+                    # as "grid_reentry_sl", once we're past the startup window.
+                    within_startup_window = (
+                        first_real_candle_ts is not None
+                        and (ts - first_real_candle_ts) <= STARTUP_REPLAY_WINDOW
+                    )
+                    is_replay_msg = RE_REPLAY_MSG.search(message) is not None
                     is_startup = (
                         not first_real_candle_seen
-                        or RE_REPLAY_MSG.search(message) is not None
+                        or (is_replay_msg and within_startup_window)
                     )
+                    if not is_startup and is_replay_msg and RE_GRID_REENTRY.search(message):
+                        event["tag"] = "grid_reentry_sl"
                     if is_startup:
                         startup_events.append(event)
                     else:
