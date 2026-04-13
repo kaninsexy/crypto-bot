@@ -119,6 +119,12 @@ RE_REPLAY_MSG   = re.compile(r'replay|replayed|missed candle', re.IGNORECASE)
 RE_GRID_REENTRY = re.compile(r'SL triggered.*missed candle replay', re.IGNORECASE)
 STARTUP_REPLAY_WINDOW = timedelta(minutes=5)
 
+# Checkpoint position restore logged by PortfolioManager on restart:
+#   [Portfolio] ↩ VolatilityBreakout: restored OPEN long | Entry $71,457.12
+RE_CHECKPOINT_RESTORE = re.compile(
+    r'\[Portfolio\]\s+\S*\s*(\w+):\s+restored OPEN \w+\s*\|\s*Entry\s*\$([\d,]+(?:\.\d+)?)'
+)
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -159,6 +165,7 @@ def parse_log(log_path: Path, since: datetime) -> dict:
     first_real_candle_seen  = False  # becomes True after the first "▶ New … candle:" line
     first_real_candle_ts    = None   # timestamp of that first candle
     line_num                = 0      # file-order counter used for positional BUY matching
+    restored_positions:     dict[str, float] = {}  # strategy → entry_price from checkpoint restore logs
 
     try:
         with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
@@ -337,6 +344,14 @@ def parse_log(log_path: Path, since: datetime) -> dict:
                             "actions":  actions,
                         })
 
+                # ── Checkpoint position restore (Bug 3: entry_price fallback) ─
+                if "[Portfolio]" in message and "restored OPEN" in message:
+                    cr_m = RE_CHECKPOINT_RESTORE.search(message)
+                    if cr_m:
+                        strat_name  = cr_m.group(1)
+                        entry_price = float(cr_m.group(2).replace(",", ""))
+                        restored_positions[strat_name] = entry_price
+
     except FileNotFoundError:
         raise
     except Exception as exc:
@@ -352,6 +367,7 @@ def parse_log(log_path: Path, since: datetime) -> dict:
         "circuit_breaker_events": circuit_breaker_events,
         "actions_timeline":       actions_timeline,
         "current_regime":         current_regime,
+        "restored_positions":     restored_positions,
     }
 
 
@@ -474,8 +490,9 @@ def infer_open_positions(parsed: dict) -> list[dict]:
 # ── Open-position enrichment from paper_state.json ───────────────────────────
 
 def enrich_open_positions_from_paper_state(
-    open_positions: list[dict],
-    paper_state_path: Path = PAPER_STATE_FILE,
+    open_positions:    list[dict],
+    paper_state_path:  Path = PAPER_STATE_FILE,
+    restored_positions: dict[str, float] | None = None,
 ) -> None:
     """
     Enrich open positions inferred from the log with live data from
@@ -489,52 +506,90 @@ def enrich_open_positions_from_paper_state(
       - entry_price:        filled only when None (log-inferred value takes
                             precedence — it's exact; paper_state carries a
                             running avg that shifts on DCA adds).
+                            Fallback chain: paper_state → restored_positions
+                            (from "[Portfolio] ↩ Strategy: restored OPEN" lines).
       - stop_loss:          always taken from paper_state (not in log at all).
       - unrealized_pnl:     always taken from paper_state (runtime value).
       - unrealized_pnl_pct: always taken from paper_state.
 
     Silently skips if the file is missing, unreadable, or malformed.
+    Bug 3 additions:
+      - Debug warning to stderr when a strategy's open position is not found
+        in paper_state.json (helps diagnose key-name mismatches).
+      - Case-insensitive fallback key lookup in the strategies dict.
+      - Final entry_price fallback from restored_positions (checkpoint log lines).
     """
-    if not paper_state_path.exists():
-        return
+    strategies: dict = {}
+    if paper_state_path.exists():
+        try:
+            state = json.loads(paper_state_path.read_text(encoding="utf-8"))
+            strategies = state.get("strategies", {})
+        except Exception:
+            pass  # malformed JSON — degrade gracefully; still apply restored_positions
 
-    try:
-        state = json.loads(paper_state_path.read_text(encoding="utf-8"))
-        strategies = state.get("strategies", {})
-    except Exception:
-        return  # malformed JSON — degrade gracefully
+    # Build a case-insensitive lookup index for the strategies dict.
+    # paper_state.json may store keys as "VolatilityBreakout", "volatility_breakout",
+    # or other variations depending on which code path wrote the checkpoint.
+    strategies_lower: dict[str, str] = {k.lower(): k for k in strategies}
 
     for pos in open_positions:
-        strat    = pos["strategy"]
-        strat_data = strategies.get(strat, {})
-        ps_pos   = strat_data.get("position")  # None when strategy has no open position
+        strat = pos["strategy"]
+
+        # Exact match first; fall back to case-insensitive lookup
+        if strat in strategies:
+            canonical_key = strat
+        else:
+            canonical_key = strategies_lower.get(strat.lower())
+
+        strat_data = strategies.get(canonical_key, {}) if canonical_key else {}
+        ps_pos     = strat_data.get("position")  # None when strategy has no open position
 
         if not ps_pos:
-            continue
+            # Bug 3: emit a diagnostic so we can see whether paper_state.json
+            # is missing the strategy entirely or just has no open position.
+            if pos["entry_price"] is None:
+                print(
+                    f"[warn] {strat}: open position not found in paper_state.json "
+                    f"(keys present: {list(strategies.keys())[:8]})",
+                    file=sys.stderr,
+                )
+        else:
+            # entry_price: only fill the gap; don't overwrite a log-resolved value
+            if pos["entry_price"] is None:
+                raw = ps_pos.get("avg_entry_price")
+                pos["entry_price"] = float(raw) if raw is not None else None
 
-        # entry_price: only fill the gap; don't overwrite a log-resolved value
-        if pos["entry_price"] is None:
-            raw = ps_pos.get("avg_entry_price")
-            pos["entry_price"] = float(raw) if raw is not None else None
+            # These fields have no log source at all — always use paper_state
+            raw_sl = ps_pos.get("stop_loss")
+            pos["stop_loss"]          = float(raw_sl) if raw_sl is not None else None
 
-        # These fields have no log source at all — always use paper_state
-        raw_sl = ps_pos.get("stop_loss")
-        pos["stop_loss"]          = float(raw_sl) if raw_sl is not None else None
+            raw_upnl = ps_pos.get("unrealized_pnl")
+            pos["unrealized_pnl"]     = float(raw_upnl) if raw_upnl is not None else None
 
-        raw_upnl = ps_pos.get("unrealized_pnl")
-        pos["unrealized_pnl"]     = float(raw_upnl) if raw_upnl is not None else None
+            raw_upct = ps_pos.get("unrealized_pnl_pct")
+            pos["unrealized_pnl_pct"] = float(raw_upct) if raw_upct is not None else None
 
-        raw_upct = ps_pos.get("unrealized_pnl_pct")
-        pos["unrealized_pnl_pct"] = float(raw_upct) if raw_upct is not None else None
+        # Bug 3: final fallback — if entry_price is still None after paper_state
+        # lookup, try the checkpoint restore log lines.  These are parsed from
+        # "[Portfolio] ↩ VolatilityBreakout: restored OPEN long | Entry $71,457.12"
+        # and stored in restored_positions by parse_log().
+        if pos["entry_price"] is None and restored_positions:
+            rp = restored_positions.get(strat)
+            if rp is not None:
+                pos["entry_price"] = rp
 
 
 # ── Entry-price enrichment ────────────────────────────────────────────────────
 
-def enrich_exit_prices(closed_trades: list[dict], paper_sells: list[dict]) -> None:
+def enrich_exit_prices(closed_trades: list[dict], paper_sells: list[dict]) -> set[int]:
     """
     Attempt to fill in exit_price on closed_trades by matching [TradeLog] entries
     to [PAPER] SELL entries at the same timestamp (±2 s) and same pnl.
     Modifies closed_trades in place.
+
+    Returns the set of paper_sells indices that were consumed, so the caller can
+    identify which SELL lines were NOT matched by any [TradeLog] entry (used by
+    synthesize_trades_from_paper_sells to handle trades closed during replay).
     """
     used: set[int] = set()
     for trade in closed_trades:
@@ -552,26 +607,126 @@ def enrich_exit_prices(closed_trades: list[dict], paper_sells: list[dict]) -> No
         if best_idx is not None:
             trade["exit_price"] = paper_sells[best_idx]["exit_price"]
             used.add(best_idx)
+    return used
+
+
+# ── Bug 1 helpers: synthesize closed trades from unmatched PAPER SELL lines ────
+
+def _attribute_sell_to_strategy(
+    sell_ts: datetime,
+    actions_timeline: list[dict],
+    window_seconds: float = 10.0,
+) -> str:
+    """
+    Return the strategy name most likely responsible for a [PAPER] FULL SELL at sell_ts.
+
+    Logic:
+      1. Walk backwards through actions_timeline looking for a SELL/CLOSE action
+         within window_seconds before sell_ts — this is the strongest signal.
+      2. If no SELL/CLOSE found, return the strategy with the most recent non-HOLD
+         action in the same window (could be the strategy that just finished buying
+         its last safety order before closing).
+      3. Fall back to "Unknown" if nothing matches.
+    """
+    cutoff = sell_ts - timedelta(seconds=window_seconds)
+
+    # Pass 1: look for explicit SELL/CLOSE in the actions timeline
+    for entry in reversed(actions_timeline):
+        ts = entry["ts"]
+        if ts > sell_ts:
+            continue
+        if ts < cutoff:
+            break
+        for strat, action in entry["actions"].items():
+            if action in ("SELL", "CLOSE"):
+                return strat
+
+    # Pass 2: any non-HOLD action in the window (weaker signal)
+    for entry in reversed(actions_timeline):
+        ts = entry["ts"]
+        if ts > sell_ts:
+            continue
+        if ts < cutoff:
+            break
+        for strat, action in entry["actions"].items():
+            if action not in ("HOLD", "SKIP", "BLOCKED"):
+                return strat
+
+    return "Unknown"
+
+
+def synthesize_trades_from_paper_sells(
+    closed_trades:    list[dict],
+    paper_sells:      list[dict],
+    matched_indices:  set[int],
+    actions_timeline: list[dict],
+) -> None:
+    """
+    Bug 1 fix: synthesize closed_trade entries for [PAPER] FULL SELL lines that
+    were NOT matched to any [TradeLog] entry.
+
+    This covers trades that close during candle replay on bot restart — the
+    simulator executes the SL/TP and logs the PAPER SELL, but the [TradeLog]
+    path (flush_new_trades in main.py) never fires because the bot is still
+    in replay mode, not the live loop.
+
+    Synthesized entries carry synthetic=True so callers can distinguish them
+    from the authoritative [TradeLog]-derived entries.
+    """
+    for i, sell in enumerate(paper_sells):
+        if i in matched_indices:
+            continue  # already attributed to a [TradeLog] entry
+        if sell.get("is_partial"):
+            continue  # partial exits don't close the trade; skip
+
+        strategy = _attribute_sell_to_strategy(sell["ts"], actions_timeline)
+
+        closed_trades.append({
+            "strategy":    strategy,
+            "symbol":      STRATEGY_SYMBOLS.get(strategy),
+            "side":        "long",
+            "pnl":         sell["pnl"],
+            "pnl_pct":     sell["pnl_pct"],
+            "exit_reason": sell["reason"],
+            "exit_time":   _fmt_ts(sell["ts"]),
+            "exit_price":  sell["exit_price"],
+            "entry_price": None,   # not available from PAPER SELL line alone
+            "synthetic":   True,   # flag: inferred from PAPER SELL, no TradeLog
+        })
 
 
 # ── Summary stats ─────────────────────────────────────────────────────────────
 
 def compute_summary(closed_trades: list[dict], open_positions: list[dict],
-                    current_regime: str | None) -> dict:
+                    current_regime: str | None,
+                    actions_timeline: list[dict] | None = None) -> dict:
     total   = len(closed_trades)
     wins    = [t for t in closed_trades if t["pnl"] > 0]
     total_pnl = round(sum(t["pnl"] for t in closed_trades), 2)
     win_rate  = round(len(wins) / total * 100, 1) if total else 0.0
 
-    # Most active strategy
+    # Most active strategy (by closed trade count)
     trade_counts: dict[str, int] = defaultdict(int)
     for t in closed_trades:
         trade_counts[t["strategy"]] += 1
     most_active = max(trade_counts, key=trade_counts.get) if trade_counts else None
 
-    # Strategies with zero closed trades (potential concern)
-    active_strategies = set(trade_counts.keys())
-    inactive = [s for s in ALL_STRATEGIES if s not in active_strategies]
+    # Bug 2 fix: determine active/inactive from the Actions timeline, not from
+    # closed_trades alone.  When closed_trades = 0 (e.g. early in a session or
+    # after a restart), every strategy used to appear as "inactive" — wrong.
+    #
+    # A strategy is ACTIVE if it appeared with any non-HOLD/SKIP/BLOCKED action
+    # in the reporting window's Actions timeline (BUY, SELL, CLOSE, ADD, etc.).
+    # A strategy is INACTIVE only if it never appeared at all, or always HOLD.
+    NON_HOLD = {"BUY", "SELL", "CLOSE", "ADD", "PARTIAL_SELL"}
+    active_from_actions: set[str] = set()
+    if actions_timeline:
+        for entry in actions_timeline:
+            for strat, action in entry["actions"].items():
+                if action.upper() not in ("HOLD", "SKIP", "BLOCKED"):
+                    active_from_actions.add(strat)
+
+    inactive = [s for s in ALL_STRATEGIES if s not in active_from_actions]
 
     return {
         "total_closed_trades": total,
@@ -737,19 +892,39 @@ def main() -> None:
     parsed = parse_log(log_path, since)
 
     # ── Enrich: fill exit_price on closed trades via [PAPER] SELL matching ─
-    enrich_exit_prices(parsed["closed_trades"], parsed["paper_sells"])
+    # Returns the set of paper_sells indices consumed so the synthesizer can
+    # identify which SELL lines were NOT paired with a [TradeLog] entry.
+    matched_sell_indices = enrich_exit_prices(parsed["closed_trades"], parsed["paper_sells"])
+
+    # ── Bug 1: synthesize closed trades from unmatched [PAPER] FULL SELL lines ─
+    # Covers trades that closed during candle replay on restart — the simulator
+    # executed the SL/TP and logged the PAPER SELL, but flush_new_trades() never
+    # fired (bot was still in replay mode, not the live candle loop).
+    synthesize_trades_from_paper_sells(
+        parsed["closed_trades"],
+        parsed["paper_sells"],
+        matched_sell_indices,
+        parsed["actions_timeline"],
+    )
 
     # ── Infer open positions ───────────────────────────────────────────────
     open_positions = infer_open_positions(parsed)
 
     # ── Enrich open positions with paper_state.json (checkpoint restores) ─
-    enrich_open_positions_from_paper_state(open_positions)
+    # Bug 3: also pass restored_positions as final entry_price fallback.
+    enrich_open_positions_from_paper_state(
+        open_positions,
+        restored_positions=parsed["restored_positions"],
+    )
 
     # ── Compute summary stats ──────────────────────────────────────────────
+    # Bug 2: pass actions_timeline so inactive_strategies reflects actual
+    # trading activity, not just closed-trade count.
     summary = compute_summary(
         parsed["closed_trades"],
         open_positions,
         parsed["current_regime"],
+        actions_timeline=parsed["actions_timeline"],
     )
 
     # ── Build output document ──────────────────────────────────────────────
