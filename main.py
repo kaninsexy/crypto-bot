@@ -112,6 +112,7 @@ def build_strategy(name: str, symbol: str = None) -> BaseStrategy:
             panic_protection=True,      # Require 2 consecutive SL closes
             max_hold_candles=336,       # Time exit after 14 days (1h candles)
             compound=True,              # Reinvest 50% of profit
+            macd_filter_enabled=True,   # Blocks new cycles when MACD histogram is negative (bearish momentum)
         )
 
     elif name == "supertrend":

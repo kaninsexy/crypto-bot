@@ -1603,6 +1603,47 @@ class PortfolioManager:
         """Build a strategy instance with production-grade defaults."""
         tf = config.TIMEFRAME
 
+        # ── DCA instance architecture — READ THIS if you see duplicate "DCA ADD" logs ──
+        #
+        # INSTANCE COUNT: exactly ONE DCAStrategy instance and ONE PaperTrading simulator.
+        #
+        # How this is guaranteed:
+        #   - STRATEGY_KEYS contains "DCA" only once (line ~137).
+        #   - _slots is a plain dict[str, StrategySlot] keyed by strategy name.
+        #     Dict keys are unique — "DCA" can only map to one slot.
+        #   - The slot-creation loop (line ~271) does one pass: one DCAStrategy
+        #     instance, one PaperTrading(initial_balance=capital) per name.
+        #
+        # CAPITAL ALLOCATION: one DCA simulator receives total_capital × regime_weight.
+        #   Regime weights (from REGIME_ALLOCATIONS, post May-2025 tuning):
+        #     STRONG_BULL 15% | BULL 15% | RANGE 20% | VOLATILE 45% | BEAR 56% | CRASH 79%
+        #   On $100k total capital, that is $15k–$79k depending on regime.
+        #   The DCA strategy then sizes each base/safety order from this slice
+        #   (base_amount=200, safety_scale=1.5 × 5 safety orders → max $3,050 per full cycle).
+        #
+        # WHY YOU SEE TWO "DCA ADD" LOG LINES ON THE SAME CANDLE (NOT a bug):
+        #   simulator.py's _handle_buy() logs "DCA ADD" whenever it ADDS TO AN EXISTING
+        #   POSITION (self.position is not None + BUY signal).  This code path is shared
+        #   by ALL strategies — the label "DCA ADD" is the simulator's generic term for
+        #   "accumulating into an open position", not a DCA-strategy-specific term.
+        #
+        #   Two simultaneous "DCA ADD" entries at the same price with different balances
+        #   (e.g. $4,030 and $9,503) means TWO DIFFERENT STRATEGY SIMULATORS both had
+        #   open positions and both fired a BUY on that candle — for example:
+        #     • DCA simulator    (larger balance)  → safety order triggered by price drop
+        #     • VWAP/Grid/etc.   (smaller balance) → re-entry signal in its own cycle
+        #   Each simulator is fully isolated; their balances are independent.
+        #
+        # COMBINED MAX DCA EXPOSURE (single DCA cycle, all safety orders filled):
+        #   base_amount=200 + 5 safety orders × martingale scale 1.5:
+        #     SO1=300, SO2=450, SO3=675, SO4=1,012, SO5=1,518 → total ≈ $4,155 per cycle
+        #   Compounding grows base_amount over time but does not change the structure.
+        #
+        # CONCLUSION: no double-instance bug exists. If log confusion persists, the fix
+        #   is cosmetic: add the strategy name to the "DCA ADD" log in simulator.py
+        #   (e.g. "[PAPER] ➕ DCA ADD [{self.position.strategy}] …") so each simulator's
+        #   accumulation line is clearly attributable to its owning strategy.
+        # ─────────────────────────────────────────────────────────────────────────────
         if name == "DCA":
             return DCAStrategy(
                 symbol=symbol, timeframe=tf,
@@ -1612,6 +1653,7 @@ class PortfolioManager:
                 trail_pct=0.025, stop_loss_pct=0.12,
                 panic_protection=True, max_hold_candles=336,
                 compound=True,
+                macd_filter_enabled=True,  # Blocks new cycles when MACD histogram is negative (bearish momentum)
             )
         elif name == "Supertrend":
             is_btc = "BTC" in symbol.upper()

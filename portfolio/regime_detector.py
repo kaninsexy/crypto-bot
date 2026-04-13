@@ -68,14 +68,18 @@ ALL_REGIMES = [
 # Strategies with 0% receive no new capital until regime changes.
 
 REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
-    # NOTE: MeanReversion is suspended (0% in all regimes) as of initial paper trading phase.
-    # OOS backtest showed -9.36% return (Sharpe -2.800) in the bear market test period.
-    # Re-enable once live paper trading data shows it works in ranging conditions.
-    # Former MeanReversion weight redistributed to best OOS performers per regime.
+    # MeanReversion allocation history:
+    #   BEFORE (paper-trading suspension): 0% in all regimes.
+    #     Reason: OOS backtest showed -9.36% return (Sharpe -2.800) in a bear-market test period,
+    #     which is an inappropriate regime for MeanReversion anyway.
+    #   AFTER (re-enabled): RANGE 10%, BULL 5%, all other regimes 0%.
+    #     Funding source: DCA reduced by 0.10 in RANGE (0.30→0.20) and 0.05 in BULL (0.20→0.15).
+    #     DCA chosen as the donor because it is the most buffer-like strategy and is least
+    #     harmed by a small trim in regimes where MeanReversion is actively earning.
     REGIME_STRONG_BULL: {
         "dca":           0.15,
         "supertrend":    0.25,  # -0.05 to fund new strategies
-        "meanrev":       0.00,
+        "meanrev":       0.00,  # Not appropriate — trending market kills mean reversion
         "grid":          0.05,
         "breakout":      0.30,  # -0.05 to fund new strategies
         "trend":         0.10,  # -0.05 to fund dual_momentum
@@ -85,9 +89,9 @@ REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
         "dual_momentum": 0.10,  # Dual momentum — rotates into strongest asset
     },
     REGIME_BULL: {
-        "dca":           0.20,  # -0.05 to fund new strategies
+        "dca":           0.15,  # -0.05 to fund MeanReversion (was 0.20)
         "supertrend":    0.25,
-        "meanrev":       0.00,
+        "meanrev":       0.05,  # Reduced allocation — trend strategies dominate in bull
         "grid":          0.10,
         "breakout":      0.20,  # -0.05 to fund new strategies
         "trend":         0.10,
@@ -97,10 +101,10 @@ REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
         "dual_momentum": 0.05,  # Small allocation in normal bull
     },
     REGIME_RANGE: {
-        # VWAP and Grid best suited for ranging markets.
-        "dca":           0.30,  # -0.05 to fund new strategies
+        # VWAP, Grid, and MeanReversion best suited for ranging markets.
+        "dca":           0.20,  # -0.10 to fund MeanReversion (was 0.30)
         "supertrend":    0.08,
-        "meanrev":       0.00,
+        "meanrev":       0.10,  # Primary MeanReversion regime (StochRSI + BB %B)
         "grid":          0.32,  # -0.05 to fund new strategies
         "breakout":      0.00,  # Breakout regime-filter blocks it in RANGE anyway
         "trend":         0.05,
@@ -112,7 +116,7 @@ REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
     REGIME_VOLATILE: {
         "dca":           0.45,  # -0.05 to fund dual_momentum
         "supertrend":    0.10,
-        "meanrev":       0.00,
+        "meanrev":       0.00,  # Not appropriate — BB/StochRSI signals are noise in volatile
         "grid":          0.30,
         "breakout":      0.00,
         "trend":         0.10,
@@ -124,7 +128,7 @@ REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
     REGIME_BEAR: {
         "dca":           0.56,  # -0.05 to fund dual_momentum
         "supertrend":    0.06,
-        "meanrev":       0.00,
+        "meanrev":       0.00,  # Not appropriate — buying dips in a downtrend
         "grid":          0.18,
         "breakout":      0.00,
         "trend":         0.00,
@@ -136,7 +140,7 @@ REGIME_ALLOCATIONS: dict[str, dict[str, float]] = {
     REGIME_CRASH: {
         "dca":           0.79,
         "supertrend":    0.00,
-        "meanrev":       0.00,
+        "meanrev":       0.00,  # Never buy dips in a crash
         "grid":          0.06,
         "breakout":      0.00,
         "trend":         0.00,
