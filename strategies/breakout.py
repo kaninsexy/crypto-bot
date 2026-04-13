@@ -115,18 +115,28 @@ class BreakoutStrategy(BaseStrategy):
             symbol=symbol or config.TRADING_PAIR,
             timeframe=timeframe or config.TIMEFRAME,
         )
-        self.lookback         = lookback
-        self.volume_mult      = volume_mult
+        self.lookback          = lookback
+        self.volume_mult       = volume_mult
         self.volume_sma_period = volume_sma_period
-        self.atr_period       = atr_period
-        self.atr_stop_mult = atr_stop_mult
-        self.reward_ratio  = reward_ratio
-        self.max_leverage  = max_leverage
-        self.mtf_enabled   = mtf_enabled
-        self.adx_filter    = adx_filter
-        self.adx_period    = adx_period
-        self.adx_threshold = adx_threshold
-        self.regime_filter = regime_filter
+        self.atr_period        = atr_period
+        self.atr_stop_mult     = atr_stop_mult
+        self.reward_ratio      = reward_ratio
+        self.max_leverage      = max_leverage
+        self.mtf_enabled       = mtf_enabled
+        self.adx_filter        = adx_filter
+        self.adx_period        = adx_period
+        self.adx_threshold     = adx_threshold
+        self.regime_filter     = regime_filter
+
+        # ── ATR trailing stop ────────────────────────────────────────────────
+        # Initial entry stop uses atr_stop_mult (2.0×) as the static floor.
+        # The trailing stop uses a wider multiplier (3.5×) so it only activates
+        # once price has moved ~1.5 ATR above entry (new_trail > static_floor).
+        # This avoids prematurely tightening a stop on a normally-volatile breakout.
+        # trail_sl_pct encodes ATR×3.5 as a % of entry price; the simulator
+        # then ratchets SL = peak × (1 − trail_sl_pct), only ever moving UP.
+        self._atr_trail_period: int   = 14    # Independent of atr_period (entry sizing)
+        self._atr_trail_mult:   float = 3.5
 
         # State updated externally before generate_signal()
         self._htf_trend: int = 0              # 1 = 4h uptrend, -1 = 4h downtrend, 0 = unknown
@@ -364,23 +374,30 @@ class BreakoutStrategy(BaseStrategy):
             fully_confirmed = volume_confirmed and mtf_bullish
             leverage = self._calculate_leverage(current_atr, current_price, fully_confirmed)
 
-            stop_loss = current_price - (self.atr_stop_mult * current_atr)
+            # Initial (static) stop: atr_stop_mult (2.0×) below entry — this is
+            # the floor.  The ATR trailing stop uses _atr_trail_mult (3.5×) and
+            # only activates once price is ~1.5 ATR above entry (trail > floor).
+            stop_loss   = current_price - (self.atr_stop_mult * current_atr)
             take_profit = current_price + (self.atr_stop_mult * self.reward_ratio * current_atr)
 
-            # Trail SL at (atr_stop_mult × ATR) / price — same ratio as initial SL
-            trail_sl_pct = (self.atr_stop_mult * current_atr) / current_price
+            # trail_sl_pct = ATR(14) × 3.5 as % of entry price.
+            # Simulator ratchets: SL = peak × (1 − trail_sl_pct), upward only.
+            trail_sl_pct = (self._atr_trail_mult * current_atr) / current_price
+
             return self.buy(
                 price=current_price,
                 reason=(
                     f"Upside breakout above resistance={resistance:.4f} | "
                     f"Volume={volume_ratio:.1f}×avg | "
-                    f"ATR={current_atr:.4f} ({current_atr/current_price*100:.2f}%) | "
+                    f"ATR({self._atr_trail_period})={current_atr:.4f} ({current_atr/current_price*100:.2f}%) | "
                     f"Body={body_size:.4f} ({body_size/current_atr*100:.0f}% of ATR) | "
                     f"RSI={current_rsi:.1f} | "
                     f"ADX={current_adx:.1f} (prev={prev_adx:.1f}, {'↑ rising' if adx_rising else '↓ falling'}) | "
                     f"4h={'↑' if self._htf_trend == 1 else '?'} | "
                     f"Leverage={leverage}x | Sentiment={self._sentiment_score:.0f}/100 "
-                    f"(size={size_factor*100:.0f}%)"
+                    f"(size={size_factor*100:.0f}%) | "
+                    f"SL={stop_loss:.4f} (static floor {self.atr_stop_mult}×ATR) | "
+                    f"trail={trail_sl_pct*100:.2f}% ({self._atr_trail_mult}×ATR)"
                 ),
                 stop_loss=stop_loss,
                 take_profit=take_profit,

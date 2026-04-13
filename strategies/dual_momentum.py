@@ -63,6 +63,7 @@ PARAMETERS:
 """
 
 import pandas as pd
+import ta
 from typing import Optional
 from loguru import logger
 
@@ -123,6 +124,13 @@ class DualMomentumStrategy(BaseStrategy):
         self._in_position:       bool                       = False
         self._current_holding:   Optional[str]              = None  # Symbol we hold
         self._rotation_pending:  bool                       = False # Need to sell before buying
+
+        # ── ATR trailing stop ────────────────────────────────────────────────
+        # DualMomentum rotates frequently so uses a tighter 2.5× multiplier.
+        # No separate static SL — ATR stop is the initial stop on every entry.
+        # trail_sl_pct = ATR(14)×2.5 / entry_price; simulator ratchets upward only.
+        self._atr_trail_period: int   = 14
+        self._atr_trail_mult:   float = 2.5
 
         logger.info(
             f"DualMomentum | Universe: {self.universe_symbols} | "
@@ -211,6 +219,17 @@ class DualMomentumStrategy(BaseStrategy):
         """
         current_price = float(df["close"].iloc[-1])
 
+        # ── ATR(14) for trailing stop ─────────────────────────────────────────
+        # Computed once per candle; used by all BUY paths below.
+        # Falls back to 0.0 if df is too short (warmup); no stop set in that case.
+        current_atr = 0.0
+        if len(df) >= self._atr_trail_period + 5:
+            atr_series = ta.volatility.AverageTrueRange(
+                high=df["high"], low=df["low"], close=df["close"],
+                window=self._atr_trail_period,
+            ).average_true_range()
+            current_atr = float(atr_series.iloc[-1])
+
         # ── 1. CRASH regime: exit everything ─────────────────────────────────
         if self.regime_filter and self._current_regime == "CRASH":
             if self._in_position:
@@ -293,11 +312,23 @@ class DualMomentumStrategy(BaseStrategy):
             self._rotation_pending = False
             self._in_position      = True
             self._current_holding  = self._top_symbol
+
+            # ATR-based trailing stop: entry − ATR(14) × 2.5
+            # Tighter multiplier (2.5) suits DualMomentum's rotation cadence.
+            # No separate static floor — ATR stop is the sole initial stop.
+            atr_stop     = (current_price - (current_atr * self._atr_trail_mult)
+                            if current_atr > 0 else None)
+            trail_sl_pct = ((current_atr * self._atr_trail_mult) / current_price
+                            if current_atr > 0 else 0.03)   # 3% fallback if ATR unavailable
+
             return self.buy(
                 current_price,
                 reason=(
                     f"DualMomentum: Rotation BUY {self._top_symbol} | "
                     f"21c return={self._top_return*100:+.2f}% | "
+                    f"ATR({self._atr_trail_period})={current_atr:.4f} | "
+                    f"SL={atr_stop:.4f} (ATR×{self._atr_trail_mult}) | "
+                    f"trail={trail_sl_pct*100:.2f}% | "
                     f"All returns: "
                     + ", ".join(
                         f"{s}={r*100:+.2f}%"
@@ -307,20 +338,35 @@ class DualMomentumStrategy(BaseStrategy):
                         )
                     )
                 ),
+                stop_loss=atr_stop,
+                trailing_sl=True,
+                trail_sl_pct=trail_sl_pct,
             )
 
         # ── 6. New position: not holding, conditions met → BUY ───────────────
         if not self._in_position:
             self._in_position     = True
             self._current_holding = self._top_symbol
+
+            atr_stop     = (current_price - (current_atr * self._atr_trail_mult)
+                            if current_atr > 0 else None)
+            trail_sl_pct = ((current_atr * self._atr_trail_mult) / current_price
+                            if current_atr > 0 else 0.03)
+
             return self.buy(
                 current_price,
                 reason=(
                     f"DualMomentum: BUY {self._top_symbol} | "
                     f"Top 21c return={self._top_return*100:+.2f}% | "
                     f"Regime={self._current_regime} | "
+                    f"ATR({self._atr_trail_period})={current_atr:.4f} | "
+                    f"SL={atr_stop:.4f} (ATR×{self._atr_trail_mult}) | "
+                    f"trail={trail_sl_pct*100:.2f}% | "
                     "Absolute + relative momentum both positive"
                 ),
+                stop_loss=atr_stop,
+                trailing_sl=True,
+                trail_sl_pct=trail_sl_pct,
             )
 
         # ── 7. Already holding the winner → HOLD ─────────────────────────────

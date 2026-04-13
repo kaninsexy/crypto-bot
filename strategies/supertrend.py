@@ -86,6 +86,16 @@ class SupertrendStrategy(BaseStrategy):
         self.btc_filter = btc_filter
         self.htf_filter = htf_filter
 
+        # ── ATR trailing stop (independent of Supertrend ATR params) ─────────
+        # The Supertrend line (st_value) acts as the static floor stop.
+        # An additional ATR(14)×3.0 trailing stop is layered on top:
+        #   initial stop = max(st_value, entry − ATR(14)×3.0)
+        # The trail only activates if it rises above the Supertrend floor.
+        # trail_sl_pct encodes ATR×3.0 as a % of entry price; the simulator
+        # ratchets SL = peak × (1 − trail_sl_pct), only ever moving UP.
+        self._atr_trail_period: int   = 14
+        self._atr_trail_mult:   float = 3.0
+
         # BTC filter state — updated externally via update_btc_trend()
         self._btc_trend_up: bool = True   # Default to True for BTC/USDT itself
 
@@ -256,6 +266,15 @@ class SupertrendStrategy(BaseStrategy):
 
         trend_label = "↑ UPTREND" if curr_dir == 1 else "↓ DOWNTREND"
 
+        # ── ATR(14) for trailing stop — computed once per candle ──────────────
+        # Uses a fixed 14-period ATR, independent of the Supertrend's own ATR
+        # (which uses atr_period=10 and multiplier=2.5 for the signal itself).
+        atr_14 = ta.volatility.AverageTrueRange(
+            high=df["high"], low=df["low"], close=df["close"],
+            window=self._atr_trail_period,
+        ).average_true_range()
+        current_atr = float(atr_14.iloc[-1])
+
         # ── BUY Signal ────────────────────────────────────────────────────────
         if bullish_flip:
             # BTC filter: skip longs on altcoins if BTC is bearish
@@ -276,11 +295,26 @@ class SupertrendStrategy(BaseStrategy):
                         f"Supertrend={st_value:.2f} | 4H trend is bearish"
                     )
                 )
+
+            # Supertrend line = static floor stop (the band that just flipped)
+            # ATR(14)×3.0 stop = entry − ATR×3.0 (volatility-adaptive)
+            # Use max so the floor is always respected; trail only activates above it.
+            atr_stop     = current_price - (current_atr * self._atr_trail_mult)
+            stop_loss    = max(st_value, atr_stop)
+            trail_sl_pct = (current_atr * self._atr_trail_mult) / current_price
+
             return self.buy(
                 price=current_price,
-                reason=f"Supertrend flipped BULLISH | Line={st_value:.2f} (trailing stop)",
-                stop_loss=st_value,          # Supertrend line = trailing stop
+                reason=(
+                    f"Supertrend flipped BULLISH | Line={st_value:.2f} (floor stop) | "
+                    f"ATR({self._atr_trail_period})={current_atr:.4f} | "
+                    f"SL={stop_loss:.4f} ({'ATR' if atr_stop >= st_value else 'Supertrend'} floor) | "
+                    f"trail={trail_sl_pct*100:.2f}% (ATR×{self._atr_trail_mult})"
+                ),
+                stop_loss=stop_loss,
                 take_profit=None,            # No fixed TP — ride until bearish flip
+                trailing_sl=True,
+                trail_sl_pct=trail_sl_pct,
             )
 
         # ── SELL Signal ───────────────────────────────────────────────────────

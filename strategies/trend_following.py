@@ -96,6 +96,17 @@ class TrendFollowingStrategy(BaseStrategy):
             f"Trend Following | EMA({fast_ema}/{slow_ema}) + MACD({macd_fast},{macd_slow},{macd_signal})"
         )
 
+    # ── ATR trailing stop parameters ──────────────────────────────────────────
+    # ATR(14) × 3.0 is the trailing distance for long positions.
+    # Static SL from config.STOP_LOSS_PCT is kept as a floor:
+    #   initial stop = max(config_static_sl, entry_price − ATR×3.0)
+    # The simulator ratchets the SL upward each candle via trail_sl_pct,
+    # which encodes the ATR distance as a fraction of the entry price.
+    # For true per-candle ATR recalculation, simulator.tick() would need
+    # to accept the OHLCV df — see paper_trading/simulator.py TODO.
+    _ATR_TRAIL_PERIOD: int   = 14
+    _ATR_TRAIL_MULT:   float = 3.0
+
     def generate_signal(self, df: pd.DataFrame) -> Signal:
         """
         Compute EMA crossover and MACD, then return BUY/SELL/HOLD.
@@ -127,6 +138,13 @@ class TrendFollowingStrategy(BaseStrategy):
         )
         macd_histogram = macd.macd_diff()  # Positive = bullish momentum
 
+        # ATR(14) — used for trailing stop only, not for entry logic
+        atr_series = ta.volatility.AverageTrueRange(
+            high=df["high"], low=df["low"], close=close,
+            window=self._ATR_TRAIL_PERIOD,
+        ).average_true_range()
+        current_atr = float(atr_series.iloc[-1])
+
         # Get the last two rows to detect crossovers
         # A crossover is when the relationship between fast/slow FLIPS
         ema_fast_prev = float(ema_fast.iloc[-2])
@@ -150,17 +168,32 @@ class TrendFollowingStrategy(BaseStrategy):
         # ── Generate signal ───────────────────────────────────────────────────
 
         if bullish_cross and macd_bullish:
-            stop_loss = current_price * (1 - config.STOP_LOSS_PCT)
+            # ATR-based trailing stop:
+            #   static_sl  = config percentage floor (ensures minimum protection)
+            #   atr_stop   = entry − ATR(14) × 3.0 (adapts to current volatility)
+            #   stop_loss  = max(static_sl, atr_stop) — use the tighter of the two
+            #
+            # trail_sl_pct converts the ATR distance to a percentage of entry price.
+            # The simulator then ratchets: SL = peak_price × (1 − trail_sl_pct),
+            # which only ever moves the stop UP as highest_high rises.
+            static_sl   = current_price * (1 - config.STOP_LOSS_PCT)
+            atr_stop    = current_price - (current_atr * self._ATR_TRAIL_MULT)
+            stop_loss   = max(static_sl, atr_stop)
+            trail_sl_pct = (current_atr * self._ATR_TRAIL_MULT) / current_price
+
             return self.buy(
                 price=current_price,
                 reason=(
                     f"Bullish EMA crossover: EMA{self.fast_ema}={ema_fast_curr:.2f} "
                     f"crossed above EMA{self.slow_ema}={ema_slow_curr:.2f} | "
-                    f"MACD histogram: {histogram_curr:.4f} (bullish)"
+                    f"MACD histogram: {histogram_curr:.4f} (bullish) | "
+                    f"ATR({self._ATR_TRAIL_PERIOD})={current_atr:.4f} | "
+                    f"SL={stop_loss:.4f} ({'ATR' if atr_stop >= static_sl else 'static'} floor) | "
+                    f"trail={trail_sl_pct*100:.2f}%/ATR×{self._ATR_TRAIL_MULT}"
                 ),
                 stop_loss=stop_loss,
                 trailing_sl=True,
-                trail_sl_pct=config.STOP_LOSS_PCT,  # Trail at same % as initial SL
+                trail_sl_pct=trail_sl_pct,
             )
 
         elif bearish_cross and macd_bearish:
