@@ -411,25 +411,37 @@ def run_portfolio_once(
     print_market_snapshot(btc_df, symbol="BTC/USDT")
 
     # ── Daily loss guard check ───────────────────────────────────────────────
-    # Compute total equity before running candle so guard can compare to day-open
+    # update() handles midnight UTC reset and returns the current tier.
+    # Graduated tiers: NORMAL → WARNING (75%) → CAUTIOUS (50%) →
+    #                  HALT (block) → REDUCE (close-only) → EMERGENCY (close all)
+    # run_candle() reads _daily_guard.size_multiplier() and tier internally.
     current_total_equity = pm._compute_total_equity(strategy_dfs)
     if daily_guard is not None:
-        daily_guard.update(current_total_equity)
-        if not daily_guard.allows_new_buys(current_total_equity):
-            loss_pct = daily_guard.current_loss_pct(current_total_equity)
+        daily_tier = daily_guard.update(current_total_equity)
+        loss_pct   = daily_guard.current_loss_pct(current_total_equity)
+
+        if not daily_guard.allows_new_buys():
+            # HALT / REDUCE / EMERGENCY — block all new buys
             logger.warning(
-                f"[DailyLossGuard] Daily loss limit hit "
-                f"({loss_pct:.1f}% / {config.DAILY_LOSS_LIMIT_PCT:.1f}%) — "
-                f"new buys blocked for rest of day."
+                f"[DailyLossGuard] Tier={daily_tier.value} | "
+                f"Loss: -{loss_pct:.2f}% today — new buys blocked."
             )
-            if notifier and not getattr(daily_guard, '_notified_today', False):
+            if notifier and not daily_guard._notified_today:
                 notifier.daily_loss_limit_hit(loss_pct, current_total_equity)
                 daily_guard._notified_today = True
-            # Inject a flag into pm to block buys this candle
             pm._daily_loss_block = True
+        elif daily_tier.value != "NORMAL":
+            # WARNING / CAUTIOUS — sizes reduced, buys still allowed
+            logger.info(
+                f"[DailyLossGuard] Tier={daily_tier.value} | "
+                f"Loss: -{loss_pct:.2f}% today | "
+                f"Size mult: {daily_guard.size_multiplier():.0%}"
+            )
+            pm._daily_loss_block = False
+            daily_guard._notified_today = False
         else:
             pm._daily_loss_block = False
-            daily_guard._notified_today = getattr(daily_guard, '_notified_today', False)
+            daily_guard._notified_today = False
 
     # Run all strategies for this candle
     actions = pm.run_candle(btc_df=btc_df, strategy_dfs=strategy_dfs)

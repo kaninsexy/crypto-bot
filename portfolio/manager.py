@@ -208,6 +208,7 @@ class PortfolioManager:
         self._last_prices:  dict[str, float] = {}
         self._regime_change_count: int = 0
         self._daily_loss_block: bool = False    # Set by DailyLossGuard in main.py
+        self._last_daily_tier:  str  = "NORMAL" # Tracks tier between candles for transition detection
         # Track how many trades per slot have already been flushed to the
         # persistent logger so we only log each trade once.
         self._logged_trade_counts: dict[str, int] = {}
@@ -323,6 +324,27 @@ class PortfolioManager:
         total_equity = self._compute_total_equity(strategy_dfs)
         cb_state     = self.circuit_breaker.update(total_equity)
         size_mult    = self.circuit_breaker.size_multiplier()
+
+        # ── Graduated daily loss guard ───────────────────────────────────────
+        # Runs independently of the circuit breaker (which tracks peak drawdown).
+        # _daily_guard is injected from main.py; update() was already called there
+        # before run_candle(), so _daily_guard.tier is current.
+        _dg = getattr(self, '_daily_guard', None)
+        if _dg is not None:
+            _daily_tier = _dg.tier.value  # "NORMAL"/"WARNING"/"CAUTIOUS"/"HALT"/"REDUCE"/"EMERGENCY"
+
+            # One-shot: close ALL positions when EMERGENCY tier first triggers
+            if _dg.needs_emergency_close():
+                self._emergency_close_all(strategy_dfs)
+
+            # One-shot: tighten stops when entering REDUCE tier
+            if _daily_tier == "REDUCE" and self._last_daily_tier != "REDUCE":
+                self._tighten_all_stops(strategy_dfs)
+
+            self._last_daily_tier = _daily_tier
+
+            # Combine: CircuitBreaker × DailyLossGuard (e.g. CB=0.5 × DLG=0.75 → 0.375)
+            size_mult = size_mult * _dg.size_multiplier()
 
         if cb_state == BreakerState.TRIPPED:
             logger.warning(
@@ -466,10 +488,15 @@ class PortfolioManager:
 
             # ── BUY logic ─────────────────────────────────────────────
             if signal.action == "BUY":
-                # Portfolio-level daily loss block (set by main.py DailyLossGuard)
+                # Portfolio-level daily loss block (set by main.py via DailyLossGuard)
+                # Covers HALT / REDUCE / EMERGENCY tiers; WARNING/CAUTIOUS only reduce size.
                 if self._daily_loss_block:
+                    tier_label = self._last_daily_tier
                     actions[sname] = "DAILY_LOSS_BLOCK"
-                    logger.debug(f"[Portfolio] {sname} BUY blocked by portfolio daily loss guard.")
+                    logger.debug(
+                        f"[Portfolio] {sname} BUY blocked by daily loss guard "
+                        f"(tier={tier_label})."
+                    )
                     continue
 
                 # Per-strategy daily loss block
@@ -846,6 +873,106 @@ class PortfolioManager:
             )
         return moved
 
+    # ── Daily loss guard helpers ────────────────────────────────────────────
+
+    def _emergency_close_all(
+        self,
+        strategy_dfs: Optional[dict[str, pd.DataFrame]] = None,
+    ) -> None:
+        """
+        Close all open positions at market price.
+
+        Called exactly once by run_candle() when DailyLossGuard.needs_emergency_close()
+        returns True (EMERGENCY tier, ≥ 5% daily loss).  The one-shot flag on the
+        guard itself prevents repeat calls on subsequent candles.
+        """
+        from strategies.base import Signal  # local import to avoid circular
+        logger.critical(
+            "[Portfolio] 🚨 EMERGENCY CLOSE-ALL — daily loss ≥ 5%. "
+            "Closing every open position at market price."
+        )
+        closed = 0
+        for sname, slot in self._slots.items():
+            if slot.simulator.position is None:
+                continue
+            price = None
+            if strategy_dfs and sname in strategy_dfs:
+                df = strategy_dfs[sname]
+                if df is not None and not df.empty:
+                    price = float(df["close"].iloc[-1])
+            if price is None:
+                price = self._last_prices.get(sname)
+            if price is None:
+                logger.warning(
+                    f"[Portfolio] Emergency close {sname}: no price available — skipping."
+                )
+                continue
+            signal = Signal(
+                action="SELL",
+                price=price,
+                reason="EMERGENCY_DAILY_LOSS_5PCT",
+                order_type="market",
+            )
+            try:
+                slot.simulator.execute_signal(signal, price)
+                logger.critical(
+                    f"[Portfolio]   ✓ Emergency close {sname} @ ${price:,.2f}"
+                )
+                closed += 1
+            except Exception as exc:
+                logger.error(f"[Portfolio] Emergency close {sname} failed: {exc}")
+        logger.critical(
+            f"[Portfolio] Emergency close complete: {closed} position(s) closed."
+        )
+
+    def _tighten_all_stops(
+        self,
+        strategy_dfs: Optional[dict[str, pd.DataFrame]] = None,
+        trail_pct: float = 0.02,
+    ) -> None:
+        """
+        Tighten stop-losses on all open positions to trail_pct below current price.
+
+        Called once when DailyLossGuard transitions into REDUCE tier (4% daily loss).
+        Only ever moves stops UP (never loosens them) — if the existing stop is
+        already tighter than trail_pct below current price, it is left untouched.
+
+        Args:
+            strategy_dfs: Latest OHLCV data to read current price from.
+            trail_pct:    Fraction below current price for the tightened stop (default 2%).
+        """
+        logger.warning(
+            f"[Portfolio] 🔴 REDUCE tier — tightening all open-position stops "
+            f"to {trail_pct*100:.0f}% below current price."
+        )
+        tightened = 0
+        for sname, slot in self._slots.items():
+            pos = slot.simulator.position
+            if pos is None:
+                continue
+            price = None
+            if strategy_dfs and sname in strategy_dfs:
+                df = strategy_dfs[sname]
+                if df is not None and not df.empty:
+                    price = float(df["close"].iloc[-1])
+            if price is None:
+                price = self._last_prices.get(sname)
+            if price is None:
+                continue
+            new_sl  = round(price * (1.0 - trail_pct), 8)
+            old_sl  = pos.stop_loss
+            # Only tighten — never move stop further away
+            if old_sl is None or new_sl > old_sl:
+                pos.stop_loss = new_sl
+                tightened += 1
+                old_str = f"${old_sl:,.4f}" if old_sl is not None else "none"
+                logger.warning(
+                    f"[Portfolio]   {sname}: stop {old_str} → ${new_sl:,.4f} "
+                    f"({trail_pct*100:.0f}% below ${price:,.2f})"
+                )
+        if tightened == 0:
+            logger.info("[Portfolio] REDUCE: no open-position stops needed tightening.")
+
     # ── Equity & reporting ──────────────────────────────────────────────────
 
     def _vol_size_mult(
@@ -950,11 +1077,22 @@ class PortfolioManager:
                 f"Conf={reading.confidence:.0%}",
             ])
 
+        # Daily loss guard info (if attached)
+        _dg = getattr(self, '_daily_guard', None)
+        dlg_lines: list[str] = []
+        if _dg is not None:
+            dlg_lines = [
+                f"  Daily Loss Guard: {_dg.tier.value}  "
+                f"(loss today: -{_dg.current_loss_pct(total_equity):.2f}%  "
+                f"size mult: {_dg.size_multiplier():.0%})",
+            ]
+
         lines.extend([
             "",
             f"  Circuit Breaker : {self.circuit_breaker.state.value}  "
             f"(DD from peak: -{cb_dd:.1f}%)",
             f"  Size Multiplier : {self.circuit_breaker.size_multiplier():.0%}",
+            *dlg_lines,
             "",
             f"  {'Strategy':<16} {'Allocated':>10} {'Equity':>10} {'Return%':>9} "
             f"{'Weight':>7} {'Active':>7}",
@@ -1156,6 +1294,11 @@ class PortfolioManager:
                 for sname, slot in self._slots.items()
             },
         }
+        # Persist start-of-day equity so restarts within the same UTC day
+        # continue from the correct daily loss baseline (not today's open equity).
+        _dg = getattr(self, '_daily_guard', None)
+        if _dg is not None:
+            data["daily_loss_guard"] = _dg.save_state()
         path = self._CHECKPOINT_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
@@ -1191,6 +1334,13 @@ class PortfolioManager:
             peak = data.get("circuit_breaker_peak")
             if peak:
                 self.circuit_breaker._peak_equity = peak
+
+            # Restore daily loss guard SOD equity (same-day restart only)
+            _dg = getattr(self, '_daily_guard', None)
+            if _dg is not None:
+                dlg_data = data.get("daily_loss_guard")
+                if dlg_data:
+                    _dg.restore_state(dlg_data)
 
             # Restore each strategy simulator + sync strategy internal state
             slot_data = data.get("slots", {})
