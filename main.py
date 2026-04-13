@@ -373,7 +373,7 @@ def run_portfolio_once(
             pass
 
         try:
-            resumed = pm.load_checkpoint()
+            resumed = pm.load_checkpoint(strategy_dfs=strategy_dfs)
             if resumed:
                 logger.info(
                     "[Portfolio] 🔄 Resumed from previous session — "
