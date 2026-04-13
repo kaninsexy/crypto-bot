@@ -44,6 +44,7 @@ from strategies.breakout import BreakoutStrategy
 # Phase D + E
 from portfolio.manager import PortfolioManager
 from portfolio.daily_loss_guard import DailyLossGuard
+from portfolio.reconciler import reconcile_on_startup
 
 # Notifications (best-effort — bot never crashes if Telegram fails)
 from notifications.telegram import get_notifier
@@ -381,6 +382,20 @@ def run_portfolio_once(
                 )
         except Exception as _e:
             logger.debug(f"Checkpoint load skipped (non-fatal): {_e}")
+
+        # ── Exchange reconciliation (live mode only; no-op in paper mode) ─────
+        # Compares internal checkpoint positions against actual Binance Futures
+        # positions. Must run AFTER load_checkpoint() and BEFORE the first candle
+        # so that any ghost/zombie discrepancies are resolved before orders fire.
+        # A network failure here is non-fatal: startup continues with a warning.
+        try:
+            reconcile_on_startup(pm, exchange)
+        except Exception as _recon_err:
+            logger.warning(
+                f"[Reconciler] Unexpected error during reconciliation "
+                f"({type(_recon_err).__name__}: {_recon_err}) — "
+                f"continuing startup. Check positions manually."
+            )
 
         # Replay missed candles AFTER checkpoint is loaded (positions restored).
         # NOTE: replay is crash recovery, NOT a dashboard feature. It must run

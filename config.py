@@ -101,6 +101,28 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE: str = os.path.join("logs", "bot.log")
 
 
+# ─── Exchange reconciliation (live mode only) ────────────────────────────────
+#
+# After load_checkpoint(), the bot compares its internal positions against
+# what actually exists on Binance Futures. See portfolio/reconciler.py.
+#
+# RECONCILE_AUTO_CLOSE_GHOST
+#   false (default): log CRITICAL for unknown exchange positions, leave them open.
+#   true:            send a reduce-only market close for ghost positions.
+#                    Use with caution — only enable once you're confident the
+#                    reconciler won't mistake a legitimate manual hedge as a ghost.
+#
+# RECONCILE_TIMEOUT_SECONDS
+#   How long to wait for Binance to respond before giving up and continuing
+#   startup without reconciliation. Default: 15 seconds.
+
+RECONCILE_AUTO_CLOSE_GHOST: bool = os.getenv(
+    "RECONCILE_AUTO_CLOSE_GHOST", "false"
+).lower() in ("true", "1", "yes")
+
+RECONCILE_TIMEOUT_SECONDS: int = int(os.getenv("RECONCILE_TIMEOUT_SECONDS", "15"))
+
+
 # ─── Validation ───────────────────────────────────────────────────────────────
 
 def validate():
