@@ -72,6 +72,7 @@ PARAMETERS:
   btd_mode           : If True, track profit as accumulated base currency (default: False)
 """
 
+import time
 import pandas as pd
 import ta
 from loguru import logger
@@ -164,6 +165,16 @@ class GridTradingStrategy(BaseStrategy):
         self._btd_cycles: int = 0                  # Grid cycles completed in BTD mode
         self._btd_total_usdt_profit: float = 0.0  # Running USDT value of base kept
 
+        # SL circuit breaker — prevents re-entry after repeated stop-losses in a
+        # short window (e.g. 5 SL hits in one sharp down-move).
+        # _sl_consecutive: SL streak, reset to 0 on any profitable exit.
+        # _sl_exit_times:  Unix timestamps of recent SL exits (pruned to 6-hour window).
+        # _cb_paused_until: Unix timestamp after which new buys are allowed again.
+        #                   0.0 means not paused.
+        self._sl_consecutive: int = 0
+        self._sl_exit_times: list[float] = []
+        self._cb_paused_until: float = 0.0
+
         logger.info(
             f"GridTrading (adaptive) | BB({bb_period}, {bb_std}σ) | "
             f"ATR({atr_period})×{atr_step_mult} | "
@@ -173,6 +184,43 @@ class GridTradingStrategy(BaseStrategy):
             f"BTD={'ON' if btd_mode else 'OFF'} | "
             f"Trailing grid: {'ON' if trailing_grid else 'OFF'}"
         )
+
+    # ── SL circuit breaker helpers ────────────────────────────────────────────
+
+    def _on_sl_exit(self) -> None:
+        """
+        Called whenever the simulator closes the position via stop-loss.
+        Increments the consecutive-SL counter and trips the circuit breaker
+        if 3+ SLs have occurred within a 6-hour rolling window.
+        """
+        now = time.time()
+        window_secs = 6 * 3600  # 6-hour look-back
+
+        # Drop exits older than the window
+        self._sl_exit_times = [t for t in self._sl_exit_times if now - t < window_secs]
+        self._sl_exit_times.append(now)
+        self._sl_consecutive += 1
+
+        if self._sl_consecutive >= 3 and len(self._sl_exit_times) >= 3:
+            self._cb_paused_until = now + 12 * 3600  # block re-entry for 12 hours
+            logger.warning(
+                f"[GridTrading] Circuit breaker: paused re-entry after "
+                f"{self._sl_consecutive} consecutive SLs "
+                f"({len(self._sl_exit_times)} SLs in last 6h) — "
+                f"resuming at {time.strftime('%H:%M:%S', time.localtime(self._cb_paused_until))}"
+            )
+
+    def _on_tp_exit(self) -> None:
+        """
+        Called whenever the position closes at a profit (grid target or upper-band break).
+        Resets the consecutive-SL counter so a single win clears the streak.
+        """
+        if self._sl_consecutive > 0:
+            logger.debug(
+                f"[GridTrading] Circuit breaker streak reset "
+                f"(was {self._sl_consecutive}) after profitable exit."
+            )
+        self._sl_consecutive = 0
 
     # ── Grid construction ─────────────────────────────────────────────────────
 
@@ -352,6 +400,7 @@ class GridTradingStrategy(BaseStrategy):
                 sell_level = self._last_buy_level
                 self._last_buy_level = None
                 buy_info = f"${sell_level:.2f}" if sell_level is not None else "entry"
+                self._on_tp_exit()
                 return self.sell(
                     price=current_price,
                     reason=(
@@ -424,6 +473,7 @@ class GridTradingStrategy(BaseStrategy):
 
                 self._in_position = False
                 self._last_buy_level = None
+                self._on_tp_exit()
                 sell_reason = (
                     f"Grid sell: ${current_price:.2f} ≥ target ${sell_target:.2f} | "
                     f"Bought at ${bought_at:.2f} | "
@@ -443,6 +493,23 @@ class GridTradingStrategy(BaseStrategy):
 
         # ── BUY: price dropped to a new (lower) grid level ────────────────────
         if not self._in_position and nearest_below is not None:
+            # Circuit breaker: skip re-entry if tripped by consecutive SLs
+            now = time.time()
+            if self._cb_paused_until > now:
+                remaining_h = (self._cb_paused_until - now) / 3600
+                logger.debug(
+                    f"[GridTrading] Circuit breaker active — "
+                    f"skipping buy at ${nearest_below:.2f} | "
+                    f"{remaining_h:.1f}h remaining"
+                )
+                return self.hold(
+                    current_price,
+                    reason=(
+                        f"[GridTrading] Circuit breaker: paused re-entry after "
+                        f"3 consecutive SLs | {remaining_h:.1f}h remaining"
+                    ),
+                )
+
             # Only buy if this level is new (lower than previous) or first buy
             if self._last_buy_level is None or nearest_below < self._last_buy_level:
                 self._in_position = True
@@ -498,13 +565,16 @@ class GridTradingStrategy(BaseStrategy):
            persisted; the simulator's SL is the safety net for the restored position.
         """
         if self._in_position and not simulator_has_position:
-            # Tick closed the position behind Grid's back — reset so we can re-enter
+            # Tick closed the position behind Grid's back — reset so we can re-enter.
+            # We treat this as a stop-loss (the simulator hits SL via tick, not via
+            # generate_signal; any TP hit inside generate_signal is handled there).
             logger.info(
                 "Grid: simulator closed position externally (SL/TP via tick). "
                 "Resetting _in_position to allow re-entry."
             )
             self._in_position = False
             self._last_buy_level = None
+            self._on_sl_exit()
 
         elif not self._in_position and simulator_has_position:
             # Restart recovery: simulator has a position Grid doesn't know about
