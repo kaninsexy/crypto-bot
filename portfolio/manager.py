@@ -1570,31 +1570,27 @@ class PortfolioManager:
 
                     # ── Re-enabled strategy balance repair ────────────────────
                     # Scenario: a strategy was previously allocated 0% (saved
-                    # checkpoint with balance=0, no position, no trades). The
-                    # user then changes the regime allocation to give it capital
-                    # (e.g. MeanReversion goes from 0% → 5%), and on restart
-                    # initialize() creates the simulator with the new capital but
-                    # restore_checkpoint() immediately overwrites balance=0 from
-                    # the stale checkpoint.
+                    # checkpoint with balance=0, no position). The user then
+                    # re-enables it (e.g. MeanReversion 0% → 10%), and on
+                    # restart initialize() creates the simulator with the new
+                    # capital but restore_checkpoint() immediately overwrites
+                    # balance=0 from the stale checkpoint.
                     #
-                    # Detection: balance exactly 0, flat (no position), slot has
-                    # positive capital from initialize(), and no fees were ever
-                    # paid (meaning the strategy was genuinely never active rather
-                    # than having traded its capital down to zero).
-                    #
-                    # Fix: reset balance to the capital initialize() allocated.
-                    # This is safe — a strategy that truly lost all its capital
-                    # through trading would have non-zero total_fees_paid.
+                    # Three conditions are sufficient:
+                    #   balance == 0.0  — checkpoint had zero
+                    #   position is None — no open trade restored
+                    #   capital > 0.0   — but initialize() gave it capital
                     if (
                         slot.simulator.balance == 0.0
                         and slot.simulator.position is None
-                        and slot.simulator.total_fees_paid == 0.0
                         and slot.capital > 0.0
                     ):
-                        slot.simulator.balance = slot.capital
+                        slot.simulator.balance         = slot.capital
+                        slot.simulator.initial_balance = slot.capital
                         logger.info(
-                            f"[Portfolio]   ↩ {sname}: was 0% allocation in checkpoint — "
-                            f"balance restored to allocated capital ${slot.capital:,.2f}"
+                            f"[Portfolio] ↩ {sname}: balance repaired "
+                            f"$0.00 → ${slot.capital:,.2f} "
+                            f"(re-enabled from zero allocation)"
                         )
 
                     pos = slot.simulator.position
