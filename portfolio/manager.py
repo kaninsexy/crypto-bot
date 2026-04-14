@@ -1161,59 +1161,79 @@ class PortfolioManager:
             )
 
         # ── Leverage & Risk Guard section ──────────────────────────────────
-        # Build a {symbol: price} dict from last known prices for each slot
-        _lv_prices: dict[str, float] = {}
-        for sn, sl in self._slots.items():
-            px = self._last_prices.get(sn)
-            if px is not None:
-                _lv_prices[sl.strategy.symbol] = px
-
-        _lv_positions = self._get_open_positions_summary()
-        _regime_cap   = self._leverage_guard.get_regime_leverage_cap(self._current_regime)
-        _corr         = self._leverage_guard.check_correlated_risk(
-            _lv_positions, _lv_prices, self.total_capital
-        )
-        _liq_warns    = self._leverage_guard.check_liquidation_safety(
-            _lv_positions, _lv_prices, self.total_capital
-        )
-
-        # Liquidation label — distinguish "no leveraged positions" from
-        # "has leverage but everything is safe" vs "active warnings".
-        _has_leveraged = any(p["leverage"] > 1 for p in _lv_positions)
-        if not _has_leveraged:
-            _liq_label = "NONE (all positions ≤ 1x leverage)"
-        elif not _liq_warns:
-            _liq_label = "NONE"
-        else:
-            # Show the worst (closest to liquidation) position's severity
-            worst = min(_liq_warns, key=lambda w: w["distance_pct"])
-            _liq_label = (
-                f"⚠ {worst['severity']} — "
-                f"{worst['strategy']} {worst['symbol']} "
-                f"{worst['distance_pct']:.1f}% from liquidation"
-            )
-
         lines.extend([
             "",
             "─" * 62,
             f"  LEVERAGE & RISK GUARD",
             "─" * 62,
-            f"  Regime leverage cap  : {_regime_cap}x ({self._current_regime})",
-            f"  Liquidation risk     : {_liq_label}",
-            f"  ── Correlated Exposure ──",
         ])
 
-        if _corr:
-            for sym, data in _corr.items():
-                n         = len(data["strategies"])
-                warn_flag = "  ⚠ EXCEEDS 15% THRESHOLD" if data["warning"] else ""
-                lines.append(
-                    f"  {sym:<20}: {n} {'strategy' if n == 1 else 'strategies'} | "
-                    f"{data['exposure_pct']:.1f}% of capital | "
-                    f"max loss {data['max_combined_loss_pct']:.1f}%{warn_flag}"
+        try:
+            # Build a {symbol: price} dict.
+            # Primary source: self._last_prices (populated by run_candle every
+            # candle).  Fallback: position.avg_entry_price so the section still
+            # renders meaningful data if summary() is called before the first
+            # candle (e.g. at startup after checkpoint restore).
+            _lv_prices: dict[str, float] = {}
+            for sn, sl in self._slots.items():
+                px = self._last_prices.get(sn)
+                if px is not None:
+                    _lv_prices[sl.strategy.symbol] = px
+
+            # If _last_prices is still empty (pre-first-candle), fall back to
+            # each open position's entry price as a proxy.  Not perfectly
+            # accurate but gives the section something to display.
+            if not _lv_prices:
+                for sn, sl in self._slots.items():
+                    pos = sl.simulator.position
+                    if pos is not None and pos.avg_entry_price > 0:
+                        _lv_prices[sl.strategy.symbol] = pos.avg_entry_price
+
+            _lv_positions = self._get_open_positions_summary()
+            _regime_cap   = self._leverage_guard.get_regime_leverage_cap(self._current_regime)
+            _corr         = self._leverage_guard.check_correlated_risk(
+                _lv_positions, _lv_prices, self.total_capital
+            )
+            _liq_warns    = self._leverage_guard.check_liquidation_safety(
+                _lv_positions, _lv_prices, self.total_capital
+            )
+
+            # Liquidation label: three distinct states so the reason is explicit.
+            _has_leveraged = any(p["leverage"] > 1 for p in _lv_positions)
+            if not _has_leveraged:
+                _liq_label = "NONE (all positions ≤ 1x leverage)"
+            elif not _liq_warns:
+                _liq_label = "NONE"
+            else:
+                worst = min(_liq_warns, key=lambda w: w["distance_pct"])
+                _liq_label = (
+                    f"⚠ {worst['severity']} — "
+                    f"{worst['strategy']} {worst['symbol']} "
+                    f"{worst['distance_pct']:.1f}% from liquidation"
                 )
-        else:
-            lines.append(f"  No open positions.")
+
+            lines.append(f"  Regime leverage cap  : {_regime_cap}x ({self._current_regime})")
+            lines.append(f"  Liquidation risk     : {_liq_label}")
+            lines.append(f"  ── Correlated Exposure ──")
+
+            if _corr:
+                for sym, data in _corr.items():
+                    n         = len(data["strategies"])
+                    warn_flag = "  ⚠ EXCEEDS 15% THRESHOLD" if data["warning"] else ""
+                    lines.append(
+                        f"  {sym:<20}: {n} {'strategy' if n == 1 else 'strategies'} | "
+                        f"{data['exposure_pct']:.1f}% of capital | "
+                        f"max loss {data['max_combined_loss_pct']:.1f}%{warn_flag}"
+                    )
+            else:
+                lines.append("  No open positions.")
+
+        except Exception as _lv_err:
+            # Never let a leverage-guard failure crash the whole summary.
+            # Log the error but still render the separator so the section is
+            # visually present and the operator knows to investigate.
+            logger.warning(f"[Portfolio] LeverageGuard summary error: {_lv_err}")
+            lines.append(f"  [error computing leverage guard data — see logs]")
 
         lines.extend([
             "─" * 62,
@@ -1547,6 +1567,36 @@ class PortfolioManager:
             for sname, slot in self._slots.items():
                 if sname in slot_data:
                     slot.simulator.restore_checkpoint(slot_data[sname])
+
+                    # ── Re-enabled strategy balance repair ────────────────────
+                    # Scenario: a strategy was previously allocated 0% (saved
+                    # checkpoint with balance=0, no position, no trades). The
+                    # user then changes the regime allocation to give it capital
+                    # (e.g. MeanReversion goes from 0% → 5%), and on restart
+                    # initialize() creates the simulator with the new capital but
+                    # restore_checkpoint() immediately overwrites balance=0 from
+                    # the stale checkpoint.
+                    #
+                    # Detection: balance exactly 0, flat (no position), slot has
+                    # positive capital from initialize(), and no fees were ever
+                    # paid (meaning the strategy was genuinely never active rather
+                    # than having traded its capital down to zero).
+                    #
+                    # Fix: reset balance to the capital initialize() allocated.
+                    # This is safe — a strategy that truly lost all its capital
+                    # through trading would have non-zero total_fees_paid.
+                    if (
+                        slot.simulator.balance == 0.0
+                        and slot.simulator.position is None
+                        and slot.simulator.total_fees_paid == 0.0
+                        and slot.capital > 0.0
+                    ):
+                        slot.simulator.balance = slot.capital
+                        logger.info(
+                            f"[Portfolio]   ↩ {sname}: was 0% allocation in checkpoint — "
+                            f"balance restored to allocated capital ${slot.capital:,.2f}"
+                        )
+
                     pos = slot.simulator.position
 
                     if pos:
