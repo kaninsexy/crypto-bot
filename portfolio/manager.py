@@ -82,6 +82,7 @@ from portfolio.regime_detector import RegimeDetector, RegimeReading, REGIME_ALLO
 from portfolio.kelly import KellyCalculator, KellyProfile, PHASE_C_PROFILES
 from portfolio.circuit_breaker import CircuitBreaker, BreakerState
 from portfolio.funding_rate import FundingRateProvider
+from portfolio.leverage_guard import LeverageGuard
 
 # Live execution layer — optional; only imported when TRADING_MODE == "live".
 # Using TYPE_CHECKING avoids a hard import dependency in paper mode.
@@ -178,6 +179,11 @@ class PortfolioManager:
             warn_pct=warn_pct,
             reset_pct=reset_pct,
         )
+
+        # ── Leverage guard ─────────────────────────────────────────────────
+        # Runs every 4 candles: liquidation proximity check, regime leverage
+        # caps, and correlated multi-strategy exposure warnings.
+        self._leverage_guard = LeverageGuard(max_portfolio_loss_pct=0.30)
 
         # ── Funding rate provider (optional) ───────────────────────────────
         self.funding_filter       = funding_filter
@@ -370,7 +376,40 @@ class PortfolioManager:
                     ):
                         slot.strategy.update_funding_rate(current_rate)
 
-        # 4. Process each strategy
+        # 4. Leverage & risk guard — pure math, no API calls.
+        # Runs every 4 candles (not every candle) to avoid redundant recalculation;
+        # risk levels don't change meaningfully candle-to-candle.
+        if self._candle_count % 4 == 0:
+            _lv_positions = self._get_open_positions_summary()
+            # Build {symbol: price} — multiple strategies can share a symbol;
+            # last one wins which is fine since they see the same market price.
+            _lv_prices: dict[str, float] = {}
+            for _sn, _slot in self._slots.items():
+                _df = strategy_dfs.get(_sn)
+                if _df is not None and not _df.empty:
+                    _lv_prices[_slot.strategy.symbol] = float(_df["close"].iloc[-1])
+
+            # Liquidation safety check
+            liq_warnings = self._leverage_guard.check_liquidation_safety(
+                _lv_positions, _lv_prices, self.total_capital
+            )
+            for w in liq_warnings:
+                logger.critical(f"[LeverageGuard] LIQUIDATION RISK: {w}")
+
+            # Correlated exposure check
+            corr = self._leverage_guard.check_correlated_risk(
+                _lv_positions, _lv_prices, self.total_capital
+            )
+            for symbol, data in corr.items():
+                if data["warning"]:
+                    logger.warning(
+                        f"[LeverageGuard] CORRELATED RISK {symbol}: "
+                        f"{len(data['strategies'])} strategies exposed | "
+                        f"notional={data['exposure_pct']:.1f}% of capital | "
+                        f"max combined loss={data['max_combined_loss_pct']:.1f}%"
+                    )
+
+        # 5. Process each strategy
         allocs = REGIME_ALLOCATIONS[self._current_regime]
 
         for sname, slot in self._slots.items():
@@ -568,6 +607,16 @@ class PortfolioManager:
                             f"equity=${strategy_equity:.0f} × "
                             f"CB={size_mult:.2f} × vol={vol_mult:.2f})"
                         )
+
+                # Apply regime-based leverage cap before handing the signal
+                # to the simulator.  Only relevant for strategies that request
+                # leverage > 1 (currently Breakout with ATR-dynamic leverage).
+                if signal.leverage > 1:
+                    signal.leverage = self._leverage_guard.apply_leverage_cap(
+                        requested_leverage=signal.leverage,
+                        regime=self._current_regime,
+                        strategy_name=sname,
+                    )
 
                 slot.simulator.execute_signal(signal, current_price)
                 actions[sname] = "BUY"
@@ -1111,7 +1160,63 @@ class PortfolioManager:
                 f"({trades} trades)"
             )
 
+        # ── Leverage & Risk Guard section ──────────────────────────────────
+        # Build a {symbol: price} dict from last known prices for each slot
+        _lv_prices: dict[str, float] = {}
+        for sn, sl in self._slots.items():
+            px = self._last_prices.get(sn)
+            if px is not None:
+                _lv_prices[sl.strategy.symbol] = px
+
+        _lv_positions = self._get_open_positions_summary()
+        _regime_cap   = self._leverage_guard.get_regime_leverage_cap(self._current_regime)
+        _corr         = self._leverage_guard.check_correlated_risk(
+            _lv_positions, _lv_prices, self.total_capital
+        )
+        _liq_warns    = self._leverage_guard.check_liquidation_safety(
+            _lv_positions, _lv_prices, self.total_capital
+        )
+
+        # Liquidation label — distinguish "no leveraged positions" from
+        # "has leverage but everything is safe" vs "active warnings".
+        _has_leveraged = any(p["leverage"] > 1 for p in _lv_positions)
+        if not _has_leveraged:
+            _liq_label = "NONE (all positions ≤ 1x leverage)"
+        elif not _liq_warns:
+            _liq_label = "NONE"
+        else:
+            # Show the worst (closest to liquidation) position's severity
+            worst = min(_liq_warns, key=lambda w: w["distance_pct"])
+            _liq_label = (
+                f"⚠ {worst['severity']} — "
+                f"{worst['strategy']} {worst['symbol']} "
+                f"{worst['distance_pct']:.1f}% from liquidation"
+            )
+
         lines.extend([
+            "",
+            "─" * 62,
+            f"  LEVERAGE & RISK GUARD",
+            "─" * 62,
+            f"  Regime leverage cap  : {_regime_cap}x ({self._current_regime})",
+            f"  Liquidation risk     : {_liq_label}",
+            f"  ── Correlated Exposure ──",
+        ])
+
+        if _corr:
+            for sym, data in _corr.items():
+                n         = len(data["strategies"])
+                warn_flag = "  ⚠ EXCEEDS 15% THRESHOLD" if data["warning"] else ""
+                lines.append(
+                    f"  {sym:<20}: {n} {'strategy' if n == 1 else 'strategies'} | "
+                    f"{data['exposure_pct']:.1f}% of capital | "
+                    f"max loss {data['max_combined_loss_pct']:.1f}%{warn_flag}"
+                )
+        else:
+            lines.append(f"  No open positions.")
+
+        lines.extend([
+            "─" * 62,
             "═" * 62,
         ])
         return "\n".join(lines)
@@ -1561,6 +1666,44 @@ class PortfolioManager:
         return n
 
     # ── Correlation helper ──────────────────────────────────────────────────
+
+    def _get_open_positions_summary(self) -> list[dict]:
+        """
+        Return a snapshot of every currently open position across all strategy slots.
+
+        Used by the LeverageGuard to check liquidation proximity and correlated
+        symbol exposure without needing direct access to the simulator internals.
+
+        Returns:
+            List of dicts, one per open position:
+            {
+                strategy:  str    — slot name (e.g. "Breakout")
+                symbol:    str    — trading pair (e.g. "BTC/USDT")
+                entry:     float  — average entry price (VWAP across DCA safety orders)
+                qty:       float  — total quantity held
+                leverage:  int    — leverage the position was opened with
+                side:      str    — "long" or "short"
+                stop_loss: float|None — current stop-loss price (None if not set)
+            }
+            Empty list if no positions are currently open.
+        """
+        result = []
+        for slot_name, slot in self._slots.items():
+            pos = slot.simulator.position
+            if pos is None:
+                continue
+            result.append({
+                "strategy":  slot_name,
+                "symbol":    slot.strategy.symbol,
+                "entry":     pos.avg_entry_price,
+                "qty":       pos.quantity,
+                # Use position.leverage (set at open time) rather than
+                # slot.strategy.leverage which may be a default/class attribute.
+                "leverage":  pos.leverage,
+                "side":      "short" if pos.is_short else "long",
+                "stop_loss": pos.stop_loss,
+            })
+        return result
 
     def _symbol_exposure_pct(self, symbol: str) -> float:
         """
