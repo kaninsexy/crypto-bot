@@ -394,12 +394,21 @@ def run_portfolio_once(
                             f"${amt:,.2f} {pair}"
                         )
                 # Re-sync initial_balance AFTER rebalance so return % is
-                # measured from the post-rebalance balance, not the stale
-                # pre-rebalance value that load_checkpoint() synced earlier.
-                # Without this, a strategy that received $3,836 from rebalance
-                # would show initial_balance=$2,918 → return = +203% (wrong).
-                for slot in pm._slots.values():
-                    slot.simulator.initial_balance = slot.simulator.balance
+                # measured from post-rebalance EQUITY (cash + open position
+                # value), not the stale pre-rebalance cash balance.
+                # Example without this: VolatilityBreakout has $2,889 cash
+                # but $8,843 equity (open BTC long worth ~$5,954). Setting
+                # initial_balance=$2,889 gives return = +206% (wrong).
+                # _last_prices is empty pre-first-candle, so we price
+                # positions using strategy_dfs which is already in scope.
+                for name, slot in pm._slots.items():
+                    df = strategy_dfs.get(name)
+                    if df is not None and not df.empty:
+                        price = float(df["close"].iloc[-1])
+                        eq = slot.simulator.get_equity(price)
+                    else:
+                        eq = slot.simulator.balance  # fallback: cash only
+                    slot.simulator.initial_balance = eq
         except Exception as _e:
             logger.debug(f"Checkpoint load skipped (non-fatal): {_e}")
 
