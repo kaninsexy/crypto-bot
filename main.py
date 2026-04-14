@@ -381,6 +381,18 @@ def run_portfolio_once(
                     "[Portfolio] 🔄 Resumed from previous session — "
                     "balances and open positions restored."
                 )
+                # Fund any re-enabled strategies (0% → X%) by transferring real
+                # capital from over-allocated donors.  This prevents phantom money:
+                # rebalance() detects drift and moves existing cash rather than
+                # conjuring new balance from thin air.
+                logger.info("[Portfolio] Running post-restore rebalance...")
+                moved = pm.rebalance(current_dfs=strategy_dfs)
+                if moved:
+                    for pair, amt in moved.items():
+                        logger.info(
+                            f"[Portfolio] Post-restore rebalance: "
+                            f"${amt:,.2f} {pair}"
+                        )
         except Exception as _e:
             logger.debug(f"Checkpoint load skipped (non-fatal): {_e}")
 

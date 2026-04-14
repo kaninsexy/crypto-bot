@@ -1570,31 +1570,6 @@ class PortfolioManager:
                 if sname in slot_data:
                     slot.simulator.restore_checkpoint(slot_data[sname])
 
-                    # ── Re-enabled strategy balance repair ────────────────────
-                    # Scenario: a strategy was previously allocated 0% (saved
-                    # checkpoint with balance=0, no position). The user then
-                    # re-enables it (e.g. MeanReversion 0% → 10%), and on
-                    # restart initialize() creates the simulator with the new
-                    # capital but restore_checkpoint() immediately overwrites
-                    # balance=0 from the stale checkpoint.
-                    #
-                    # Three conditions are sufficient:
-                    #   balance == 0.0  — checkpoint had zero
-                    #   position is None — no open trade restored
-                    #   capital > 0.0   — but initialize() gave it capital
-                    if (
-                        slot.simulator.balance == 0.0
-                        and slot.simulator.position is None
-                        and slot.capital > 0.0
-                    ):
-                        slot.simulator.balance         = slot.capital
-                        slot.simulator.initial_balance = slot.capital
-                        logger.info(
-                            f"[Portfolio] ↩ {sname}: balance repaired "
-                            f"$0.00 → ${slot.capital:,.2f} "
-                            f"(re-enabled from zero allocation)"
-                        )
-
                     # Always sync initial_balance to the actual restored balance
                     # so return % is measured from checkpoint state, not from
                     # the regime allocation used at restart.
