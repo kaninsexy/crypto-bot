@@ -43,6 +43,12 @@ STRATEGY_SYMBOLS: dict[str, str] = {
 
 ALL_STRATEGIES = list(STRATEGY_SYMBOLS.keys())
 
+# Inverse map: symbol → [strategy names] — used by price-based trade attribution.
+# Built at module load so _attribute_sell_to_strategy() doesn't recompute it per call.
+_SYMBOL_TO_STRATEGIES: dict[str, list[str]] = {}
+for _s, _sym in STRATEGY_SYMBOLS.items():
+    _SYMBOL_TO_STRATEGIES.setdefault(_sym, []).append(_s)
+
 # ── Regex patterns ────────────────────────────────────────────────────────────
 # Matches the loguru file format:
 #   "2024-01-15 10:30:00 | INFO     | paper_trading.simulator:close_full | message"
@@ -493,6 +499,7 @@ def enrich_open_positions_from_paper_state(
     open_positions:    list[dict],
     paper_state_path:  Path = PAPER_STATE_FILE,
     restored_positions: dict[str, float] | None = None,
+    paper_buys:        list[dict] | None = None,
 ) -> None:
     """
     Enrich open positions inferred from the log with live data from
@@ -569,14 +576,37 @@ def enrich_open_positions_from_paper_state(
             raw_upct = ps_pos.get("unrealized_pnl_pct")
             pos["unrealized_pnl_pct"] = float(raw_upct) if raw_upct is not None else None
 
-        # Bug 3: final fallback — if entry_price is still None after paper_state
-        # lookup, try the checkpoint restore log lines.  These are parsed from
-        # "[Portfolio] ↩ VolatilityBreakout: restored OPEN long | Entry $71,457.12"
-        # and stored in restored_positions by parse_log().
+        # Fallback 2: checkpoint restore log lines.
+        # Parsed from "[Portfolio] ↩ Strategy: restored OPEN long | Entry $71,457.12"
+        # by parse_log() into restored_positions dict.
         if pos["entry_price"] is None and restored_positions:
             rp = restored_positions.get(strat)
             if rp is not None:
                 pos["entry_price"] = rp
+
+        # Fallback 3: scan paper_buys for a BUY line within ±5 s of open_since.
+        # This catches strategies (e.g. VolatilityBreakout, DualMomentum) whose
+        # position was opened in the current log session but whose strategy name
+        # couldn't be inferred from the Actions timeline at the time of the buy
+        # (e.g. no Actions line was logged, or the position was opened before the
+        # first Actions line in the window).
+        # paper_state.json may be stale (written by an older bot run that predates
+        # these strategies), so we fall all the way through to this line-level scan.
+        if pos["entry_price"] is None and paper_buys:
+            try:
+                open_since_ts = datetime.fromisoformat(pos["open_since"])
+            except (ValueError, TypeError):
+                open_since_ts = None
+            if open_since_ts is not None:
+                best_price: float | None = None
+                best_delta: float = 5.0   # seconds tolerance
+                for buy in paper_buys:
+                    delta = abs((buy["ts"] - open_since_ts).total_seconds())
+                    if delta <= best_delta:
+                        best_delta = delta
+                        best_price = buy["entry_price"]
+                if best_price is not None:
+                    pos["entry_price"] = best_price
 
 
 # ── Entry-price enrichment ────────────────────────────────────────────────────
@@ -612,25 +642,100 @@ def enrich_exit_prices(closed_trades: list[dict], paper_sells: list[dict]) -> se
 
 # ── Bug 1 helpers: synthesize closed trades from unmatched PAPER SELL lines ────
 
+def _price_to_candidate_strategies(exit_price: float | None) -> list[str]:
+    """
+    Narrow down candidate strategies based on the exit price of the trade.
+
+    Each strategy trades a fixed symbol (see STRATEGY_SYMBOLS).  Price ranges
+    derived from current market levels allow us to identify which symbol was
+    traded — even when the Actions timeline is ambiguous or missing.
+
+    Thresholds:
+      > $10,000  → BTC/USDT  (DCA, TrendFollowing, BearShort, VolatilityBreakout, DualMomentum)
+      $500–$10k  → ETH/USDT  (Supertrend, MeanReversion, VWAP)
+      < $500     → SOL/USDT or AVAX/USDT  (GridTrading, Breakout)
+
+    Returns ALL_STRATEGIES when exit_price is None (no filter applicable).
+    """
+    if exit_price is None:
+        return ALL_STRATEGIES
+    if exit_price > 10_000:
+        return _SYMBOL_TO_STRATEGIES.get("BTC/USDT", ALL_STRATEGIES)
+    elif exit_price > 500:
+        return _SYMBOL_TO_STRATEGIES.get("ETH/USDT", ALL_STRATEGIES)
+    else:
+        # SOL/USDT + AVAX/USDT both fall below $500
+        low_cap = (
+            _SYMBOL_TO_STRATEGIES.get("SOL/USDT", [])
+            + _SYMBOL_TO_STRATEGIES.get("AVAX/USDT", [])
+        )
+        return low_cap if low_cap else ALL_STRATEGIES
+
+
 def _attribute_sell_to_strategy(
     sell_ts: datetime,
     actions_timeline: list[dict],
+    exit_price: float | None = None,
     window_seconds: float = 10.0,
 ) -> str:
     """
-    Return the strategy name most likely responsible for a [PAPER] FULL SELL at sell_ts.
+    Return the strategy name most likely responsible for a [PAPER] FULL SELL.
 
-    Logic:
-      1. Walk backwards through actions_timeline looking for a SELL/CLOSE action
-         within window_seconds before sell_ts — this is the strongest signal.
-      2. If no SELL/CLOSE found, return the strategy with the most recent non-HOLD
-         action in the same window (could be the strategy that just finished buying
-         its last safety order before closing).
-      3. Fall back to "Unknown" if nothing matches.
+    Attribution uses a three-level hierarchy:
+
+    Level 1 — Price-range filter (PRIMARY, most reliable).
+      Each strategy trades a single symbol with a known price range.
+      exit_price > $10k  → BTC strategies only
+      exit_price $500-10k → ETH strategies only
+      exit_price < $500  → SOL/AVAX strategies only
+      If the price bucket contains exactly ONE strategy, return it directly.
+
+    Level 2 — Actions timeline within price bucket (SECONDARY).
+      Among the price-filtered candidates, walk backwards through the
+      Actions timeline looking for:
+        a. SELL/CLOSE action (strongest signal — strategy is actively exiting)
+        b. Any non-HOLD/SKIP/BLOCKED action (weaker — strategy was recently active)
+      Both passes are confined to window_seconds before sell_ts.
+
+    Level 3 — Unconstrained Actions fallback (TERTIARY).
+      If no candidate match in the window, relax the price filter and look
+      for any SELL/CLOSE across all strategies.  Covers edge cases where
+      a strategy's price has shifted outside the expected bucket.
+
+    Falls back to "Unknown" only when the timeline has no usable signal at all.
     """
+    # Level 1: derive candidate set from price
+    candidates = set(_price_to_candidate_strategies(exit_price))
+
+    if len(candidates) == 1:
+        # Price uniquely identifies the strategy — no timeline needed
+        return next(iter(candidates))
+
     cutoff = sell_ts - timedelta(seconds=window_seconds)
 
-    # Pass 1: look for explicit SELL/CLOSE in the actions timeline
+    # Level 2a: SELL/CLOSE within the price-filtered candidate set
+    for entry in reversed(actions_timeline):
+        ts = entry["ts"]
+        if ts > sell_ts:
+            continue
+        if ts < cutoff:
+            break
+        for strat, action in entry["actions"].items():
+            if strat in candidates and action in ("SELL", "CLOSE"):
+                return strat
+
+    # Level 2b: any non-HOLD action within the price-filtered candidate set
+    for entry in reversed(actions_timeline):
+        ts = entry["ts"]
+        if ts > sell_ts:
+            continue
+        if ts < cutoff:
+            break
+        for strat, action in entry["actions"].items():
+            if strat in candidates and action not in ("HOLD", "SKIP", "BLOCKED"):
+                return strat
+
+    # Level 3: relax price filter — look for any SELL/CLOSE across all strategies
     for entry in reversed(actions_timeline):
         ts = entry["ts"]
         if ts > sell_ts:
@@ -641,16 +746,10 @@ def _attribute_sell_to_strategy(
             if action in ("SELL", "CLOSE"):
                 return strat
 
-    # Pass 2: any non-HOLD action in the window (weaker signal)
-    for entry in reversed(actions_timeline):
-        ts = entry["ts"]
-        if ts > sell_ts:
-            continue
-        if ts < cutoff:
-            break
-        for strat, action in entry["actions"].items():
-            if action not in ("HOLD", "SKIP", "BLOCKED"):
-                return strat
+    # Last resort: return the lexicographically-first candidate from the price bucket
+    # (a named strategy is always better than "Unknown" for downstream grouping)
+    if candidates and candidates != set(ALL_STRATEGIES):
+        return sorted(candidates)[0]
 
     return "Unknown"
 
@@ -679,7 +778,9 @@ def synthesize_trades_from_paper_sells(
         if sell.get("is_partial"):
             continue  # partial exits don't close the trade; skip
 
-        strategy = _attribute_sell_to_strategy(sell["ts"], actions_timeline)
+        strategy = _attribute_sell_to_strategy(
+            sell["ts"], actions_timeline, exit_price=sell.get("exit_price")
+        )
 
         closed_trades.append({
             "strategy":    strategy,
@@ -911,10 +1012,12 @@ def main() -> None:
     open_positions = infer_open_positions(parsed)
 
     # ── Enrich open positions with paper_state.json (checkpoint restores) ─
-    # Bug 3: also pass restored_positions as final entry_price fallback.
+    # Pass restored_positions and paper_buys as progressively weaker fallbacks
+    # for entry_price when paper_state.json is stale or missing a strategy.
     enrich_open_positions_from_paper_state(
         open_positions,
         restored_positions=parsed["restored_positions"],
+        paper_buys=parsed["paper_buys"],
     )
 
     # ── Compute summary stats ──────────────────────────────────────────────
