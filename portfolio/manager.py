@@ -1595,6 +1595,15 @@ class PortfolioManager:
                             f"(re-enabled from zero allocation)"
                         )
 
+                    # Always sync initial_balance to the actual restored balance
+                    # so return % is measured from checkpoint state, not from
+                    # the regime allocation used at restart.
+                    # Example: DCA restored to $30,000 but PaperTrading was
+                    # created with initial_balance=$20,000 (current BULL weight).
+                    # Without this line: return = (30,000 - 20,000) / 20,000 = +50%
+                    # With this line:    return = (30,000 - 30,000) / 30,000 = +0.00%
+                    slot.simulator.initial_balance = slot.simulator.balance
+
                     pos = slot.simulator.position
 
                     if pos:
