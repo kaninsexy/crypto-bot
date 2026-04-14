@@ -1151,7 +1151,8 @@ class PortfolioManager:
         for sname, slot in self._slots.items():
             price = self._last_prices.get(sname)
             eq    = slot.equity_at(price) if price else slot.equity
-            ret   = (eq - slot.capital) / slot.capital * 100 if slot.capital > 0 else 0
+            _ib   = slot.simulator.initial_balance
+            ret   = (eq - _ib) / _ib * 100 if _ib > 0 else 0.0
             w     = allocs.get(slot.bucket_key, 0.0) * 100
             trades = len(slot.simulator.trade_history)
             lines.append(
@@ -1260,7 +1261,8 @@ class PortfolioManager:
         for sname, slot in self._slots.items():
             price  = self._last_prices.get(sname)
             eq     = slot.equity_at(price) if price else slot.equity
-            ret    = (eq - slot.capital) / slot.capital * 100 if slot.capital > 0 else 0
+            _ib    = slot.simulator.initial_balance
+            ret    = (eq - _ib) / _ib * 100 if _ib > 0 else 0.0
             w      = allocs.get(slot.bucket_key, 0.0) * 100
 
             # Open position snapshot
