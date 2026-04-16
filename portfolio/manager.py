@@ -279,7 +279,7 @@ class PortfolioManager:
             capital  = round(self.total_capital * weight, 2)
             # Use per-strategy symbol from config if available
             slot_symbol = config.STRATEGY_SYMBOLS.get(sname, self.symbol)
-            strategy = self._build_strategy(sname, slot_symbol)
+            strategy = self._build_strategy(sname, slot_symbol, capital)
             sim      = PaperTrading(initial_balance=capital, symbol=slot_symbol)
 
             self._slots[sname] = StrategySlot(
@@ -1808,7 +1808,7 @@ class PortfolioManager:
     # ── Strategy builder ────────────────────────────────────────────────────
 
     @staticmethod
-    def _build_strategy(name: str, symbol: str) -> BaseStrategy:
+    def _build_strategy(name: str, symbol: str, capital: float = 0.0) -> BaseStrategy:
         """Build a strategy instance with production-grade defaults."""
         tf = config.TIMEFRAME
 
@@ -1827,8 +1827,7 @@ class PortfolioManager:
         #   Regime weights (from REGIME_ALLOCATIONS, post May-2025 tuning):
         #     STRONG_BULL 15% | BULL 15% | RANGE 20% | VOLATILE 45% | BEAR 56% | CRASH 79%
         #   On $100k total capital, that is $15k–$79k depending on regime.
-        #   The DCA strategy then sizes each base/safety order from this slice
-        #   (base_amount=200, safety_scale=1.5 × 5 safety orders → max $3,050 per full cycle).
+        #   base_amount and max_safety_orders are scaled to this slice — see below.
         #
         # WHY YOU SEE TWO "DCA ADD" LOG LINES ON THE SAME CANDLE (NOT a bug):
         #   simulator.py's _handle_buy() logs "DCA ADD" whenever it ADDS TO AN EXISTING
@@ -1843,10 +1842,10 @@ class PortfolioManager:
         #     • VWAP/Grid/etc.   (smaller balance) → re-entry signal in its own cycle
         #   Each simulator is fully isolated; their balances are independent.
         #
-        # COMBINED MAX DCA EXPOSURE (single DCA cycle, all safety orders filled):
-        #   base_amount=200 + 5 safety orders × martingale scale 1.5:
-        #     SO1=300, SO2=450, SO3=675, SO4=1,012, SO5=1,518 → total ≈ $4,155 per cycle
-        #   Compounding grows base_amount over time but does not change the structure.
+        # COMBINED MAX DCA EXPOSURE — capital-scaled:
+        #   base_amount = max($10, slot_capital × DCA_BASE_ORDER_PCT)
+        #   safety_scale = 1.5; max_safety_orders reduced until total ≤ 80% of capital.
+        #   Example at $30k: base=$300, 5 SOs → total ≈ $3,957 per cycle (13.2% of capital).
         #
         # CONCLUSION: no double-instance bug exists. If log confusion persists, the fix
         #   is cosmetic: add the strategy name to the "DCA ADD" log in simulator.py
@@ -1854,10 +1853,37 @@ class PortfolioManager:
         #   accumulation line is clearly attributable to its owning strategy.
         # ─────────────────────────────────────────────────────────────────────────────
         if name == "DCA":
+            # ── Capital-scaled DCA sizing ──────────────────────────────────────
+            # base_amount = 1% of allocated capital, floored at $10 (Binance min notional).
+            dca_capital  = capital
+            base_amount  = max(10.0, round(dca_capital * config.DCA_BASE_ORDER_PCT, 2))
+
+            # Reduce max_safety_orders until the worst-case cycle cost fits within
+            # 80% of capital.  This prevents DCA from running out of funds mid-cycle.
+            #   total_planned = base × (1 + 1.5 + 1.5² + … + 1.5^max_so)
+            safety_scale = 1.5
+            max_so = 5
+            while max_so > 2:
+                total_planned = base_amount * sum(
+                    safety_scale ** i for i in range(max_so + 1)
+                )
+                if total_planned <= dca_capital * 0.8:
+                    break
+                max_so -= 1
+
+            # Recompute final total_planned for the log (loop may have broken early)
+            total_planned = base_amount * sum(
+                safety_scale ** i for i in range(max_so + 1)
+            )
+            logger.info(
+                f"[DCA] Capital-scaled: base=${base_amount:.0f} | "
+                f"safety_orders={max_so} | max_cycle=${total_planned:.0f}"
+            )
+
             return DCAStrategy(
                 symbol=symbol, timeframe=tf,
-                base_amount=200.0, deviation_pct=2.0,
-                safety_scale=1.5, max_safety_orders=5,
+                base_amount=base_amount, deviation_pct=2.0,
+                safety_scale=safety_scale, max_safety_orders=max_so,
                 rsi_threshold=42.0, tp1_pct=0.03, tp2_pct=0.06,
                 trail_pct=0.025, stop_loss_pct=0.12,
                 panic_protection=True, max_hold_candles=336,

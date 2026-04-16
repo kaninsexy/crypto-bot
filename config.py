@@ -93,6 +93,23 @@ MIN_CAPITAL_PER_STRATEGY: float = float(
 )
 
 
+# ─── DCA strategy sizing ──────────────────────────────────────────────────────
+#
+# base_amount for each DCA cycle is computed as:
+#   base_amount = max($10, slot_capital × DCA_BASE_ORDER_PCT)
+#
+# At 1% (default):
+#   $30,000 DCA capital  → base = $300
+#   $2,000  DCA capital  → base = $20
+#   $1,000  DCA capital  → base = $10  (floor enforced)
+#
+# $10 floor is Binance's minimum notional order size — orders below this
+# are rejected by the exchange.
+#
+# Override via: DCA_BASE_ORDER_PCT=0.02 in .env
+DCA_BASE_ORDER_PCT: float = float(os.getenv("DCA_BASE_ORDER_PCT", "0.01"))
+
+
 # ─── Risk management — daily loss limit ──────────────────────────────────────
 
 # If the portfolio loses more than this % of start-of-day equity in one day,
