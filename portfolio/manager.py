@@ -923,9 +923,16 @@ class PortfolioManager:
 
             drift_pct = (current - target) / target * 100
 
-            if drift_pct > drift_threshold_pct and free > min_transfer:
-                # Over-allocated AND has idle cash → potential donor
+            has_open_position = slot.simulator.position is not None
+            if drift_pct > drift_threshold_pct and free > min_transfer and not has_open_position:
+                # Over-allocated AND has idle cash AND no open position → donor
+                # Never drain a strategy that is actively in a trade
                 donors.append((sname, slot, free, drift_pct))
+            elif drift_pct > drift_threshold_pct and has_open_position:
+                logger.debug(
+                    f"[Rebalance] {sname} is over-allocated by {drift_pct:.0f}% "
+                    f"but has open position — skipping as donor to protect trade"
+                )
             elif drift_pct < -drift_threshold_pct:
                 # Under-allocated → wants more capital
                 needed = target - current
