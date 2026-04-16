@@ -551,21 +551,6 @@ class PortfolioManager:
                         )
                         continue
 
-                # Cross-strategy symbol exposure cap.
-                # Prevents two strategies from piling into the same coin
-                # simultaneously (e.g. DCA + TrendFollowing both long BTC).
-                if self.max_symbol_exposure_pct > 0:
-                    slot_symbol   = slot.strategy.symbol
-                    exposure_pct  = self._symbol_exposure_pct(slot_symbol)
-                    if exposure_pct >= self.max_symbol_exposure_pct:
-                        actions[sname] = "CORR_BLOCK"
-                        logger.debug(
-                            f"[Portfolio] {sname} BUY blocked: {slot_symbol} "
-                            f"already {exposure_pct:.1f}% of portfolio equity "
-                            f"(cap={self.max_symbol_exposure_pct:.0f}%)"
-                        )
-                        continue
-
                 if not self.circuit_breaker.allows_new_buys():
                     actions[sname] = "BLOCKED"
                     logger.debug(f"[Portfolio] {sname} BUY blocked by circuit breaker.")
@@ -623,6 +608,60 @@ class PortfolioManager:
                             f"equity=${strategy_equity:.0f} × "
                             f"CB={size_mult:.2f} × vol={vol_mult:.2f})"
                         )
+
+                # ── Symbol exposure cap + proportional scaling ──────────────────
+                # Runs AFTER Kelly sizing so we know the intended amount_usdt.
+                # Never resizes open positions — only scales the incoming signal.
+                #
+                # Math (40% cap, 1× leverage, $100k equity):
+                #   DCA holds BTC worth 30% ($30k notional) → headroom = 10% = $10k
+                #   TF Kelly wants $8,000 → fits inside $10k headroom → no change
+                #   TF Kelly wants $12,000 → exceeds $10k → scaled to $10,000
+                #   DCA at 40% already → no headroom → CORR_BLOCK
+                #
+                # With leverage (e.g. Breakout at 2× requesting $1,000 margin):
+                #   notional = $1,000 × 2 = $2,000
+                #   headroom_notional = $5,000
+                #   headroom_margin = $5,000 / 2 = $2,500 → fits, no scaling
+                if self.max_symbol_exposure_pct > 0:
+                    _corr_symbol = slot.strategy.symbol
+                    _exposure    = self._symbol_exposure_pct(_corr_symbol)
+                    if _exposure >= self.max_symbol_exposure_pct:
+                        # Zero headroom — block entirely
+                        actions[sname] = "CORR_BLOCK"
+                        logger.debug(
+                            f"[CorrCap] {sname} BUY blocked: {_corr_symbol} "
+                            f"at {_exposure:.1f}% — cap={self.max_symbol_exposure_pct:.0f}%, "
+                            f"no headroom."
+                        )
+                        continue
+                    elif _exposure > 0:
+                        # Partial headroom — scale amount_usdt down to fit
+                        _headroom_pct      = self.max_symbol_exposure_pct - _exposure
+                        _headroom_notional = total_equity * (_headroom_pct / 100.0)
+                        _lev               = max(1.0, float(signal.leverage))
+                        _headroom_margin   = _headroom_notional / _lev
+                        _requested         = signal.metadata.get("amount_usdt", 0.0)
+                        if _requested > _headroom_margin > 0:
+                            _scaled = round(_headroom_margin, 2)
+                            if _scaled < config.MIN_CAPITAL_PER_STRATEGY:
+                                # Headroom exists but is below Binance minimum order size
+                                actions[sname] = "CORR_BLOCK"
+                                logger.debug(
+                                    f"[CorrCap] {sname} BUY blocked: headroom "
+                                    f"${_scaled:.0f} < min "
+                                    f"${config.MIN_CAPITAL_PER_STRATEGY:.0f}."
+                                )
+                                continue
+                            signal.metadata["amount_usdt"] = _scaled
+                            logger.info(
+                                f"[CorrCap] {sname} {_corr_symbol}: "
+                                f"scaled ${_requested:.0f} → ${_scaled:.0f} "
+                                f"({_headroom_pct:.1f}% headroom at {_lev:.0f}x | "
+                                f"existing={_exposure:.1f}% "
+                                f"cap={self.max_symbol_exposure_pct:.0f}%)"
+                            )
+                        # else: fits inside headroom, nothing to do
 
                 # Apply regime-based leverage cap before handing the signal
                 # to the simulator.  Only relevant for strategies that request
