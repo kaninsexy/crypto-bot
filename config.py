@@ -82,6 +82,17 @@ STRATEGY_SYMBOLS: dict = {
     "DualMomentum":       os.getenv("SYMBOL_DUALMOMENTUM",   "BTC/USDT"),
 }
 
+# Minimum USDT balance a strategy slot must hold before it is allowed to open
+# a new position.  At small starting capital (~$5k), some regime allocations
+# leave a slot with less than Binance's minimum notional order size (~$100–200).
+# Any BUY signal from an underfunded slot is skipped and logged as a WARNING.
+# Only BUY signals are blocked — SELL/HOLD always pass through.
+# Override via: MIN_CAPITAL_PER_STRATEGY=200.0 in .env
+MIN_CAPITAL_PER_STRATEGY: float = float(
+    os.getenv("MIN_CAPITAL_PER_STRATEGY", "200.0")
+)
+
+
 # ─── Risk management — daily loss limit ──────────────────────────────────────
 
 # If the portfolio loses more than this % of start-of-day equity in one day,

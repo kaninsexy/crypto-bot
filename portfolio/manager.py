@@ -578,6 +578,22 @@ class PortfolioManager:
                     logger.debug(f"[Portfolio] {sname} suspended (0% allocation in {self._current_regime})")
                     continue
 
+                # ── Minimum capital guard ──────────────────────────────────
+                # Binance rejects orders below ~$100–200 notional.  At small
+                # starting capital ($5k) some slots may be allocated less than
+                # this, causing silent order failures in live mode.
+                # Block BUY only — SELL/HOLD are never affected.
+                # The slot will be funded on the next deposit/rebalance call.
+                _slot_balance = slot.simulator.balance
+                if _slot_balance < config.MIN_CAPITAL_PER_STRATEGY:
+                    actions[sname] = "CAP_GUARD"
+                    logger.warning(
+                        f"[CapGuard] {sname} skipped: balance ${_slot_balance:.0f} "
+                        f"below minimum ${config.MIN_CAPITAL_PER_STRATEGY:.0f} "
+                        f"— waiting for rebalance to fund"
+                    )
+                    continue
+
                 # Kelly size for this trade
                 kelly_profile = self.kelly_profiles.get(sname)
                 if kelly_profile and kelly_profile.recommended_kelly > 0:
@@ -1228,6 +1244,24 @@ class PortfolioManager:
                     )
             else:
                 lines.append("  No open positions.")
+
+            # ── Capital Guard ──────────────────────────────────────────────
+            # Only show slots that have a non-zero regime allocation but whose
+            # balance is still below the minimum order size.  Slots with 0%
+            # allocation are already listed as "suspended" above.
+            _underfunded = [
+                f"{_sn} (${_sl.simulator.balance:.0f})"
+                for _sn, _sl in self._slots.items()
+                if (
+                    allocs.get(_sl.bucket_key, 0.0) > 0
+                    and _sl.simulator.balance < config.MIN_CAPITAL_PER_STRATEGY
+                )
+            ]
+            if _underfunded:
+                lines.append(f"  ── Capital Guard ──")
+                lines.append(
+                    f"  Underfunded slots: {', '.join(_underfunded)}"
+                )
 
         except Exception as _lv_err:
             # Never let a leverage-guard failure crash the whole summary.
