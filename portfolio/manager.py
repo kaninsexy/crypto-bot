@@ -776,7 +776,12 @@ class PortfolioManager:
         # ── Post-candle balance floor check ────────────────────────────────
         # Catches slots whose cash was drained below the Binance minimum by a
         # rebalance transfer (donor side).  Fires every candle until restored.
+        # Skips strategies with 0% regime allocation — they are correctly at
+        # $0 cash (suspended by regime) and are not genuinely underfunded.
         for sname, slot in self._slots.items():
+            regime_weight = allocs.get(slot.bucket_key, 0.0)
+            if regime_weight == 0.0:
+                continue  # 0% allocation — correctly at $0, not underfunded
             if slot.simulator.balance < config.MIN_CAPITAL_PER_STRATEGY:
                 logger.warning(
                     f"[CapGuard] {sname} balance ${slot.simulator.balance:.0f} "
@@ -864,7 +869,7 @@ class PortfolioManager:
     def rebalance(
         self,
         current_dfs: Optional[dict[str, pd.DataFrame]] = None,
-        drift_threshold_pct: float = 10.0,
+        drift_threshold_pct: float = 25.0,
         min_transfer: float = 20.0,
     ) -> dict[str, float]:
         """
