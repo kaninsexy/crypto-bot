@@ -773,6 +773,16 @@ class PortfolioManager:
             else:
                 actions[sname] = "HOLD"
 
+        # ── Post-candle balance floor check ────────────────────────────────
+        # Catches slots whose cash was drained below the Binance minimum by a
+        # rebalance transfer (donor side).  Fires every candle until restored.
+        for sname, slot in self._slots.items():
+            if slot.simulator.balance < config.MIN_CAPITAL_PER_STRATEGY:
+                logger.warning(
+                    f"[CapGuard] {sname} balance ${slot.simulator.balance:.0f} "
+                    f"below minimum after rebalance — waiting for capital return"
+                )
+
         return actions
 
     # ── Deposits ────────────────────────────────────────────────────────────
@@ -1935,7 +1945,10 @@ class PortfolioManager:
                 symbol=symbol, timeframe=tf,
                 # P5: updated params — faster (10) and tighter bands (3.0)
                 atr_period=10, multiplier=3.0,
-                btc_filter=not is_btc,
+                # BTC trend filter disabled — in RANGE regime BTC Supertrend is
+                # often bearish/neutral, permanently blocking ETH entries.
+                # Re-enable in STRONG_BULL regime via env var if desired.
+                btc_filter=False,
             )
         elif name == "MeanReversion":
             return MeanReversionStrategy(
@@ -1964,9 +1977,9 @@ class PortfolioManager:
             return VWAPStrategy(
                 symbol=symbol, timeframe=tf,
                 vwap_period=24,      # 24h rolling VWAP (matches 1h candles)
-                entry_dev_pct=1.5,   # Buy when 1.5% below VWAP
+                entry_dev_pct=1.0,   # Loosened from 1.5% → 1.0%: RANGE market ETH stays near VWAP
                 exit_dev_pct=0.5,    # Exit when 0.5% above VWAP
-                rsi_period=14, rsi_entry=50.0, rsi_exit=65.0,
+                rsi_period=14, rsi_entry=55.0, rsi_exit=65.0,  # Raised from 50 → 55: RSI 50-55 is still valid oversold entry zone
                 stop_loss_pct=0.03, atr_period=14,
                 volume_filter=True, cooldown_candles=6,
             )
