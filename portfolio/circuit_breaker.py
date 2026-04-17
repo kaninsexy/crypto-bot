@@ -151,6 +151,27 @@ class CircuitBreaker:
         Returns:
             Current BreakerState.
         """
+        # ── Pre-rebalance startup guard ─────────────────────────────────────
+        # On the very first update() call, a total equity of exactly 0
+        # indicates the bot is still in its pre-rebalance startup window:
+        # load_checkpoint() may have restored empty balances and the
+        # rebalance pass hasn't distributed capital yet. Evaluating the
+        # state machine here would compute drawdown = (peak - 0) / peak
+        # = 100%, instantly tripping the breaker and blocking the very
+        # rebalance that would have restored healthy balances.
+        #
+        # We skip without incrementing _candle_count so that the guard
+        # remains active for any additional pre-rebalance calls on the
+        # same first candle. Once equity is non-zero, the guard is
+        # bypassed and normal evaluation resumes.
+        if self._candle_count == 0 and current_equity == 0:
+            logger.info(
+                "[CircuitBreaker] Skipping evaluation — "
+                "pre-rebalance startup (equity = $0, peak = "
+                f"${self._peak_equity:,.0f})."
+            )
+            return self._state
+
         self._candle_count += 1
 
         # Track minimum equity (for reporting)

@@ -374,6 +374,7 @@ def run_portfolio_once(
         except Exception:
             pass
 
+        resumed = False
         try:
             resumed = pm.load_checkpoint(strategy_dfs=strategy_dfs)
             if resumed:
@@ -381,36 +382,52 @@ def run_portfolio_once(
                     "[Portfolio] 🔄 Resumed from previous session — "
                     "balances and open positions restored."
                 )
-                # Fund any re-enabled strategies (0% → X%) by transferring real
-                # capital from over-allocated donors.  This prevents phantom money:
-                # rebalance() detects drift and moves existing cash rather than
-                # conjuring new balance from thin air.
-                logger.info("[Portfolio] Running post-restore rebalance...")
-                moved = pm.rebalance(current_dfs=strategy_dfs)
-                if moved:
-                    for pair, amt in moved.items():
-                        logger.info(
-                            f"[Portfolio] Post-restore rebalance: "
-                            f"${amt:,.2f} {pair}"
-                        )
-                # Re-sync initial_balance AFTER rebalance so return % is
-                # measured from post-rebalance EQUITY (cash + open position
-                # value), not the stale pre-rebalance cash balance.
-                # Example without this: VolatilityBreakout has $2,889 cash
-                # but $8,843 equity (open BTC long worth ~$5,954). Setting
-                # initial_balance=$2,889 gives return = +206% (wrong).
-                # _last_prices is empty pre-first-candle, so we price
-                # positions using strategy_dfs which is already in scope.
-                for name, slot in pm._slots.items():
-                    df = strategy_dfs.get(name)
-                    if df is not None and not df.empty:
-                        price = float(df["close"].iloc[-1])
-                        eq = slot.simulator.get_equity(price)
-                    else:
-                        eq = slot.simulator.balance  # fallback: cash only
-                    slot.simulator.initial_balance = eq
         except Exception as _e:
             logger.debug(f"Checkpoint load skipped (non-fatal): {_e}")
+
+        # ── Startup rebalance (MUST run before circuit breaker evaluates) ────
+        # This block runs UNCONDITIONALLY on the first candle so that:
+        #   - Resumed sessions: re-funds any re-enabled strategies (0% → X%)
+        #     by transferring real capital from over-allocated donors. This
+        #     prevents phantom money: rebalance() detects drift and moves
+        #     existing cash rather than conjuring new balance from thin air.
+        #   - Fresh starts (no checkpoint): rebalance is a no-op because
+        #     initialize() already distributed capital matching regime weights.
+        #   - Edge case (resumed with $0 balances): rebalance is a no-op AND
+        #     the CircuitBreaker guard (see circuit_breaker.update) skips
+        #     evaluation when total_equity == 0 on its very first call,
+        #     preventing a spurious -100% drawdown trip.
+        # Sequencing this BEFORE pm.run_candle() (which calls
+        # circuit_breaker.update()) is the whole reason this lives here.
+        try:
+            logger.info(
+                "[Portfolio] Running startup rebalance "
+                "(pre-circuit-breaker)..."
+            )
+            moved = pm.rebalance(current_dfs=strategy_dfs)
+            if moved:
+                for pair, amt in moved.items():
+                    logger.info(
+                        f"[Portfolio] Startup rebalance: ${amt:,.2f} {pair}"
+                    )
+            # Re-sync initial_balance AFTER rebalance so return % is
+            # measured from post-rebalance EQUITY (cash + open position
+            # value), not the stale pre-rebalance cash balance.
+            # Example without this: VolatilityBreakout has $2,889 cash
+            # but $8,843 equity (open BTC long worth ~$5,954). Setting
+            # initial_balance=$2,889 gives return = +206% (wrong).
+            # _last_prices is empty pre-first-candle, so we price
+            # positions using strategy_dfs which is already in scope.
+            for name, slot in pm._slots.items():
+                df = strategy_dfs.get(name)
+                if df is not None and not df.empty:
+                    price = float(df["close"].iloc[-1])
+                    eq = slot.simulator.get_equity(price)
+                else:
+                    eq = slot.simulator.balance  # fallback: cash only
+                slot.simulator.initial_balance = eq
+        except Exception as _e:
+            logger.debug(f"Startup rebalance skipped (non-fatal): {_e}")
 
         # ── Exchange reconciliation (live mode only; no-op in paper mode) ─────
         # Compares internal checkpoint positions against actual Binance Futures
