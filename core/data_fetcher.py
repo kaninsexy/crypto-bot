@@ -4,8 +4,13 @@ core/data_fetcher.py — OHLCV (candlestick) data fetcher.
 OHLCV stands for: Open, High, Low, Close, Volume.
 These are the building blocks for every technical indicator.
 
-This module fetches candle data from Binance via ccxt and returns
+This module fetches candle data from OKX via ccxt and returns
 it as a pandas DataFrame — the format all our strategies expect.
+
+Strategies pass plain pair symbols like "BTC/USDT". OKX perpetual swaps
+actually use the format "BTC/USDT:USDT", so fetch_ohlcv() normalises the
+symbol through _to_okx_swap_symbol() before calling the exchange.
+Strategies never need to know about this.
 
 Example output (1h candles for BTC/USDT):
   ┌─────────────────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
@@ -39,22 +44,36 @@ _RETRYABLE = (
 )
 
 
+def _to_okx_swap_symbol(symbol: str) -> str:
+    """
+    Convert standard symbol to OKX swap format.
+    "BTC/USDT" → "BTC/USDT:USDT"
+    "ETH/USDT" → "ETH/USDT:USDT"
+    Already in correct format → return as-is.
+    """
+    if ":" not in symbol:
+        base, quote = symbol.split("/")
+        return f"{base}/{quote}:{quote}"
+    return symbol
+
+
 def fetch_ohlcv(
-    exchange: ccxt.binance,
+    exchange: ccxt.okx,
     symbol: str = None,
     timeframe: str = None,
     limit: int = None,
 ) -> pd.DataFrame:
     """
-    Fetch OHLCV candle data from Binance and return as a DataFrame.
+    Fetch OHLCV candle data from OKX and return as a DataFrame.
 
     Retries automatically on transient errors (network glitch, rate limit,
-    Binance maintenance) with exponential backoff — up to 5 attempts.
+    OKX maintenance) with exponential backoff — up to 5 attempts.
     A temporary internet drop will be survived without crashing the bot.
 
     Args:
         exchange:  The ccxt exchange instance (from core/exchange.py).
         symbol:    Trading pair, e.g. "BTC/USDT". Defaults to config.TRADING_PAIR.
+                   Gets normalised to OKX swap format ("BTC/USDT:USDT") internally.
         timeframe: Candle size, e.g. "1h", "15m", "4h". Defaults to config.TIMEFRAME.
         limit:     How many candles to fetch. Defaults to config.CANDLE_LIMIT.
 
@@ -65,7 +84,7 @@ def fetch_ohlcv(
         ccxt.BadSymbol:    Trading pair doesn't exist (not retried).
         ccxt.NetworkError: If all retry attempts are exhausted.
     """
-    symbol    = symbol    or config.TRADING_PAIR
+    symbol    = _to_okx_swap_symbol(symbol or config.TRADING_PAIR)
     timeframe = timeframe or config.TIMEFRAME
     limit     = limit     if limit is not None else config.CANDLE_LIMIT
 
@@ -78,7 +97,7 @@ def fetch_ohlcv(
             break   # success — exit retry loop
 
         except ccxt.BadSymbol:
-            logger.error(f"Symbol '{symbol}' not found on Binance.")
+            logger.error(f"Symbol '{symbol}' not found on OKX.")
             raise   # not retryable — wrong config
 
         except _RETRYABLE as e:
@@ -86,13 +105,13 @@ def fetch_ohlcv(
             wait = min(_BACKOFF_BASE * (2 ** (attempt - 1)), _BACKOFF_MAX)
             if attempt < _MAX_RETRIES:
                 logger.warning(
-                    f"Binance API error (attempt {attempt}/{_MAX_RETRIES}): {e} — "
+                    f"OKX API error (attempt {attempt}/{_MAX_RETRIES}): {e} — "
                     f"retrying in {wait}s…"
                 )
                 time.sleep(wait)
             else:
                 logger.error(
-                    f"Binance API failed after {_MAX_RETRIES} attempts: {e}"
+                    f"OKX API failed after {_MAX_RETRIES} attempts: {e}"
                 )
                 raise
 
@@ -109,7 +128,7 @@ def fetch_ohlcv(
     return df
 
 
-def fetch_latest_price(exchange: ccxt.binance, symbol: str = None) -> float:
+def fetch_latest_price(exchange: ccxt.okx, symbol: str = None) -> float:
     """
     Convenience function: fetch just the latest closing price.
 

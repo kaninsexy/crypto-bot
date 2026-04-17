@@ -14,9 +14,19 @@ load_dotenv()
 
 
 # ─── Binance credentials ──────────────────────────────────────────────────────
+# Kept for reference / historical config. Active exchange is OKX (see below).
 
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
+
+
+# ─── OKX credentials ─────────────────────────────────────────────────────────
+# OKX requires three pieces: API key, secret, and a passphrase you set when
+# creating the API key. All three are required for live trading.
+
+OKX_API_KEY:    str = os.getenv("OKX_API_KEY", "")
+OKX_API_SECRET: str = os.getenv("OKX_API_SECRET", "")
+OKX_PASSPHRASE: str = os.getenv("OKX_PASSPHRASE", "")
 
 
 # ─── Trading settings ─────────────────────────────────────────────────────────
@@ -162,10 +172,12 @@ def validate():
         raise ValueError(f"TRADING_MODE must be 'paper' or 'live', got: '{TRADING_MODE}'")
 
     if TRADING_MODE == "live":
-        if not BINANCE_API_KEY or BINANCE_API_KEY == "your_api_key_here":
-            raise ValueError("BINANCE_API_KEY is not set. Required for live trading.")
-        if not BINANCE_API_SECRET or BINANCE_API_SECRET == "your_api_secret_here":
-            raise ValueError("BINANCE_API_SECRET is not set. Required for live trading.")
+        if not OKX_API_KEY:
+            raise ValueError("OKX_API_KEY is not set.")
+        if not OKX_API_SECRET:
+            raise ValueError("OKX_API_SECRET is not set.")
+        if not OKX_PASSPHRASE:
+            raise ValueError("OKX_PASSPHRASE is not set.")
 
     if MAX_RISK_PER_TRADE <= 0 or MAX_RISK_PER_TRADE > 0.5:
         raise ValueError(f"MAX_RISK_PER_TRADE should be between 0 and 0.5, got: {MAX_RISK_PER_TRADE}")
