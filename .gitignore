@@ -33,3 +33,6 @@ data/*.parquet
 .idea/
 *.swp
 logs/daily_summary.json
+graphify-out/
+repomix-output.xml
+repomix-context.txt
