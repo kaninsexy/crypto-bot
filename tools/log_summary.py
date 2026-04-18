@@ -19,6 +19,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import defaultdict
 
+import numpy as np
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 ROOT             = Path(__file__).parent.parent
@@ -796,6 +798,39 @@ def synthesize_trades_from_paper_sells(
         })
 
 
+# ── Rolling Sharpe helper ─────────────────────────────────────────────────────
+
+def _compute_rolling_sharpe(
+    returns: list[float],
+    window: int = 30,
+    periods_per_year: int = 365 * 24,
+) -> float | None:
+    """
+    Compute an annualised rolling Sharpe ratio from the last `window` trade
+    returns (percentage returns, i.e. pnl_pct).
+
+    Formula:  sharpe = (mean / std) * sqrt(periods_per_year)
+    • `periods_per_year` defaults to 365*24 (hourly-candle assumption).
+    • Returns None when fewer than 2 returns are available.
+    • Returns 0.0 when the std is zero (degenerate, non-negative flat returns).
+
+    Caveat: this annualises trade-level pnl_pct as if each return were a
+    one-hour observation. If trades hold for many candles the true annual
+    factor should be (hours_per_year / avg_hold_hours). The current formula
+    matches the requested spec; revisit if you want a holding-period-aware
+    version.
+    """
+    window_returns = returns[-window:]
+    if len(window_returns) < 2:
+        return None
+    arr  = np.asarray(window_returns, dtype=float)
+    mean = float(np.mean(arr))
+    std  = float(np.std(arr))
+    if std <= 0:
+        return 0.0
+    return float((mean / std) * np.sqrt(periods_per_year))
+
+
 # ── Summary stats ─────────────────────────────────────────────────────────────
 
 def compute_summary(closed_trades: list[dict], open_positions: list[dict],
@@ -829,6 +864,24 @@ def compute_summary(closed_trades: list[dict], open_positions: list[dict],
 
     inactive = [s for s in ALL_STRATEGIES if s not in active_from_actions]
 
+    # ── Per-strategy rolling Sharpe (last 30 closed trade returns) ──
+    # closed_trades is appended in chronological order by parse_log (file order),
+    # so grouping preserves chronology per strategy.
+    per_strategy_returns: dict[str, list[float]] = defaultdict(list)
+    for t in closed_trades:
+        per_strategy_returns[t["strategy"]].append(t["pnl_pct"])
+
+    per_strategy: dict[str, dict] = {}
+    for strat, rets in per_strategy_returns.items():
+        per_strategy[strat] = {
+            "trade_count":    len(rets),
+            "rolling_sharpe": _compute_rolling_sharpe(rets, window=30),
+        }
+
+    # ── Portfolio-level rolling Sharpe (combined returns across all strategies) ──
+    all_returns = [t["pnl_pct"] for t in closed_trades]
+    rolling_sharpe = _compute_rolling_sharpe(all_returns, window=30)
+
     return {
         "total_closed_trades": total,
         "total_closed_pnl":    total_pnl,
@@ -836,6 +889,8 @@ def compute_summary(closed_trades: list[dict], open_positions: list[dict],
         "most_active_strategy": most_active,
         "current_regime":      current_regime or "UNKNOWN",
         "inactive_strategies": inactive,
+        "rolling_sharpe":      rolling_sharpe,
+        "per_strategy":        per_strategy,
     }
 
 
@@ -861,8 +916,24 @@ def print_human_summary(summary: dict, closed_trades: list[dict],
     print(f"  Win rate         : {summary['win_rate_pct']:.1f}%")
     print(f"  Most active      : {summary['most_active_strategy'] or 'N/A'}")
     print(f"  Current regime   : {summary['current_regime']}")
+    port_sharpe = summary.get("rolling_sharpe")
+    port_sharpe_str = f"{port_sharpe:.2f}" if port_sharpe is not None else "None"
+    print(f"  Rolling Sharpe (30): {port_sharpe_str}")
     if summary["inactive_strategies"]:
         print(f"  ⚠ Inactive strats: {', '.join(summary['inactive_strategies'])}")
+
+    # ── Per-strategy metrics ──
+    per_strategy = summary.get("per_strategy") or {}
+    if per_strategy:
+        print(f"\n{sep}")
+        print(f"  PER-STRATEGY METRICS  ({len(per_strategy)})")
+        print(sep)
+        for strat in sorted(per_strategy.keys()):
+            metrics = per_strategy[strat]
+            sharpe  = metrics.get("rolling_sharpe")
+            sharpe_str = f"{sharpe:.2f}" if sharpe is not None else "None"
+            tc = metrics.get("trade_count", 0)
+            print(f"  • {strat:<18} trades={tc:<3}  Rolling Sharpe (30): {sharpe_str}")
 
     # ── Closed trades ──
     print(f"\n{sep}")

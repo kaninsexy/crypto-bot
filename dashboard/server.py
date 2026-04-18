@@ -68,6 +68,15 @@ def api_status():
     bot      = read_bot_status()
     running  = is_bot_running()
 
+    # ── Profit reserve defaults ───────────────────────────────────────────
+    # PortfolioManager.export_state() now writes reserve_balance,
+    # earned_profit, and safe_withdrawal into paper_state.json.  Fall back
+    # to 0.0 for stale / pre-reserve-system checkpoints so the dashboard
+    # never chokes on missing keys.
+    paper.setdefault("reserve_balance", 0.0)
+    paper.setdefault("earned_profit",   0.0)
+    paper.setdefault("safe_withdrawal", paper.get("reserve_balance", 0.0))
+
     with _price_lock:
         live_price = dict(_price_cache)
 

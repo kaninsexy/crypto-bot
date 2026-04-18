@@ -203,6 +203,15 @@ class PortfolioManager:
         # earned profit.  Every later deposit() adds to this the same amount
         # it adds to total_capital.  earned_profit = total_capital - total_deposited.
         self.total_deposited: float = total_capital
+        # ── Profit reserve ────────────────────────────────────────────────
+        # Each candle, 30 % of earned_profit is swept into `reserve_balance`
+        # and simultaneously deducted from `total_capital` so the trading
+        # pool shrinks by the same amount.  In paper mode the move is
+        # bookkeeping only; in live mode a Phase-5 hook will wire in the
+        # OKX Earn API.  See update_reserve() / deploy_reserve() /
+        # withdraw_profit() below.
+        self.reserve_balance: float = 0.0
+        self.paper_mode: bool       = True   # never call OKX Earn API in paper mode
         self.symbol        = symbol  or config.TRADING_PAIR
         self.timeframe     = timeframe or config.TIMEFRAME
 
@@ -401,6 +410,33 @@ class PortfolioManager:
                 f"Drawdown: {self.circuit_breaker.current_drawdown_pct(total_equity):.1f}% | "
                 f"All new buys blocked."
             )
+
+        # ── Drawdown-driven reserve redeployment ───────────────────────────
+        # Top-level safety hatch: if the live trading pool has shrunk
+        # significantly vs. cumulative deposits AND we have a reserve,
+        # redeploy that reserve back into trading capital so the bot
+        # doesn't over-tighten its own belt at the worst possible moment.
+        #   -25% drawdown → deploy the entire remaining reserve
+        #   -15% drawdown → deploy half of remaining reserve
+        # The -25 branch is checked first to avoid a -15 half-deploy
+        # followed by a -25 full-deploy on the same candle (double-spend).
+        # Uses the sum of simulator cash balances (not the outer
+        # `total_equity` that marks open positions to market) so a single
+        # mid-trade drawdown wick doesn't trigger aggressive redeployment.
+        # Named `live_equity` — not `total_equity` — on purpose: shadowing
+        # the outer `total_equity` would quietly change the correlation-cap
+        # math used later in this same run_candle() call.
+        live_equity = sum(
+            slot.simulator.balance
+            for slot in self._slots.values()
+        )
+        if self.total_deposited > 0:
+            drawdown_pct = (live_equity - self.total_deposited) \
+                           / self.total_deposited * 100
+            if drawdown_pct <= -25 and self.reserve_balance > 0:
+                self.deploy_reserve(fraction=1.0)
+            elif drawdown_pct <= -15 and self.reserve_balance > 0:
+                self.deploy_reserve(fraction=0.5)
 
         # 3. Refresh funding rate (if filter enabled, every N candles)
         # Funding updates every 8 hours on-chain; hourly fetches are more than
@@ -830,6 +866,11 @@ class PortfolioManager:
                     f"below minimum after rebalance — waiting for capital return"
                 )
 
+        # ── Profit reserve sweep ───────────────────────────────────────────
+        # Runs after all trades / compounding for the candle so earned_profit
+        # reflects the latest state.  Moves 30% of earned profit to reserve.
+        self.update_reserve()
+
         return actions
 
     # ── Deposits ────────────────────────────────────────────────────────────
@@ -919,20 +960,68 @@ class PortfolioManager:
     @property
     def earned_profit(self) -> float:
         """
-        Cumulative earned profit: total_capital minus cumulative real deposits.
+        Cumulative earned profit: sum of every strategy simulator's current
+        cash balance, minus cumulative real deposits.
 
-        This is the portfolio-level equivalent of StrategySlot.earned_profit.
-        It isolates trading returns from principal by subtracting only what
-        was actually deposited (never what strategy balances report).
+        Previously this compared `total_capital` against `total_deposited`,
+        but `total_capital` only ever changes on deposits — strategy P&L is
+        never folded back into it — so the old formula always returned 0.0
+        and the profit reserve never fired.  Summing live simulator balances
+        measures real portfolio cash growth, which is what the reserve
+        sweep and dashboard widgets actually need.
 
-        Floored at 0.0 so a drawdown reports "no earned profit" rather than
-        a negative profit number that would be confusing alongside losses
+        Floored at 0.0 so a drawdown reports "no earned profit" rather
+        than a negative number that would be confusing alongside losses
         already reported by return %.
 
         Returns:
             Non-negative USDT amount of earned profit above deposited principal.
         """
-        return max(0.0, self.total_capital - self.total_deposited)
+        total_equity = sum(
+            slot.simulator.balance
+            for slot in self._slots.values()
+        )
+        return max(0.0, total_equity - self.total_deposited)
+
+    # ── Profit reserve ──────────────────────────────────────────────────────
+
+    def update_reserve(self) -> None:
+        """Called every candle. Moves 30% of earned_profit to reserve."""
+        target = max(0.0, self.earned_profit * 0.3)
+        shortfall = target - self.reserve_balance
+        if shortfall > 1.0:  # min $1 to avoid noise
+            self.reserve_balance += shortfall
+            self.total_capital -= shortfall
+            if not self.paper_mode:
+                # TODO Phase 5: call OKX Earn API here
+                pass
+            logger.info(
+                f"[Reserve] Moved ${shortfall:,.2f} to reserve "
+                f"| Total reserve: ${self.reserve_balance:,.2f}"
+            )
+
+    def deploy_reserve(self, fraction: float = 1.0) -> None:
+        """Redeploy fraction of reserve back into trading capital."""
+        amount = self.reserve_balance * fraction
+        if amount > 0:
+            self.reserve_balance -= amount
+            self.total_capital += amount
+            logger.info(
+                f"[Reserve] Redeployed ${amount:,.2f} back to trading"
+                f"| Remaining reserve: ${self.reserve_balance:,.2f}"
+            )
+
+    def withdraw_profit(self, amount: float) -> bool:
+        """Withdraw from reserve only. Returns True if successful."""
+        if amount > self.reserve_balance:
+            logger.warning(
+                f"[Reserve] Withdrawal ${amount:,.2f} exceeds "
+                f"reserve ${self.reserve_balance:,.2f} — rejected"
+            )
+            return False
+        self.reserve_balance -= amount
+        logger.info(f"[Reserve] Withdrew ${amount:,.2f} from reserve")
+        return True
 
     # ── Portfolio rebalancing ───────────────────────────────────────────────
 
@@ -1554,6 +1643,14 @@ class PortfolioManager:
             "total_capital":   round(self.total_capital, 2),
             "total_equity":    round(total_equity, 2),
             "total_return_pct": round(total_return_pct, 2),
+            # ── Profit reserve (Phase 5 groundwork) ───────────────────────
+            # reserve_balance:  USDT swept from profits and held out of trading.
+            # earned_profit:    cumulative trading profit above deposited principal.
+            # safe_withdrawal:  USDT the user can withdraw without touching
+            #                   principal or trading pool (= reserve_balance).
+            "reserve_balance": round(self.reserve_balance, 2),
+            "earned_profit":   round(self.earned_profit, 2),
+            "safe_withdrawal": round(self.reserve_balance, 2),
             "strategies":      strategies,
             "recent_trades":   all_trades[:30],
         }
@@ -1626,6 +1723,9 @@ class PortfolioManager:
             # restart.  Without this, an old checkpoint would reload with
             # total_deposited=0.0 and mis-report all capital as earned profit.
             "total_deposited":       self.total_deposited,
+            # Profit reserve — money already swept out of the trading pool.
+            # Persisted so a restart doesn't forget locked-in profits.
+            "reserve_balance":       self.reserve_balance,
             "candle_count":          self._candle_count,
             "current_regime":        self._current_regime,
             "circuit_breaker_peak":  self.circuit_breaker._peak_equity,
@@ -1776,6 +1876,9 @@ class PortfolioManager:
             # (effectively treats all prior capital as principal, zeroing
             # earned_profit until the next real deposit or drawdown).
             self.total_deposited = data.get("total_deposited", self.total_capital)
+            # Profit reserve — default 0.0 for backward compatibility with
+            # checkpoints written before the reserve system shipped.
+            self.reserve_balance = data.get("reserve_balance", 0.0)
             self._candle_count   = data.get("candle_count",   0)
             self._current_regime = data.get("current_regime", self._current_regime)
 
