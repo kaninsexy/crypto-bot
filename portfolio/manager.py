@@ -79,7 +79,7 @@ from strategies.volatility_breakout import VolatilityBreakoutStrategy
 from strategies.dual_momentum import DualMomentumStrategy
 
 from portfolio.regime_detector import RegimeDetector, RegimeReading, REGIME_ALLOCATIONS, REGIME_CASH_RESERVE, REGIME_RANGE
-from portfolio.kelly import KellyCalculator, KellyProfile, PHASE_C_PROFILES
+from portfolio.kelly import RegimeAwareKellyCalculator, KellyProfile
 from portfolio.circuit_breaker import CircuitBreaker, BreakerState
 from portfolio.funding_rate import FundingRateProvider
 from portfolio.leverage_guard import LeverageGuard
@@ -217,8 +217,12 @@ class PortfolioManager:
 
         # ── Sub-components ─────────────────────────────────────────────────
         self.regime_detector = RegimeDetector()
-        self.kelly_calc      = KellyCalculator(kelly_fraction=kelly_fraction)
-        self.kelly_profiles  = self.kelly_calc.build_profiles(PHASE_C_PROFILES)
+        self.kelly_calc      = RegimeAwareKellyCalculator(kelly_fraction=kelly_fraction)
+        self.kelly_profiles: dict[str, KellyProfile] = {}  # populated by _rebuild_kelly()
+        # Kelly rebuild trigger state
+        self._candles_since_kelly_rebuild: int           = 0
+        self._last_kelly_regime:            Optional[str] = None
+        self._kelly_rebuild_period:         int           = 50
         self.circuit_breaker = CircuitBreaker(
             initial_equity=total_capital,
             trip_pct=trip_pct,
@@ -292,6 +296,28 @@ class PortfolioManager:
             f"CorrCap: {corr_label}"
         )
 
+    def _rebuild_kelly(self, regime: str) -> None:
+        """
+        Rebuild per-regime Kelly profiles from current priors/fallback.
+        Called from initialize() once at startup and from run_candle()
+        on regime change or every self._kelly_rebuild_period candles.
+        Live-stats blending is a no-op for now — paper_state.json trades
+        are not yet tagged with the regime in which they occurred. Once a
+        _load_live_stats_by_regime() loader lands, pass its output as
+        live_stats= here. Cold start is safe: build_regime_profiles()
+        handles live_stats=None explicitly.
+        """
+        self.kelly_profiles = self.kelly_calc.build_regime_profiles(
+            regime=regime,
+            live_stats=None,  # TODO(phase-2c-followup): regime-tagged live stats
+        )
+        self._last_kelly_regime           = regime
+        self._candles_since_kelly_rebuild = 0
+        logger.info(
+            f"[Portfolio] Kelly profiles rebuilt for regime={regime} | "
+            f"strategies={list(self.kelly_profiles.keys())}"
+        )
+
     # ── Initialization ──────────────────────────────────────────────────────
 
     def initialize(self, initial_btc_df: pd.DataFrame) -> None:
@@ -313,6 +339,7 @@ class PortfolioManager:
         logger.info(f"\n{self.regime_detector.summary(reading)}")
 
         # Compute Kelly sizes per strategy
+        self._rebuild_kelly(reading.regime)
         allocs   = REGIME_ALLOCATIONS[reading.regime]
         kelly_sz = self.kelly_calc.portfolio_kelly_sizes(
             self.kelly_profiles, allocs, self.total_capital
@@ -376,6 +403,13 @@ class PortfolioManager:
             self._current_regime  = reading.regime
             self._current_reading = reading
             logger.info(f"[Portfolio] Regime → {reading.regime} | Rebalancing target allocations.")
+
+        # 1b. Rebuild Kelly profiles on regime change or periodic interval.
+        self._candles_since_kelly_rebuild += 1
+        regime_changed = (reading.regime != self._last_kelly_regime)
+        periodic_due   = (self._candles_since_kelly_rebuild >= self._kelly_rebuild_period)
+        if regime_changed or periodic_due:
+            self._rebuild_kelly(reading.regime)
 
         # 2. Compute current total equity + update circuit breaker
         total_equity = self._compute_total_equity(strategy_dfs)
