@@ -69,7 +69,7 @@ def load_or_fetch(
     symbol:        str,
     timeframe:     str = "1h",
     years:         float = 3.0,
-    exchange_id:   str = "binance",
+    exchange_id:   str = "okx",
     force_refresh: bool = False,
     cache_dir:     Optional[Path] = None,
 ) -> pd.DataFrame:
@@ -87,7 +87,7 @@ def load_or_fetch(
         symbol:        e.g. "BTC/USDT", "SOL/USDT"
         timeframe:     e.g. "1h", "4h", "1d"
         years:         How many years of history to target (default 3)
-        exchange_id:   CCXT exchange ID (default "binance")
+        exchange_id:   CCXT exchange ID (default "okx")
         force_refresh: Skip age check; always fetch latest candles.
         cache_dir:     Override default cache directory.
 

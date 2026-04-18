@@ -3,14 +3,14 @@ backtest/runner.py — Orchestrates the full Phase C backtesting pipeline.
 
 WHAT IT DOES
 ────────────
-1. Downloads 12 months of 1h OHLCV data for the configured symbol from Binance
+1. Downloads 36 months (3 years) of 1h OHLCV data for the configured symbol from OKX
    (no API key needed — public endpoint).
 
 2. Splits data into two periods:
      In-sample  (IS) : first 9 months  → strategy development / optimisation
      Out-of-sample (OOS): last 3 months → honest performance estimate
 
-3. For each of the 6 strategies, runs BacktestEngine on both IS and OOS.
+3. For each of the 10 strategies, runs BacktestEngine on both IS and OOS.
    Each run uses a **fresh** strategy instance (no state leakage between periods).
 
 4. Calls backtest/report.py to print a side-by-side comparison table.
@@ -51,6 +51,10 @@ from strategies.mean_reversion import MeanReversionStrategy
 from strategies.grid_trading import GridTradingStrategy
 from strategies.breakout import BreakoutStrategy
 from strategies.trend_following import TrendFollowingStrategy
+from strategies.bear_short import BearShortStrategy
+from strategies.vwap import VWAPStrategy
+from strategies.volatility_breakout import VolatilityBreakoutStrategy
+from strategies.dual_momentum import DualMomentumStrategy
 
 
 # ── Config from env ──────────────────────────────────────────────────────────
@@ -58,8 +62,8 @@ from strategies.trend_following import TrendFollowingStrategy
 SYMBOL        = os.getenv("BACKTEST_SYMBOL", "BTC/USDT")
 TIMEFRAME     = os.getenv("BACKTEST_TF", "1h")
 BALANCE       = float(os.getenv("BACKTEST_BALANCE", "10000"))
-TOTAL_MONTHS  = int(os.getenv("BACKTEST_MONTHS", "12"))
-IS_MONTHS     = int(os.getenv("BACKTEST_SPLIT", "9"))   # in-sample months
+TOTAL_MONTHS  = int(os.getenv("BACKTEST_MONTHS", "36"))
+IS_MONTHS     = int(os.getenv("BACKTEST_SPLIT", "27"))  # in-sample months
 OOS_MONTHS    = TOTAL_MONTHS - IS_MONTHS                 # out-of-sample months
 
 # Warm-up: enough candles for the longest indicator in any strategy (~200 for SMA200)
@@ -103,6 +107,18 @@ def make_strategies(symbol: str, timeframe: str) -> dict:
         "TrendFollowing": TrendFollowingStrategy(
             symbol=symbol, timeframe=timeframe,
         ),
+        "BearShort": BearShortStrategy(
+            symbol=symbol, timeframe=timeframe,
+        ),
+        "VWAP": VWAPStrategy(
+            symbol=symbol, timeframe=timeframe,
+        ),
+        "VolatilityBreakout": VolatilityBreakoutStrategy(
+            symbol=symbol, timeframe=timeframe,
+        ),
+        "DualMomentum": DualMomentumStrategy(
+            symbol=symbol, timeframe=timeframe,
+        ),
     }
 
 
@@ -114,23 +130,23 @@ def download_history(
     months: int = 12,
 ) -> pd.DataFrame:
     """
-    Download `months` of OHLCV data from Binance (public, no API key needed).
+    Download `months` of OHLCV data from OKX (public, no API key needed).
 
-    Binance limits each fetch to 1000 candles. For 1h data over 12 months that
-    is ~8 760 candles, so we page backwards in batches of 1000.
+    OKX limits each fetch to 300 candles per request. For 1h data over 12 months that
+    is ~8 760 candles, so we page backwards in batches of 300.
 
     Returns a DataFrame indexed by UTC timestamp, columns: open/high/low/close/volume.
     """
-    logger.info(f"Downloading {months}mo of {timeframe} data for {symbol} from Binance...")
+    logger.info(f"Downloading {months}mo of {timeframe} data for {symbol} from OKX...")
 
-    exchange = ccxt.binance({"enableRateLimit": True})
+    exchange = ccxt.okx({"enableRateLimit": True})
 
     # Calculate start timestamp
     since_dt = datetime.now(timezone.utc) - timedelta(days=int(months * 30.44))
     since_ms  = int(since_dt.timestamp() * 1000)
 
     all_candles = []
-    batch_size  = 1000
+    batch_size  = 300
 
     while True:
         try:
