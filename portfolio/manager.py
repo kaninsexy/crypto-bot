@@ -99,13 +99,32 @@ import config
 class StrategySlot:
     """
     One "slot" in the portfolio: a strategy + its isolated paper trading simulator.
+
+    Fields:
+      capital            — Running pool assigned to this slot. Grows with DCA
+                           compound reinvestment (line ~741) and monthly deposits.
+                           Used as a display/tracking value.
+      allocated_capital  — *Only* what was officially deposited or redistributed
+                           by the rebalancer. Does NOT grow with earned trading
+                           profit or DCA compound. The rebalancer treats this as
+                           the floor: earned_profit = simulator.balance -
+                           allocated_capital is protected and never redistributed.
+                           If not supplied at creation, defaults to `capital`.
     """
     name:       str                   # e.g. "DCA", "Supertrend"
     strategy:   BaseStrategy
     simulator:  PaperTrading
     bucket_key: str                   # Deposit manager bucket name (lowercase)
-    capital:    float                 # Allocated capital at init
+    capital:    float                 # Running capital (includes compounded profit)
     active:     bool = True           # False = suspended by regime or circuit breaker
+    allocated_capital: Optional[float] = None  # Official deposits only; set via __post_init__
+
+    def __post_init__(self):
+        # Default allocated_capital to the initial capital if caller omitted it.
+        # This preserves the original constructor API and keeps legacy behavior
+        # identical for strategies with no earned profit.
+        if self.allocated_capital is None:
+            self.allocated_capital = self.capital
 
     @property
     def equity(self) -> float:
@@ -114,6 +133,18 @@ class StrategySlot:
 
     def equity_at(self, price: float) -> float:
         return self.simulator.get_equity(price)
+
+    @property
+    def earned_profit(self) -> float:
+        """
+        Cash above allocated_capital — treated as untouchable by the rebalancer.
+
+        NOTE: This is a *cash-only* measure. Unrealized P&L on an open position
+        is deliberately excluded because the rebalancer only moves cash.
+        A slot can still have earned_profit > 0 while holding positions, as
+        long as closed trades have produced enough cash to exceed the floor.
+        """
+        return max(0.0, self.simulator.balance - self.allocated_capital)
 
 
 # ── Portfolio Manager ─────────────────────────────────────────────────────────
@@ -286,6 +317,11 @@ class PortfolioManager:
                 name=sname, strategy=strategy,
                 simulator=sim, bucket_key=bucket_key,
                 capital=capital, active=(capital > 0),
+                # allocated_capital starts equal to capital. It will diverge
+                # from `capital` over time only if DCA compound reinvestment
+                # grows `capital` (allocated_capital stays at the original
+                # deposited amount until a real deposit/rebalance event).
+                allocated_capital=capital,
             )
             logger.info(
                 f"  Slot: {sname:<15} | "
@@ -832,6 +868,10 @@ class PortfolioManager:
                 continue
             slot.simulator.deposit(share)
             slot.capital += share
+            # A real deposit IS new allocated capital — this is the one place
+            # (alongside rebalance transfers) where allocated_capital grows
+            # without earned profit being touched.
+            slot.allocated_capital += share
             deployed[sname] = share
             logger.info(f"[Portfolio]   → {sname}: +${share:.2f}")
 
@@ -906,11 +946,18 @@ class PortfolioManager:
             Dict of {"DonorName→ReceiverName": usdt_transferred}.
             Empty dict if nothing was rebalanced.
         """
-        total_equity = self._compute_total_equity(current_dfs)
         allocs = REGIME_ALLOCATIONS[self._current_regime]
 
+        # Drift is measured against allocated_capital, NOT simulator balance and
+        # NOT slot.capital (which includes DCA-compounded profit).  Earned
+        # trading profit (balance - allocated_capital) is invisible to the
+        # rebalancer — it belongs to the strategy that earned it and must
+        # never be redistributed.  Only the officially-allocated capital
+        # portions are moved when regime weights shift.
+        total_allocated = sum(s.allocated_capital for s in self._slots.values())
+
         # Build current state for each slot
-        donors:    list[tuple] = []   # (sname, slot, free_cash, over_pct)
+        donors:    list[tuple] = []   # (sname, slot, transferable, over_pct)
         receivers: list[tuple] = []   # (sname, slot, needed_usdt, under_pct)
 
         for sname, slot in self._slots.items():
@@ -918,10 +965,8 @@ class PortfolioManager:
             if weight <= 0:
                 continue  # 0%-weight strategy — skip
 
-            target  = total_equity * weight
-            price   = self._last_prices.get(sname)
-            current = slot.equity_at(price) if price else slot.equity
-            free    = slot.simulator.balance   # Cash only, not position value
+            target  = total_allocated * weight   # target share of allocated capital
+            current = slot.allocated_capital     # official allocation (excludes profits)
 
             if target == 0:
                 continue
@@ -929,10 +974,38 @@ class PortfolioManager:
             drift_pct = (current - target) / target * 100
 
             has_open_position = slot.simulator.position is not None
-            if drift_pct > drift_threshold_pct and free > min_transfer and not has_open_position:
-                # Over-allocated AND has idle cash AND no open position → donor
-                # Never drain a strategy that is actively in a trade
-                donors.append((sname, slot, free, drift_pct))
+            position_cost = (
+                slot.simulator.position.total_cost
+                if slot.simulator.position is not None else 0.0
+            )
+
+            # Earned profit = cash above the allocated floor.  Always protected.
+            # Advertise it in the log so operators can see exactly how much is
+            # being shielded from redistribution.
+            earned_profit = max(0.0, slot.simulator.balance - slot.allocated_capital)
+            if earned_profit > 0:
+                logger.info(
+                    f"[Rebalance] {sname}: protecting "
+                    f"${earned_profit:,.2f} earned profit"
+                )
+
+            # Cash portion of `simulator.balance` that is *within* the allocated
+            # floor (min(balance, allocated_capital)) — i.e. NOT earned profit.
+            # Only this portion is eligible for redistribution.
+            free = slot.simulator.balance - earned_profit
+            # Subtract any cash already committed to an open position (cost basis).
+            # Donors are filtered out below if they hold a position, so in practice
+            # position_cost=0 here — but keep the math explicit for safety.
+            max_donatable = max(0.0, free - position_cost)
+
+            # Never donate more than the excess over target, even if cash is
+            # plentiful — the rebalancer's job is to return to target, not drain.
+            excess_allocated = max(0.0, current - target)
+            transferable = min(max_donatable, excess_allocated)
+
+            if drift_pct > drift_threshold_pct and transferable > min_transfer and not has_open_position:
+                # Over-allocated AND has non-earned cash AND no open position → donor
+                donors.append((sname, slot, transferable, drift_pct))
             elif drift_pct > drift_threshold_pct and has_open_position:
                 logger.debug(
                     f"[Rebalance] {sname} is over-allocated by {drift_pct:.0f}% "
@@ -972,9 +1045,20 @@ class PortfolioManager:
                     continue
 
                 transfer = round(transfer, 2)
+                # Rebalance transfer moves *allocated* capital between slots.
+                # - simulator.balance       : actual USDT cash being moved
+                # - capital                 : legacy running-pool counter
+                # - allocated_capital       : the tracked floor — MUST stay in
+                #                             sync so earned_profit (balance -
+                #                             allocated_capital) keeps its
+                #                             correct absolute amount after
+                #                             the transfer.
                 don_slot.simulator.balance -= transfer
+                don_slot.capital           -= transfer
+                don_slot.allocated_capital -= transfer
                 rec_slot.simulator.balance += transfer
                 rec_slot.capital           += transfer
+                rec_slot.allocated_capital += transfer
                 donor_cash[don_name]       -= transfer
                 remaining                  -= transfer
 
@@ -1512,7 +1596,16 @@ class PortfolioManager:
             "current_regime":        self._current_regime,
             "circuit_breaker_peak":  self.circuit_breaker._peak_equity,
             "slots": {
-                sname: slot.simulator.get_checkpoint()
+                # Persist BOTH fields so the earned-profit protection survives a
+                # restart. `capital` is the running pool (grows with DCA
+                # compound); `allocated_capital` is the rebalancer floor.
+                # Old checkpoints only wrote `allocated_capital` holding the
+                # running-pool value — load_checkpoint() handles that case.
+                sname: {
+                    **slot.simulator.get_checkpoint(),
+                    "capital": slot.capital,
+                    "allocated_capital": slot.allocated_capital,
+                }
                 for sname, slot in self._slots.items()
             },
         }
@@ -1664,6 +1757,16 @@ class PortfolioManager:
             for sname, slot in self._slots.items():
                 if sname in slot_data:
                     slot.simulator.restore_checkpoint(slot_data[sname])
+                    sd = slot_data[sname]
+                    # Backward compatibility:
+                    #   Old checkpoints:  {"allocated_capital": X}  — this X was
+                    #                     actually slot.capital at save time.
+                    #   New checkpoints:  {"capital": X, "allocated_capital": Y}
+                    # Falling through .get() chains restores the correct value
+                    # in either case, and `allocated_capital` defaults to
+                    # `slot.capital` when both keys are missing.
+                    slot.capital = sd.get("capital", sd.get("allocated_capital", slot.capital))
+                    slot.allocated_capital = sd.get("allocated_capital", slot.capital)
 
                     # Always sync initial_balance to the actual restored balance
                     # so return % is measured from checkpoint state, not from
