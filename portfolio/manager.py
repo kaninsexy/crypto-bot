@@ -197,6 +197,12 @@ class PortfolioManager:
         live_executor:        Optional["CCXTExecutor"] = None,
     ):
         self.total_capital = total_capital
+        # Tracks only real cash in — seed principal plus every subsequent
+        # deposit() call — never strategy returns.  Seeded from total_capital
+        # here so a fresh start does NOT mis-report the initial balance as
+        # earned profit.  Every later deposit() adds to this the same amount
+        # it adds to total_capital.  earned_profit = total_capital - total_deposited.
+        self.total_deposited: float = total_capital
         self.symbol        = symbol  or config.TRADING_PAIR
         self.timeframe     = timeframe or config.TIMEFRAME
 
@@ -849,6 +855,10 @@ class PortfolioManager:
         """
         logger.info(f"[Portfolio] 💰 Deposit: ${amount_usdt:,.2f} | {note or 'monthly'}")
         self.total_capital += amount_usdt
+        # Record the full deposit in `total_deposited` BEFORE it gets split
+        # across strategies.  This is the only field that isolates real cash
+        # in from trading P&L, so earned_profit stays accurate after trading.
+        self.total_deposited += amount_usdt
 
         allocs     = REGIME_ALLOCATIONS[self._current_regime]
         cash_hold  = REGIME_CASH_RESERVE.get(self._current_regime, 0.0)
@@ -903,6 +913,26 @@ class PortfolioManager:
                 f"Pass actual_usdt= for live accuracy."
             )
         return self.deposit(usdt, note=note or f"{amount_thb:,.0f} THB")
+
+    # ── Capital accounting ───────────────────────────────────────────────────
+
+    @property
+    def earned_profit(self) -> float:
+        """
+        Cumulative earned profit: total_capital minus cumulative real deposits.
+
+        This is the portfolio-level equivalent of StrategySlot.earned_profit.
+        It isolates trading returns from principal by subtracting only what
+        was actually deposited (never what strategy balances report).
+
+        Floored at 0.0 so a drawdown reports "no earned profit" rather than
+        a negative profit number that would be confusing alongside losses
+        already reported by return %.
+
+        Returns:
+            Non-negative USDT amount of earned profit above deposited principal.
+        """
+        return max(0.0, self.total_capital - self.total_deposited)
 
     # ── Portfolio rebalancing ───────────────────────────────────────────────
 
@@ -1592,6 +1622,10 @@ class PortfolioManager:
         data = {
             "saved_at":              datetime.now(timezone.utc).isoformat(),
             "total_capital":         self.total_capital,
+            # Persist cumulative real deposits so earned_profit survives a
+            # restart.  Without this, an old checkpoint would reload with
+            # total_deposited=0.0 and mis-report all capital as earned profit.
+            "total_deposited":       self.total_deposited,
             "candle_count":          self._candle_count,
             "current_regime":        self._current_regime,
             "circuit_breaker_peak":  self.circuit_breaker._peak_equity,
@@ -1736,6 +1770,12 @@ class PortfolioManager:
             data = json.loads(path.read_text())
 
             self.total_capital   = data.get("total_capital",  self.total_capital)
+            # Backward compatibility: checkpoints written before the
+            # total_deposited field existed won't include it — in that case
+            # fall back to total_capital, which is the best available proxy
+            # (effectively treats all prior capital as principal, zeroing
+            # earned_profit until the next real deposit or drawdown).
+            self.total_deposited = data.get("total_deposited", self.total_capital)
             self._candle_count   = data.get("candle_count",   0)
             self._current_regime = data.get("current_regime", self._current_regime)
 
