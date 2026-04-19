@@ -171,14 +171,39 @@ class BacktestEngine:
         df: pd.DataFrame,
         strategy: BaseStrategy,
         period_label: str = "full",
+        universe_dfs: Optional[dict[str, pd.DataFrame]] = None,
     ) -> BacktestResult:
         """
         Run a full backtest.
 
         Args:
-            df:            OHLCV DataFrame (full period, enough for warm-up).
+            df:            OHLCV DataFrame for the strategy's primary symbol
+                           (used as fallback and for timestamp alignment).
+                           Must contain enough candles for warm-up.
             strategy:      A freshly instantiated BaseStrategy subclass.
             period_label:  Label for reporting, e.g. "in-sample".
+            universe_dfs:  Optional {symbol: OHLCV DataFrame} mapping for
+                           multi-symbol rotation strategies such as
+                           DualMomentum. When provided AND the strategy
+                           implements `update_universe(...)`, the engine:
+                             - feeds a growing slice of the universe to the
+                               strategy each candle
+                             - determines which symbol is "active" this
+                               candle based on the strategy's internal state
+                               (_current_holding, _top_symbol, _rotation_pending)
+                             - uses the active symbol's price / high / low for
+                               signal generation, fill pricing, and simulator
+                               ticks
+                             - mutates `sim.symbol` to the active symbol
+                               BEFORE executing any non-HOLD signal so
+                               Position.symbol and TradeRecord.symbol are
+                               correctly attributed per trade
+
+                           All DataFrames in universe_dfs MUST share the same
+                           index length as `df` — they are assumed to be
+                           timestamp-aligned. Mismatched lengths will produce
+                           incorrect prices; callers are responsible for
+                           alignment upstream.
 
         Returns:
             BacktestResult with equity curve, trade history, and metrics.
@@ -194,85 +219,173 @@ class BacktestEngine:
         equity_curve: dict = {}
         signals_fired: list[dict] = []
 
+        is_multi_symbol = (
+            universe_dfs is not None
+            and hasattr(strategy, "update_universe")
+        )
+
         logger.info(
             f"[Backtest] Starting {period_label} run | "
             f"Strategy: {strategy.name} | Symbol: {strategy.symbol} | "
             f"Candles: {len(df)} | Warm-up: {self.warm_up_candles} | "
             f"Balance: ${self.initial_balance:,.0f}"
+            + (
+                f" | Universe: {sorted(universe_dfs.keys())}"
+                if is_multi_symbol else ""
+            )
         )
 
         for i in range(self.warm_up_candles, len(df)):
-            df_slice = df.iloc[: i + 1]
-            candle = df_slice.iloc[-1]
-            ts = df_slice.index[-1]
-            close_price = float(candle["close"])
-            candle_high  = float(candle["high"])
-            candle_low   = float(candle["low"])
+            df_slice = df.iloc[: i + 1]  # fallback slice — strategy's primary symbol
 
-            # ── Generate signal (suppress warm-up errors gracefully) ──────
+            # ── 1. Feed universe data to multi-symbol strategies ────────────
+            if is_multi_symbol:
+                universe_slice = {
+                    sym: udf.iloc[: i + 1] for sym, udf in universe_dfs.items()
+                }
+                strategy.update_universe(universe_slice)
+
+            # ── 2. Determine which symbol is active THIS candle ─────────────
+            # For single-symbol strategies this is trivial (strategy.symbol).
+            # For multi-symbol strategies (DualMomentum), the active symbol is
+            # driven by the strategy's internal rotation state. We look at:
+            #   _current_holding  — symbol currently in-position
+            #   _top_symbol       — current best-ranked symbol
+            #   _rotation_pending — need to sell current holding, will buy next
+            #   _in_position      — whether the strategy thinks it's long
+            # These attributes exist on DualMomentumStrategy; any future
+            # multi-symbol strategy should expose the same shape.
+            if is_multi_symbol:
+                current_holding  = getattr(strategy, "_current_holding", None)
+                rotation_pending = getattr(strategy, "_rotation_pending", False)
+                top_symbol       = getattr(strategy, "_top_symbol", None)
+                in_position      = getattr(strategy, "_in_position", False)
+
+                # Defensive: if the strategy points at a symbol we have no data
+                # for, fail loudly. Silently falling back would tick the
+                # position against the wrong symbol's prices — catastrophic P&L
+                # corruption that looks like a working backtest.
+                for label, sym in [
+                    ("_current_holding", current_holding),
+                    ("_top_symbol",      top_symbol),
+                ]:
+                    if sym is not None and sym not in universe_dfs:
+                        raise ValueError(
+                            f"[Backtest] Strategy {strategy.name} references "
+                            f"{label}={sym!r} but it is not in universe_dfs "
+                            f"(keys: {sorted(universe_dfs.keys())}). "
+                            f"Pass all of the strategy's universe_symbols into "
+                            f"engine.run(..., universe_dfs=...) in runner.py."
+                        )
+
+                if in_position and current_holding is not None:
+                    active_symbol = current_holding
+                elif rotation_pending and top_symbol is not None:
+                    active_symbol = top_symbol
+                elif top_symbol is not None:
+                    active_symbol = top_symbol
+                else:
+                    # Genuine warmup — _top_symbol not yet computed. No trades
+                    # fire here because generate_signal returns HOLD when
+                    # _universe_returns is empty (see dual_momentum.py path 2).
+                    active_symbol = strategy.symbol
+            else:
+                active_symbol = strategy.symbol
+
+            # ── 3. Pull active symbol's df slice, candle, and prices ────────
+            if is_multi_symbol and active_symbol in universe_dfs:
+                active_full_df  = universe_dfs[active_symbol]
+                active_df_slice = active_full_df.iloc[: i + 1]
+            else:
+                active_full_df  = df
+                active_df_slice = df_slice
+
+            active_candle = active_df_slice.iloc[-1]
+            active_close  = float(active_candle["close"])
+            active_high   = float(active_candle["high"])
+            active_low    = float(active_candle["low"])
+            ts            = active_df_slice.index[-1]
+
+            # ── 4. Generate signal using the ACTIVE symbol's df ─────────────
             try:
-                signal = strategy.generate_signal(df_slice)
+                signal = strategy.generate_signal(active_df_slice)
             except ValueError as e:
                 # Happens right at warm-up boundary — skip quietly
                 logger.debug(f"[Backtest] Warm-up skip at candle {i}: {e}")
-                equity_curve[ts] = sim.get_equity(close_price)
+                equity_curve[ts] = sim.get_equity(active_close)
                 continue
 
-            # ── Determine fill price ──────────────────────────────────────
-            # For BUY signals with next_candle_fill=True: fill at the NEXT
-            # candle's open (+ slippage). This is more realistic because the
-            # signal fires at the close; the earliest real fill is the next bar.
-            # For all other signals and when next_candle_fill=False: fill at
-            # the current candle's close + slippage (backward-compatible).
+            # ── 5. Determine fill price ─────────────────────────────────────
+            # With next_candle_fill=True, BUYs fill at the NEXT candle's open
+            # (+ slippage) of the ACTIVE symbol. All other signals (and
+            # next_candle_fill=False) fill at the active symbol's close +
+            # slippage.
             if (
                 self.next_candle_fill
                 and signal.action == "BUY"
-                and i + 1 < len(df)
+                and i + 1 < len(active_full_df)
             ):
-                next_open = float(df.iloc[i + 1]["open"])
+                next_open = float(active_full_df.iloc[i + 1]["open"])
                 slip = self.slippage_market if signal.order_type == "market" else self.slippage_limit
                 fill_price = next_open * (1.0 + slip)
             else:
-                fill_price = self._apply_slippage(signal, close_price)
+                fill_price = self._apply_slippage(signal, active_close)
 
-            # ── Execute in simulator ──────────────────────────────────────
+            # ── 6. Execute in simulator ─────────────────────────────────────
+            # CRITICAL: mutate sim.symbol BEFORE execute_signal so that the
+            # Position and TradeRecord carry the ACTIVE symbol, not the
+            # strategy's primary symbol. This is why we avoid touching the
+            # simulator internals and handle symbol tracking here.
             if signal.action != "HOLD":
                 if self.verbose:
-                    logger.debug(f"[Backtest] Candle {i} | {signal}")
+                    logger.debug(
+                        f"[Backtest] Candle {i} | {active_symbol} | {signal}"
+                    )
+                sim.symbol = active_symbol
                 sim.execute_signal(signal, fill_price)
 
-            # ── Tick: OHLCV-accurate SL / TP / trail / time-exit ─────────
-            # Using tick_ohlcv_candle instead of tick(close) means:
-            #   • SL checks against candle LOW  → catches wick stop-outs
-            #   • TP checks against candle HIGH → catches wick take-profits
-            #   • TSL ratchets via candle HIGH  → correct peak for trailing SL
-            # This removes the close-only optimism bias from the backtest.
+            # ── 7. Tick: OHLCV-accurate SL / TP / trail / time-exit ─────────
+            # Use the ACTIVE symbol's high/low/close so SL/TP checks fire
+            # against the actual price series of the symbol we hold.
             sim.tick_ohlcv_candle(
-                high=candle_high,
-                low=candle_low,
-                close=close_price,
+                high=active_high,
+                low=active_low,
+                close=active_close,
             )
 
-            # ── DCA state sync (mirrors main.py logic) ────────────────────
+            # ── 8. DCA state sync (mirrors main.py logic) ───────────────────
             if isinstance(strategy, DCAStrategy):
                 strategy.sync_state(simulator_has_position=sim.position is not None)
 
-            # ── Record equity ─────────────────────────────────────────────
-            equity_curve[ts] = sim.get_equity(close_price)
+            # ── 9. Record equity ────────────────────────────────────────────
+            equity_curve[ts] = sim.get_equity(active_close)
 
             if signal.action != "HOLD":
                 signals_fired.append({
                     "ts": ts,
+                    "symbol": active_symbol,
                     "action": signal.action,
                     "price": fill_price,
                     "reason": signal.reason,
                 })
 
         # ── Force-close any open position at last candle ──────────────────
+        # For multi-symbol strategies the position may be on a symbol other
+        # than `df` represents — use the position's own symbol to pick the
+        # right closing price from universe_dfs when available.
         if sim.position is not None:
-            last_price = float(df["close"].iloc[-1])
+            if (
+                universe_dfs is not None
+                and sim.position.symbol in universe_dfs
+            ):
+                last_price = float(
+                    universe_dfs[sim.position.symbol]["close"].iloc[-1]
+                )
+            else:
+                last_price = float(df["close"].iloc[-1])
             logger.info(
-                f"[Backtest] Closing open position at end of period @ {last_price:.4f}"
+                f"[Backtest] Closing open position on {sim.position.symbol} "
+                f"at end of period @ {last_price:.4f}"
             )
             sim._handle_full_sell(None, last_price, "backtest_end", order_type="market")
             # Update last equity entry

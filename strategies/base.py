@@ -299,6 +299,10 @@ class BaseStrategy(ABC):
         panic_protection: bool = False,
         max_hold_candles: int = 0,
         metadata: dict = None,
+        quantity_pct: float = 1.0,
+        limit_offset: float = 0.0005,
+        is_short: bool = False,
+        compound_profit: bool = False,
     ) -> Signal:
         return Signal(
             action="BUY", strategy=self.name, price=price, reason=reason,
@@ -308,6 +312,8 @@ class BaseStrategy(ABC):
             order_type=order_type, leverage=leverage,
             panic_protection=panic_protection, max_hold_candles=max_hold_candles,
             metadata=metadata or {},
+            quantity_pct=quantity_pct, limit_offset=limit_offset,
+            is_short=is_short, compound_profit=compound_profit,
         )
 
     def sell(
@@ -322,6 +328,13 @@ class BaseStrategy(ABC):
         order_type: str = "limit",
         compound_profit: bool = False,
         metadata: dict = None,
+        trailing_tp: bool = False,
+        trail_pct: float = 0.02,
+        trailing_sl: bool = False,
+        trail_sl_pct: float = 0.03,
+        limit_offset: float = 0.0005,
+        panic_protection: bool = False,
+        max_hold_candles: int = 0,
     ) -> Signal:
         return Signal(
             action="SELL", strategy=self.name, price=price, reason=reason,
@@ -329,4 +342,8 @@ class BaseStrategy(ABC):
             is_short=is_short, leverage=leverage, order_type=order_type,
             compound_profit=compound_profit,
             metadata=metadata or {},
+            trailing_tp=trailing_tp, trail_pct=trail_pct,
+            trailing_sl=trailing_sl, trail_sl_pct=trail_sl_pct,
+            limit_offset=limit_offset,
+            panic_protection=panic_protection, max_hold_candles=max_hold_candles,
         )
