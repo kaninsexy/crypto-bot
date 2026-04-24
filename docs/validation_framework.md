@@ -7,14 +7,25 @@ every strategy and the portfolio as a whole before anything moves toward
 deployment. It is the authoritative reference for what "validated" means on
 this project. Modifications require human approval (see `CLAUDE.md`).
 
-## Three-way data split
+## Two-way data split (80 / 20)
 
-- **Training (50%)** — used freely for development, parameter search, bug
-  fixing, feature engineering.
-- **Validation (30%)** — used for CPCV path construction and for early
-  rejection of strategies that do not survive cross-validation.
-- **Holdout (20%)** — the most recent slice of the data, chosen deliberately
-  to reflect current market conditions.
+Each strategy's full cache window is divided into two non-overlapping halves
+by a single calendar cut computed from the actual data bounds in the parquet
+cache:
+
+```
+holdout_start = data_start + 0.80 × (data_end − data_start)
+```
+
+- **Dev window `[data_start, holdout_start)`** — the first 80 % of the
+  available history.  Used freely for development, parameter search, bug
+  fixing, CPCV path construction, and iterative Sharpe estimation.
+- **Holdout window `[holdout_start, data_end)`** — the most recent 20 %,
+  chosen deliberately to reflect current market conditions.
+
+For multi-symbol strategies (DualMomentum) the cut is computed on the
+intersection window: `data_start = max(per-symbol starts)`,
+`data_end = min(per-symbol ends)`.
 
 The holdout is sacred. It is accessed **exactly once per strategy**, at the
 end of that strategy's rescue iteration, to produce a final DSR that
@@ -48,7 +59,7 @@ across many reconstructed backtest paths.
 
 Standard CPCV mechanics:
 
-- Split the training+validation span into N non-overlapping blocks.
+- Split the dev window into N non-overlapping blocks.
 - Form all combinations where k blocks are held out and N−k blocks are used
   for training.
 - Purge overlapping periods around the held-out blocks to prevent leakage
@@ -141,6 +152,22 @@ Any strategy that survives holdout DSR gets per-regime Sharpe analysis across
 BULL / BEAR / CHOP / CRASH. Those per-regime Sharpes feed into
 `REGIME_PRIORS`, which is the input to regime-aware Kelly sizing built in
 Phase 2c. `REGIME_PRIORS` is currently empty — this step is what fills it.
+
+## Infrastructure
+
+The holdout split is managed by a small set of dedicated modules.  Do not
+replicate their logic elsewhere; go through these interfaces.
+
+| File | Role |
+|------|------|
+| `backtest/holdout_manifest.json` | Source of truth for every strategy's `data_start`, `dev_end`, `holdout_start`, `data_end`, and `timeframe`. Generated once; updated only via `regenerate_manifest()`. |
+| `backtest/holdout_access.log` | Append-only audit log.  Every call to `load_holdout` appends one access event; every manifest regeneration appends one `regenerated=true` event. |
+| `backtest/holdout.py` | Public accessors: `load_dev(strategy_id)` (unrestricted), `load_holdout(strategy_id, caller=…, reason=…)` (single-access enforced). Also exports `load_manifest()`. |
+| `backtest/generate_holdout_manifest.py` | `generate_initial()` for first-time setup; `regenerate_manifest(strategies=None)` to redraw the split after cache refresh. CLI: `python -m backtest.generate_holdout_manifest init \| regen`. |
+| `backtest/cache.py` | `load_or_download_ohlcv` enforces the holdout boundary at read time.  Pass `until_ts=get_symbol_dev_cutoff(symbol)` to restrict to the dev window.  Raises `HoldoutBypass` if holdout rows are returned outside an authorised context. |
+
+Modifying `holdout.py`, `holdout_manifest.json`, or `holdout_access.log`
+schema requires human approval (see `CLAUDE.md`).
 
 ## What this framework is not
 
