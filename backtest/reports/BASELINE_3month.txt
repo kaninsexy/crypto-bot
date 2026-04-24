@@ -1,0 +1,18 @@
+BACKTEST REPORT — MULTI-SYMBOL [1h]
+Generated: 2026-04-19 12:30:43
+==============================================================================
+
+Strategy         Symbol                   IS Ret%  OOS Ret%   MaxDD%   Sharpe  WinRate  Trades      PF
+------------------------------------------------------------------------------
+GridTrading      SOL/USDT                  +0.11%    +0.10%   -0.03%    9.271    88.1%      42  35.566
+VWAP             ETH/USDT                  -3.38%    +2.92%   -0.93%    5.078    58.3%      12   2.610
+VolatilityBreakout BTC/USDT                 -11.56%    +1.42%   -3.41%    1.602    48.6%      70   1.293
+BearShort        BTC/USDT                  -0.15%    +0.05%   -0.09%    1.522    85.7%       7   2.307
+DCA              BTC/USDT                  -0.92%    +0.28%   -0.67%    1.147   100.0%       9     inf
+TrendFollowing   BTC/USDT                  -5.03%    -4.29%   -6.50%   -2.439    31.2%      16   0.509
+DualMomentum     multi (BTC/ETH/BNB)      -22.73%    -9.00%   -9.09%   -3.036    39.5%      38   0.462
+Supertrend       ETH/USDT                  -7.63%    -7.86%   -9.35%   -3.826    25.0%      12   0.300
+MeanReversion    ETH/USDT                  +0.66%    -0.72%   -0.72%   -4.394     0.0%       2   0.000
+Breakout         AVAX/USDT                 -1.91%   -10.13%  -10.13%   -4.803    14.3%       7   0.074
+
+CSV saved to: 2026-04-19_123043_summary.csv
