@@ -1,213 +1,152 @@
 # MASTER PLAN — Crypto Trading Bot
-# Last Updated: 2026-04-17
-# Status: Paper trading Week 1, bot running on OKX
 
-## CURRENT STATE
-- Bot: Python multi-strategy, OKX USDT-M futures, paper trading
-- Server: kanin@104.248.145.189 (DigitalOcean Singapore)
-- Repo: kaninsexy/crypto-bot (~/Documents/crypto-bot on Mac)
-- Deploy: git push Mac → ssh server → sudo bash -c "cd /home/botuser/crypto_bot && git pull" → sudo systemctl restart cryptobot cryptodashboard
-- Dashboard: http://104.248.145.189:8080 (gunicorn)
-- Paper capital: $100,000 (fresh restart Apr 17)
+Last updated: 2026-04-25
+Supersedes the 2026-04-17 plan (prior content preserved in git history). The
+primary change since: Phase 2c is complete, Phase 3a has shipped, and the
+plan is now organised around a validation-first rescue process rather than
+feature expansion.
 
-## STRATEGIES (10 active)
-DCA, Supertrend, MeanReversion, GridTrading, Breakout,
-TrendFollowing, BearShort, VWAP, VolatilityBreakout, DualMomentum
+## Project integrity principle
 
-## REGIME ALLOCATIONS
-- STRONG_BULL: Breakout(30%), Supertrend(25%), TrendFollowing(10%), DCA(15%)
-- BULL: Breakout(20%), Supertrend(25%), MeanReversion(5%), TrendFollowing(10%), DCA(15%)
-- RANGE: GridTrading(32%), DCA(20%), MeanReversion(10%), VWAP(10%), DualMomentum(10%)
-- BEAR: DCA(56%), BearShort(15%), GridTrading(18%)
-- CRASH: DCA(79%), BearShort(15%), GridTrading(6%)
-- VOLATILE: DCA(45%), GridTrading(30%), Supertrend(10%), TrendFollowing(10%)
+**Nothing deploys until Phase 3b validates it via DSR on holdout data.**
 
-## COMPLETED FEATURES
-- Graduated daily loss caps (5 tiers: WARNING/CAUTIOUS/HALT/REDUCE/EMERGENCY)
-- ATR trailing stops (TrendFollowing 3x, Supertrend 3x, Breakout 3.5x, DualMomentum 2.5x)
-- GridTrading consecutive SL circuit breaker
-- Exchange reconciliation (Q2) — paper no-op, live 3-pass engine
-- LeverageGuard: correct Binance/OKX formula (MMR=0.4%), correlated risk, regime caps
-- Minimum capital guard ($200 floor, blocks BUY not SELL)
-- DCA base_amount scaled to 1% of allocated capital (min $10)
-- DCA MACD filter enabled
-- MeanReversion activated RANGE(10%) BULL(5%)
-- CorrCap proportional scaling (forward-looking)
-- Rebalancer: protects open positions, 25% threshold
-- Post-restore rebalance + circuit breaker guard on $0 equity
-- OKX migration (from Binance, geo-blocked)
-- Server hardened: non-root user (kanin), SSH locked, port 8080 IP-restricted
-- Dashboard on gunicorn
-- Kelly profiles built from PHASE_C_PROFILES (needs regime-aware upgrade)
-- Per-strategy return % uses equity-based initial_balance
+This is the single rule that overrides everything else in this document. No
+strategy gets paper-deployed, and no paper-deployed strategy gets live-deployed,
+until the Deflated Sharpe Ratio on the untouched holdout window clears the
+threshold set in Phase 3b. See `docs/validation_framework.md` for the
+methodology.
 
-## KNOWN ISSUES TO FIX (Priority Order)
-1. Rebalancer conflates capital allocation with earned profit — needs redesign
-2. Kelly sizing never fires (recommended_kelly=0 for low-trade strategies)
-3. Kelly not regime-aware (same profile used regardless of market state)
-4. Backtesting infrastructure missing (no way to validate Kelly inputs)
-5. Total capital accounting (deposits vs profits not tracked separately)
-6. OKX live trading: transfer functions raise NotImplementedError
-7. OKX contract sizes for live trading (uses contracts not base currency)
-8. Rolling Sharpe not tracked in log_summary.py
+## Phase status
 
-## PHASE 2 — Architecture Fixes (Current Priority)
-Build with Claude Code + Graphify
+### Phase 2c — Regime-Aware Kelly Wiring — COMPLETE (commit `4a51f0b`)
 
-### 2a. Rebalancer Redesign ✅ COMPLETE
-- Track initial_capital (deposited) separately from earned_profit
-- Only rebalance initial_capital proportions
-- Earned profits compound within each strategy untouched
-- Reference: pysystemtrade capital allocation pattern
+Code path for regime-aware Kelly sizing is wired. `KellyCalculator` now looks
+up `REGIME_PRIORS[regime][strategy]` before falling back to
+`ALL_REGIME_FALLBACK`. Per-strategy per-regime Kelly profiles, Bayesian
+blending of prior + live trade results, rebuild on regime change and every
+50 candles.
 
-### 2b. Backtesting Infrastructure ✅ COMPLETE
-- Fetch 3 years OKX historical data (2022-2025)
-- Run all 10 strategies against historical data
-- Get per-strategy, per-regime win rates for Kelly inputs
-- Why 3 years: captures 2022 bear, 2023 recovery, 2024-2025 bull
+### Phase 2c.1 — REGIME_PRIORS Calibration — PENDING (auto-fulfilled by Phase 3d)
 
-### 2c. Regime-Aware Kelly Blending
-- Separate Kelly profiles per strategy per regime
-- Blend PHASE_C_PROFILES prior with live trade results (Bayesian)
-- Rebuild every 50 candles + on regime change
-- Formula: blended = (prior × n_prior + live × n_live) / (n_prior + n_live)
+`portfolio/kelly.py:223` declares `REGIME_PRIORS` as an empty dict. Every
+lookup currently falls back to `ALL_REGIME_FALLBACK` (line 141). This means
+regime-aware Kelly is wired but inactive — effectively identical to
+pre-Phase 2c behavior.
 
-### 2d. Total Capital Accounting ✅ COMPLETE
-- total_capital only increases on deposit() calls
-- Track deposits separately from strategy returns
+Calibration will be automatic once Phase 3d produces per-regime Sharpe data
+for surviving strategies. No separate project required; Phase 3d's output
+populates `REGIME_PRIORS` as its final step.
 
-## PHASE 3 — Intelligence Layer (Week 2-4, after 30+ trades)
+### Phase 3a — COMPLETE (commit `f2d29cf`)
 
-### Rolling Sharpe Tracking
-sharpe = returns.rolling(30).mean() / returns.rolling(30).std() * sqrt(365*24)
-Add to log_summary.py and weekly review
+Backtest redesign. Per-strategy symbols via `config.STRATEGY_SYMBOLS`, L1
+OHLCV parquet cache with 24h TTL, DualMomentum multi-symbol rotation,
+`base.py` kwarg fix. This is the current `main` tip.
 
-### Forecast Combining (replace CorrCap hard blocks)
-Pattern from pysystemtrade: each strategy produces normalized signal (-20 to +20)
-Portfolio combines with weights — conflicts cancel mathematically
-Eliminates need for separate conflict detection system
+### Phase 3a.1 — PENDING COMMIT
 
-### Profit Reserve System
-Continuous formula: reserve_contribution = current_profit_pct × 0.3
-Move to OKX Earn (flexible, daily interest) automatically
-Withdrawal function: only from profits, never from principal
+Supertrend and BearShort vectorization. Approximately 10× speedup on the two
+slowest strategies. Supertrend math is identical; BearShort drifts within
+noise. Changes sit in the working tree awaiting a human commit decision.
 
-### Passivbot Evolutionary Parameter Optimization
-Use genetic algorithms to optimize strategy parameters
-(ATR multipliers, RSI thresholds, grid spacing) vs historical data
+### Phase 3b — NEXT
 
-### Strategy Chaining (from 3commas composite bots)
-One strategy's exit triggers another's entry
-Implement as event hooks in portfolio/manager.py
+Statistical validation framework. CPCV + Deflated Sharpe Ratio + three-way
+data split (train / validation / holdout). Will be built before any further
+strategy work. Detailed spec in `docs/validation_framework.md`.
 
-## PHASE 4 — Alpha Expansion (Month 2)
+### Phase 3c
 
-### Funding Rate Arbitrage
-- References: 50shadesofgwei/funding-rate-arbitrage, aoki-h-jp/funding-rate-arbitrage
-- Start 5% allocation, paper trade 2 weeks first
-- Only viable when annualized rate > 8-10%
-- Monitor via OKX funding rate API
+Per-strategy rescue or retire decisions using the Phase 3b framework.
+Target: 2–4 weeks of evening sessions. See `docs/strategies.md` for the
+current rescue list. Within-strategy iteration cap is 20 variations
+(`CLAUDE.md`).
 
-### ML Regime Detection
-- Replace/supplement EMA/RSI with HMM or K-means clustering
-- Reference: Sakeeb91/market-regime-detection
-- Only if current detector shows misclassification patterns
-- Requires 60+ days labeled regime data
+**Execution pattern:** Phase 3c uses the multi-agent framework documented in
+`CLAUDE.md`. Specifically: parallel literature-review subagents (one per
+strategy), cross-model adversarial review of every parameter proposal, and
+`trials.log` discipline for multiple-testing correction. See
+`docs/research_log.md` section on multi-agent patterns for the full evidence
+basis.
 
-### TradingView Pro ($15/month — subscribe when live)
-- Webhook alerts for confluence signals
-- Pine Script for rapid parameter iteration
-- Screener for multi-coin regime conditions
+### Phase 3d
 
-### LLM as Signal in Regime Detector
-- Pattern from OctoBot GPTEvaluator
-- Claude sentiment score as one input (weight 10-15%)
-- Multi-agent review: Pro/Neutral/Opposing stances (claude-trader pattern)
-- Via OpenClaw's existing multi-agent setup
+Portfolio-level validation of the strategies that survive 3c. Pairwise
+correlation check, portfolio-level DSR, and a buy-and-hold baseline that the
+combined portfolio must beat.
 
-### Multi-Provider LLM Resilience
-- Auto-fallback: Claude → GPT-4o → local model
-- Pattern from LLM_trader
-- Already partially handled by OpenClaw/OpenRouter
+**Inverse-volatility strategy weights + Barroso-Santa-Clara vol scaling.**
+Per forecast-combining research (see `docs/research_log.md`, section on
+forecast combining), this captures most of the empirical uplift of full
+forecast-combining machinery with ~1-2 days of work. Applied to surviving
+strategies only, after they pass Phase 3c. Specifically: each strategy's
+position gets scaled by `target_vol / rolling_vol_30d`
+(Barroso-Santa-Clara), and strategies are weighted within regime buckets by
+inverse of their realized return volatility.
 
-## PHASE 5 — Pre-Live Preparation (Month 2-3)
+### Phase 4
 
-### OKX Live Trading Audit
-- Implement transfer_spot_to_swap() properly
-- OKX contract sizes: amount_to_contracts conversion
-- Position mode: one-way vs hedge
-- Rewrite reconciler for OKX position structure
-- Test all order types on OKX testnet
+Paper deploy of the validated portfolio only. 4-week monitoring vs backtest
+expectations. No live money on the table in this phase.
 
-### Crisis-Alpha Strategy
-- 7-10% allocation, CRASH/HIGH_VOL only
-- Liquidation cascade detection via OKX WebSocket
-- Reference: kukapay/crypto-liquidations-mcp
+> **Open question (pre-Phase 4):** Decide deployment mechanics — deploy to
+> existing server with fresh $100k paper state, or preserve current paper
+> state and deploy alongside for comparison? Decision needed before Phase 4
+> begins.
 
-### Pre-Live Checklist (ALL required before going live)
-- [ ] 50+ closed trades per active strategy
-- [ ] Rolling Sharpe > 0.8 on paper trading
-- [ ] Max drawdown < 15% on paper trading
-- [ ] Funding rate arb paper traded 2+ weeks
-- [ ] OKX live trading audit complete
-- [ ] Withdrawal + profit reserve functions built
-- [ ] Regime-aware Kelly with real backtest data
-- [ ] Rebalancer redesign complete
+### Phase 5
 
-## PHASE 6 — Live Trading (Month 3+)
+Live deployment decision. Separate gate, requires Phase 4 monitoring to be
+clean (paper behaviour within expected bounds, no unexplained equity drift,
+risk guards firing correctly).
 
-### Capital Flow
-Bitkub (THB bank transfer → USDT) → OKX TRC20 → Trading Account
+## Deploy gate
 
-### Deployment by Capital
-- <$5,000: DCA, GridTrading, TrendFollowing, VolBreakout only
-- $5,000-10,000: Add Supertrend, DualMomentum, VWAP
-- $10,000+: All 10 strategies
-- $28,000+ (1M THB): Full deployment after 6 months proven
+A strategy is allowed onto paper deploy only when all of the following hold:
 
-### Monthly: 60k THB (~$1,680) via Bitkub → OKX
+1. DSR on holdout data clears the Phase 3b threshold.
+2. Portfolio-level DSR of the combined survivors clears the threshold
+   (Phase 3d).
+3. The combined portfolio beats a buy-and-hold baseline on the same
+   instruments over the same period.
+4. Per-regime Sharpe attribution has been recorded and fed into
+   `REGIME_PRIORS` where applicable.
 
-### Profit Reserve (continuous formula)
-reserve = profit_pct × 0.3 → OKX Earn flexible savings
-Safe withdrawal: only from profits, maintain min capital per strategy
+A paper-deployed portfolio is allowed onto live only when Phase 4 monitoring
+concludes cleanly. These gates are not negotiable and are not bypassable by
+agents (see `CLAUDE.md`).
 
-## TOOLS STACK
-- Claude Code Pro ($20/month) — large refactors NOW
-- Graphify (free) — token compression for Claude Code, install immediately
-- OpenClaw — scheduled research, daily monitoring (running)
-- OpenRouter ($20/month) — LLM routing (running)
-- TradingView Pro ($15/month) — when live, not before
-- OKX Earn (free) — profit reserve when profitable
+## Out of scope for now
 
-## OPENCLAW RESEARCH SCHEDULE
-Sunday weekly:
-  openclaw agent --agent research --message "Weekly review: analyze strategies.md and WEEKLY_REVIEW.md. Which strategies underperformed and why?"
+The 2026-04-17 plan listed funding-rate arbitrage, ML regime detection,
+TradingView integration, LLM-as-signal, and a crisis-alpha strategy as
+Phase 4+ items. Those remain parked until the validation framework exists
+and the current portfolio has survivors — there is no point expanding alpha
+surface before confirming there is any alpha.
 
-At 30 closed trades:
-  openclaw agent --agent research --message "Bot has 30+ closed trades on OKX. Analyze performance by strategy and regime. Which has worst risk-adjusted return? Search GitHub for specific improvements."
+## Future phases (deferred)
 
-At 50 closed trades:
-  openclaw agent --agent research --message "50+ closed trades. Research pysystemtrade forecast combining pattern — can we replace CorrCap with this? Also check LLM-as-evaluator patterns in OctoBot/claude-trader repos."
+### Forecast Combining — DEFERRED
 
-Monthly (12th):
-  openclaw agent --agent research --message "Monthly GitHub search: new multi-strategy crypto bot patterns, Kelly improvements, OKX-specific optimizations, funding rate arbitrage viability. Check freqtrade, pysystemtrade, OctoBot recent commits."
+Pysystemtrade-style continuous forecast aggregation was evaluated in detail (see `docs/research_log.md` section on forecast combining). Decision: defer until after Phase 5. Revisit only if Phase 4 paper-trading monitoring reveals concrete pathologies — specifically: CorrCap hard-blocks causing measurable opportunity cost (>1-2% annualized drag), or regime transitions causing discrete-switching whipsaw losses.
 
-## GITHUB REFERENCES
-- pysystemtrade: forecast combining, capital allocation
-- claude-trader (Byte-Ventures): multi-agent signal review, 5 risk layers
-- OctoBot (Drakkar-Software): LLM-as-signal, tentacles architecture
-- Passivbot (enarjord): evolutionary parameter optimization
-- LLM_trader (qrak): multi-provider LLM resilience, vision AI candles
-- freqtrade: Edge Positioning for Kelly improvement
-- Sakeeb91/market-regime-detection: HMM/K-means regime
-- kukapay/crypto-liquidations-mcp: crisis-alpha liquidation detection
-- 50shadesofgwei/funding-rate-arbitrage: funding arb implementation
-- aoki-h-jp/funding-rate-arbitrage: funding arb reference
+Evidence summary: Carver's own tests show the approach is "indistinguishable" from simpler alternatives in Sharpe terms; DeMiguel et al. (2009) and its 2024 replication show equal-weight combining is nearly impossible to beat out-of-sample; crypto-specific volatility structure introduces new failure modes (FDM leverage creep during regime shifts). Phase 3d's inverse-vol weights + vol scaling captures most of the demonstrated benefit at a fraction of the implementation cost.
 
-## INVESTMENT PLAN (separate from bot)
-- IBKR cash account + Wise account (Thailand residence)
-- SCB Easy: SCBS&P500E mutual fund (max 1M THB, 0.1% TER, CGT exempt)
-- Target allocation: 60% VOO/VT, 15% VXUS, 10% QQQ, 10% Gold, 5% cash
-- Foreign income not taxed if not remitted same year
-- Emergency fund: 1,000,000 THB (hard floor, never invest)
-- 1M THB in savings for bot — deploy gradually after 6 months proven
+### Passivbot Evolutionary Optimization — RETIRED
+
+Considered as parameter search tool. Retired because it conflicts with the project's DSR-based validation discipline: evolutionary search generates large numbers of parameter variations, which directly inflate the multiple-testing count in `trials.log` and the DSR haircut. The CPCV + DSR framework is specifically designed to prevent this class of p-hacking; adopting Passivbot would undermine the integrity principle.
+
+### Profit Reserve System — RETIRED
+
+Considered as auto-transfer of profits to OKX Earn. Retired because it is premature optimization: there are no validated profitable strategies yet to reserve profits from. If Phase 5 succeeds and the bot becomes consistently profitable in live mode, a simpler manual monthly skim satisfies the same goal without the operational complexity of auto-transfer integration.
+
+## Capital and operational context
+
+- Bot: Python multi-strategy, OKX USDT-M futures, paper trading.
+- Server: `kanin@104.248.145.189` (DigitalOcean Singapore), currently on
+  commit `4a51f0b`.
+- Repo: `kaninsexy/crypto-bot`, local at `~/Documents/crypto-bot`.
+- Deploy: git push → SSH → `sudo bash -c "cd /home/botuser/crypto_bot && git pull"`
+  → `sudo systemctl restart cryptobot cryptodashboard`.
+- Paper capital: $100,000 (fresh restart 2026-04-17).
+- Live deployment remains future work.

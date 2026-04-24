@@ -1,0 +1,50 @@
+Continuing crypto trading bot work.
+
+CONTEXT
+- Bot: Python multi-strategy, OKX USDT-M futures, paper trading $100k (fresh Apr 17 2026).
+- Server: kanin@104.248.145.189, repo: github.com/kaninsexy/crypto-bot.
+- Local: ~/Documents/crypto-bot, venv: source venv/bin/activate.
+- Current commit: f2d29cf on main (Phase 3a redesign + base.py kwarg fix).
+- Server is still on 4a51f0b (pre-Phase 3a). Not yet updated.
+- Working tree has uncommitted Supertrend + BearShort vectorization (~10x), pending commit decision.
+
+CURRENT PHASE
+- Phase 3b — statistical validation framework buildout (CPCV + DSR + 3-way split).
+- Everything else is gated behind it. Nothing deploys until DSR on holdout clears threshold.
+
+PROJECT KNOWLEDGE — WHERE TO READ BEFORE DOING ANYTHING
+- CLAUDE.md                         — agent operating rules, autonomy boundaries, safety guardrails
+- docs/MASTER_PLAN.md               — phase map and deploy gate
+- docs/bot_status.md                — current factual state, per-strategy table
+- docs/strategies.md                — per-strategy diagnosis and next action
+- docs/validation_framework.md      — Phase 3b spec (CPCV, DSR, thresholds, trials.log)
+- docs/open_questions.md            — outstanding items
+- docs/strategy_failure_analysis_2026-04-19.md — backtest failure write-up for 4 broken strategies
+
+PROJECT KNOWLEDGE FRESHNESS
+When starting a chat, re-upload or re-read these files in this order:
+  1. CLAUDE.md
+  2. docs/MASTER_PLAN.md
+  3. docs/bot_status.md
+  4. docs/strategies.md (for rescue-work chats)
+  5. docs/validation_framework.md (for Phase 3b work)
+  6. docs/open_questions.md (for anything else)
+If a doc has been edited in this session, re-read it before acting on it.
+
+CHAT DISCIPLINE
+- Ask before writing code or invoking Cowork. Don't jump to edits on ambiguous requests.
+- Don't stack next steps. Finish the current task, surface the result, wait for direction.
+- Flag long chats. Context drift is real — if a chat is getting long, propose moving to a
+  fresh one with a clean handoff.
+- Agents never commit, push, or deploy. See CLAUDE.md autonomy rules for the full list.
+
+KEY TECHNICAL RULES
+- self._slots not self.slots in manager.py
+- paper_mode=True guards real OKX API calls
+- Never change total_capital semantics
+- Server deploy uses `sudo bash -c "cd /home/botuser/crypto_bot && git pull"`
+
+NEXT LIKELY ACTIONS
+- Decide whether to commit Phase 3a.1 vectorization (human decision).
+- Decide whether to re-run DualMomentum with no time limit or accept 9/10 as baseline.
+- Start Phase 3b framework buildout once the above are resolved.
