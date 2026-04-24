@@ -73,6 +73,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from backtest.cache import _holdout_bypass_ctx
 from backtest.logs import append_jsonl, iter_jsonl_filtered
 
 
@@ -320,15 +321,20 @@ def load_holdout(
             "Call regenerate_manifest() to reset the access window."
         )
 
-    # 4. Load and filter data.
+    # 4. Load and filter data — bypass enforcement so holdout.py is the only
+    #    authorised path for accessing holdout rows.
     entry = manifest[strategy_id]
     holdout_start = pd.Timestamp(entry["holdout_start"])
-    result = _build_df(
-        _get_symbols(entry),
-        entry["timeframe"],
-        after_ts=holdout_start,
-        before_ts=None,
-    )
+    token = _holdout_bypass_ctx.set(True)
+    try:
+        result = _build_df(
+            _get_symbols(entry),
+            entry["timeframe"],
+            after_ts=holdout_start,
+            before_ts=None,
+        )
+    finally:
+        _holdout_bypass_ctx.reset(token)
 
     # 5. Append audit event — after data is loaded so n_rows is known.
     event = {

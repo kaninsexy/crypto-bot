@@ -28,8 +28,21 @@ DESIGN NOTES
   (OKX, Binance, a stub fixture, etc.).
 • All numeric / DataFrame checks use explicit `is None` / `== 0` — the
   project style guide forbids truthy-falsy shortcuts on numeric values.
+
+HOLDOUT ENFORCEMENT
+───────────────────
+`load_or_download_ohlcv` refuses to return rows inside any strategy's
+holdout window unless the call originates from within `holdout.load_holdout`
+(authorised via `_holdout_bypass_ctx`).  Pass `until_ts` to explicitly cap
+the returned range to the dev window for a given symbol.
+
+Callers that need the dev-only slice should pass:
+    until_ts=get_symbol_dev_cutoff(symbol)
 """
 
+import contextvars
+import functools
+import json
 import os
 import time
 from pathlib import Path
@@ -39,6 +52,96 @@ import pandas as pd
 from loguru import logger
 
 
+# ── Holdout enforcement ───────────────────────────────────────────────────────
+
+class HoldoutBypass(RuntimeError):
+    """Raised when load_or_download_ohlcv would return holdout-window rows
+    outside of an authorised holdout-read context.
+
+    Use `until_ts=get_symbol_dev_cutoff(symbol)` to restrict to the dev
+    window, or call from within `holdout.load_holdout` which sets the
+    bypass context automatically.
+    """
+
+
+class EnforcementManifestMissing(RuntimeError):
+    """Raised when the holdout manifest file is absent at enforcement time.
+
+    Run `python -m backtest.generate_holdout_manifest init` first.
+    """
+
+
+class EnforcementManifestMalformed(RuntimeError):
+    """Raised when the holdout manifest exists but cannot be parsed."""
+
+
+# Set to True by holdout.load_holdout during its _build_df call so the
+# enforcement check is skipped for that single authorised access.
+_holdout_bypass_ctx: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_holdout_bypass_ctx", default=False
+)
+
+# Independent manifest path — NOT imported from holdout.py to avoid circular
+# imports.  Override in tests via monkeypatch.setattr.
+_ENFORCEMENT_MANIFEST_PATH: Path = Path("backtest/holdout_manifest.json")
+
+
+@functools.lru_cache(maxsize=1)
+def _load_enforcement_manifest() -> dict:
+    """Load holdout manifest for enforcement checks only.
+
+    Raises EnforcementManifestMissing if the file does not exist.
+    Raises EnforcementManifestMalformed if the file cannot be parsed.
+    """
+    p = _ENFORCEMENT_MANIFEST_PATH
+    if not p.exists():
+        raise EnforcementManifestMissing(
+            f"Holdout manifest not found at {p}. "
+            "Run `python -m backtest.generate_holdout_manifest init` first."
+        )
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise EnforcementManifestMalformed(
+            f"Could not parse holdout manifest at {p}: {exc}"
+        ) from exc
+
+
+def _earliest_holdout_start(symbol: str) -> "pd.Timestamp | None":
+    """Return the earliest holdout_start across all strategies using symbol.
+
+    Returns None if the manifest is absent or no strategy uses symbol.
+    """
+    manifest = _load_enforcement_manifest()
+    timestamps: list[pd.Timestamp] = []
+    for entry in manifest.values():
+        if "symbols" in entry:
+            syms = entry["symbols"]
+        elif "symbol" in entry:
+            syms = [entry["symbol"]]
+        else:
+            continue
+        if symbol in syms and "holdout_start" in entry:
+            timestamps.append(pd.Timestamp(entry["holdout_start"]))
+    if not timestamps:
+        return None
+    return min(timestamps)
+
+
+def get_symbol_dev_cutoff(symbol: str) -> "pd.Timestamp | None":
+    """Return the dev-window cutoff (earliest holdout_start) for symbol.
+
+    Pass the returned value as `until_ts` to `load_or_download_ohlcv` to
+    restrict the returned DataFrame to the dev window only.
+
+    Returns None if the manifest has no entry for this symbol — callers
+    should treat None as "no restriction applies."
+    """
+    return _earliest_holdout_start(symbol)
+
+
+# ── Main cache function ───────────────────────────────────────────────────────
+
 def load_or_download_ohlcv(
     symbol: str,
     timeframe: str,
@@ -46,6 +149,7 @@ def load_or_download_ohlcv(
     download_fn: Callable[[str, str, int], pd.DataFrame],
     cache_dir: Path = Path("backtest/cache/ohlcv"),
     ttl_hours: int = 24,
+    until_ts: "pd.Timestamp | None" = None,
 ) -> pd.DataFrame:
     """
     Load an OHLCV DataFrame from the parquet cache or download fresh.
@@ -62,9 +166,19 @@ def load_or_download_ohlcv(
                       if it does not exist.
         ttl_hours:    How long a cache entry is considered fresh. Older files
                       trigger a redownload.
+        until_ts:     If given, the returned DataFrame is clipped to rows
+                      with index < until_ts before the holdout-enforcement
+                      check.  Pass get_symbol_dev_cutoff(symbol) to restrict
+                      to the dev window.
 
     Returns:
-        OHLCV DataFrame (same structure `download_fn` returns).
+        OHLCV DataFrame (same structure `download_fn` returns), optionally
+        clipped to [start, until_ts).
+
+    Raises:
+        HoldoutBypass: if the returned rows include data at or after the
+                       symbol's earliest holdout_start and the call is not
+                       from within an authorised holdout-read context.
 
     Env vars:
         BACKTEST_REFRESH_CACHE=1  → bypass the cache read path entirely;
@@ -94,7 +208,9 @@ def load_or_download_ohlcv(
                     f"{cache_path.name} "
                     f"(age: {age_seconds / 3600:.1f}h, rows: {len(df)})"
                 )
-                return df
+                return _apply_until_and_enforce(df, symbol, until_ts)
+            except HoldoutBypass:
+                raise
             except Exception as e:
                 # Corrupted parquet — fall through to redownload below.
                 logger.warning(
@@ -126,5 +242,30 @@ def load_or_download_ohlcv(
         )
     except Exception as e:
         logger.warning(f"[Cache] Failed to write {cache_path.name}: {e}")
+
+    return _apply_until_and_enforce(df, symbol, until_ts)
+
+
+def _apply_until_and_enforce(
+    df: pd.DataFrame,
+    symbol: str,
+    until_ts: "pd.Timestamp | None",
+) -> pd.DataFrame:
+    """Clip df to [start, until_ts) then enforce the holdout boundary."""
+    if until_ts is not None:
+        df = df[df.index < until_ts]
+
+    if _holdout_bypass_ctx.get():
+        return df
+
+    earliest_hs = _earliest_holdout_start(symbol)
+    if earliest_hs is not None and not df.empty:
+        if df.index.max() >= earliest_hs:
+            raise HoldoutBypass(
+                f"load_or_download_ohlcv for {symbol!r} returned rows at or "
+                f"after holdout_start={earliest_hs.isoformat()}. "
+                "Pass until_ts=get_symbol_dev_cutoff(symbol) to restrict to "
+                "the dev window, or call from within holdout.load_holdout."
+            )
 
     return df

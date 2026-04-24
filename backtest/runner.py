@@ -43,7 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from backtest.engine import BacktestEngine, BacktestResult
-from backtest.cache import load_or_download_ohlcv
+from backtest.cache import load_or_download_ohlcv, get_symbol_dev_cutoff
 from backtest.report import print_comparison_table, print_period_report
 
 # Strategy factories — each returns a fresh, reset instance
@@ -318,6 +318,7 @@ def run_all(
             timeframe=timeframe,
             months=total_months,
             download_fn=download_history,
+            until_ts=get_symbol_dev_cutoff(sym),
         )
 
     # ── 2. Split each symbol into IS / OOS ───────────────────────────────────
