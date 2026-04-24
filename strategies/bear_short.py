@@ -179,46 +179,42 @@ class BearShortStrategy(BaseStrategy):
         upper_raw  = mid + self.supertrend_mult * atr_series
         lower_raw  = mid - self.supertrend_mult * atr_series
 
-        supertrend = pd.Series(index=df.index, dtype=float)
-        direction  = pd.Series(index=df.index, dtype=int)
+        # Numpy arrays for C-speed indexing — same recurrence, no .iloc overhead.
+        n   = len(df)
+        ur  = upper_raw.to_numpy(dtype=np.float64)
+        lr  = lower_raw.to_numpy(dtype=np.float64)
+        cl  = close.to_numpy(dtype=np.float64)
 
-        supertrend.iloc[0] = upper_raw.iloc[0]
-        direction.iloc[0]  = -1
+        st   = np.empty(n, dtype=np.float64)
+        dir_ = np.empty(n, dtype=np.int64)
+        st[0]   = ur[0]
+        dir_[0] = -1
 
-        for i in range(1, len(df)):
-            prev_close = close.iloc[i - 1]
-            prev_upper = supertrend.iloc[i - 1] if direction.iloc[i - 1] == -1 else upper_raw.iloc[i]
-            prev_lower = supertrend.iloc[i - 1] if direction.iloc[i - 1] ==  1 else lower_raw.iloc[i]
+        for i in range(1, n):
+            prev_cl  = cl[i - 1]
+            prev_dir = dir_[i - 1]
+            prev_st  = st[i - 1]
 
-            # Lower band (uptrend support): ratchets up, never falls
-            curr_lower = lower_raw.iloc[i]
-            if curr_lower > prev_lower or prev_close < prev_lower:
-                final_lower = curr_lower
-            else:
-                final_lower = prev_lower
+            prev_upper = prev_st if prev_dir == -1 else ur[i]
+            prev_lower = prev_st if prev_dir ==  1 else lr[i]
 
-            # Upper band (downtrend resistance): ratchets down, never rises
-            curr_upper = upper_raw.iloc[i]
-            if curr_upper < prev_upper or prev_close > prev_upper:
-                final_upper = curr_upper
-            else:
-                final_upper = prev_upper
+            final_upper = ur[i] if (ur[i] < prev_upper or prev_cl > prev_upper) else prev_upper
+            final_lower = lr[i] if (lr[i] > prev_lower or prev_cl < prev_lower) else prev_lower
 
-            prev_dir = direction.iloc[i - 1]
-            if prev_dir == -1 and close.iloc[i] > final_upper:
-                direction.iloc[i]  = 1           # Flip to uptrend
-                supertrend.iloc[i] = final_lower
-            elif prev_dir == 1 and close.iloc[i] < final_lower:
-                direction.iloc[i]  = -1          # Flip to downtrend
-                supertrend.iloc[i] = final_upper
+            if prev_dir == -1 and cl[i] > final_upper:
+                dir_[i] = 1
+                st[i]   = final_lower
+            elif prev_dir == 1 and cl[i] < final_lower:
+                dir_[i] = -1
+                st[i]   = final_upper
             elif prev_dir == -1:
-                direction.iloc[i]  = -1
-                supertrend.iloc[i] = final_upper
+                dir_[i] = -1
+                st[i]   = final_upper
             else:
-                direction.iloc[i]  = 1
-                supertrend.iloc[i] = final_lower
+                dir_[i] = 1
+                st[i]   = final_lower
 
-        return supertrend, direction
+        return pd.Series(st, index=df.index), pd.Series(dir_, index=df.index)
 
     # ── Signal generation ─────────────────────────────────────────────────────
 

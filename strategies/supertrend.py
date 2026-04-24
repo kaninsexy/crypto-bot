@@ -179,54 +179,45 @@ class SupertrendStrategy(BaseStrategy):
         basic_upper = hl2 + self.multiplier * atr
         basic_lower = hl2 - self.multiplier * atr
 
-        # Step 3: Final bands (ratchet — never move against the trend)
+        # Step 3 & 4: Final bands + direction — numpy arrays for C-speed indexing.
+        # The recurrence (each value depends on the previous) prevents full
+        # vectorization, but raw numpy indexing is ~10x faster than pandas .iloc.
         n = len(df)
-        final_upper = basic_upper.copy()
-        final_lower = basic_lower.copy()
+        bu = basic_upper.to_numpy(dtype=np.float64)
+        bl = basic_lower.to_numpy(dtype=np.float64)
+        cl = close.to_numpy(dtype=np.float64)
+
+        fu = bu.copy()
+        fl = bl.copy()
 
         for i in range(1, n):
-            # Upper band: only moves down (tightens), never up when in downtrend
-            if basic_upper.iloc[i] < final_upper.iloc[i - 1] or close.iloc[i - 1] > final_upper.iloc[i - 1]:
-                final_upper.iloc[i] = basic_upper.iloc[i]
-            else:
-                final_upper.iloc[i] = final_upper.iloc[i - 1]
+            fu[i] = bu[i] if (bu[i] < fu[i - 1] or cl[i - 1] > fu[i - 1]) else fu[i - 1]
+            fl[i] = bl[i] if (bl[i] > fl[i - 1] or cl[i - 1] < fl[i - 1]) else fl[i - 1]
 
-            # Lower band: only moves up (tightens), never down when in uptrend
-            if basic_lower.iloc[i] > final_lower.iloc[i - 1] or close.iloc[i - 1] < final_lower.iloc[i - 1]:
-                final_lower.iloc[i] = basic_lower.iloc[i]
-            else:
-                final_lower.iloc[i] = final_lower.iloc[i - 1]
-
-        # Step 4: Direction and Supertrend line
-        supertrend = pd.Series(index=df.index, dtype=float)
-        direction = pd.Series(index=df.index, dtype=int)
-
-        # Initialise
-        supertrend.iloc[0] = final_upper.iloc[0]
-        direction.iloc[0] = -1
+        st  = np.empty(n, dtype=np.float64)
+        dir_ = np.empty(n, dtype=np.int64)
+        st[0]   = fu[0]
+        dir_[0] = -1
 
         for i in range(1, n):
-            prev_dir = direction.iloc[i - 1]
-            prev_st = supertrend.iloc[i - 1]
-
-            if prev_st == final_upper.iloc[i - 1]:
+            if st[i - 1] == fu[i - 1]:
                 # Was in downtrend
-                if close.iloc[i] > final_upper.iloc[i]:
-                    direction.iloc[i] = 1        # Flip to uptrend
-                    supertrend.iloc[i] = final_lower.iloc[i]
+                if cl[i] > fu[i]:
+                    dir_[i] = 1
+                    st[i]   = fl[i]
                 else:
-                    direction.iloc[i] = -1
-                    supertrend.iloc[i] = final_upper.iloc[i]
+                    dir_[i] = -1
+                    st[i]   = fu[i]
             else:
                 # Was in uptrend
-                if close.iloc[i] < final_lower.iloc[i]:
-                    direction.iloc[i] = -1       # Flip to downtrend
-                    supertrend.iloc[i] = final_upper.iloc[i]
+                if cl[i] < fl[i]:
+                    dir_[i] = -1
+                    st[i]   = fu[i]
                 else:
-                    direction.iloc[i] = 1
-                    supertrend.iloc[i] = final_lower.iloc[i]
+                    dir_[i] = 1
+                    st[i]   = fl[i]
 
-        return supertrend, direction
+        return pd.Series(st, index=df.index), pd.Series(dir_, index=df.index)
 
     # ─── Signal Generation ────────────────────────────────────────────────────
 
