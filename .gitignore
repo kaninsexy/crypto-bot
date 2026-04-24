@@ -36,3 +36,13 @@ logs/daily_summary.json
 graphify-out/
 repomix-output.xml
 repomix-context.txt
+context.md
+
+# macOS
+.DS_Store
+
+# Repomix output
+context.md
+
+# Backtest runtime cache
+backtest/cache/
