@@ -46,3 +46,4 @@ context.md
 
 # Backtest runtime cache
 backtest/cache/
+backtest/reports/
