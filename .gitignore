@@ -47,3 +47,5 @@ context.md
 # Backtest runtime cache
 backtest/cache/
 backtest/reports/
+backtest/trials.log
+backtest/holdout_access.log
