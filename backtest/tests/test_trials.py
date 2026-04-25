@@ -74,6 +74,20 @@ def _base_event(trial_type: str = "smoke", **overrides) -> dict:
         ev["dsr_validation"] = 0.85
     if trial_type == "final_gate":
         ev["dsr_holdout"] = 0.92
+        # Schema v2 (chunk 11) — every final_gate row carries the
+        # verdict + its component bools + at-eval thresholds + total
+        # trade count.  Default to a happy-path "keep" so existing
+        # tests stay readable; tests that probe the under_tested or
+        # consistency rules override per-case.
+        ev["verdict"] = "keep"
+        ev["trade_count_pass"] = True
+        ev["mintrl_pass"] = True
+        ev["mt_mean_pass"] = True
+        ev["baseline_pass"] = True
+        ev["sr_zero_expected_at_eval"] = 1.78
+        ev["mintrl_required_at_eval"] = 5.06
+        ev["baseline_sharpe_at_eval"] = 0.5
+        ev["total_trades"] = 42
     ev.update(overrides)
     return ev
 
@@ -490,3 +504,121 @@ def test_latest_final_gate_filters_by_strategy():
     row = trials.latest_final_gate("VWAP")
     assert row is not None
     assert row["strategy_id"] == "VWAP"
+
+
+# ── Schema v2 (chunk 11) ──────────────────────────────────────────────────────
+# final_gate rows now carry verdict + components + at-eval thresholds.
+# Each missing required field rejects; the verdict↔component bools
+# consistency rule rejects mismatched shapes.
+
+def test_schema_version_is_v2():
+    assert trials._SCHEMA_VERSION == 2
+    trials.record_trial(_base_event("final_gate"))
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[0]["schema_version"] == 2
+
+
+def test_final_gate_records_verdict_field():
+    trials.record_trial(_base_event("final_gate"))
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[0]["verdict"] == "keep"
+
+
+@pytest.mark.parametrize("missing_key", [
+    "verdict",
+    "trade_count_pass",
+    "mintrl_pass",
+    "mt_mean_pass",
+    "baseline_pass",
+    "sr_zero_expected_at_eval",
+    "mintrl_required_at_eval",
+    "baseline_sharpe_at_eval",
+    "total_trades",
+])
+def test_final_gate_rejects_v2_missing_field(missing_key):
+    ev = _base_event("final_gate")
+    del ev[missing_key]
+    with pytest.raises(trials.TrialSchemaError, match=f"missing required field {missing_key!r}"):
+        trials.record_trial(ev)
+
+
+def test_final_gate_rejects_unknown_verdict():
+    ev = _base_event("final_gate")
+    ev["verdict"] = "monitor"  # not in {keep, retire, under_tested}
+    with pytest.raises(trials.TrialSchemaError, match="unknown verdict"):
+        trials.record_trial(ev)
+
+
+def test_final_gate_under_tested_requires_quality_bools_none():
+    """For verdict=under_tested, mt_mean_pass and baseline_pass MUST
+    be None (the fields were not computed; False would be a lie)."""
+    ev = _base_event("final_gate")
+    ev["verdict"] = "under_tested"
+    ev["trade_count_pass"] = False
+    ev["mintrl_pass"] = True
+    ev["mt_mean_pass"] = False  # WRONG — should be None
+    ev["baseline_pass"] = None
+    with pytest.raises(trials.TrialSchemaError, match="must be None for verdict=under_tested"):
+        trials.record_trial(ev)
+
+
+def test_final_gate_keep_requires_quality_bools_non_none():
+    """For verdict=keep / retire, all four component bools MUST be
+    non-None — they were computed."""
+    ev = _base_event("final_gate")
+    ev["verdict"] = "keep"
+    ev["mt_mean_pass"] = None  # WRONG — must be bool when not under_tested
+    with pytest.raises(trials.TrialSchemaError, match="must be bool"):
+        trials.record_trial(ev)
+
+
+def test_final_gate_under_tested_happy_path():
+    """A well-formed under_tested row writes successfully when both
+    quality bools are None."""
+    ev = _base_event("final_gate")
+    ev["verdict"] = "under_tested"
+    ev["trade_count_pass"] = False
+    ev["mintrl_pass"] = True
+    ev["mt_mean_pass"] = None
+    ev["baseline_pass"] = None
+    # NaN floats are acceptable for under_tested rows where the quality
+    # gates didn't compute their thresholds.
+    ev["sr_zero_expected_at_eval"] = float("nan")
+    trials.record_trial(ev)
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[0]["verdict"] == "under_tested"
+
+
+def test_final_gate_rejects_non_bool_precondition():
+    ev = _base_event("final_gate")
+    ev["trade_count_pass"] = "true"  # str, not bool
+    with pytest.raises(trials.TrialSchemaError, match="trade_count_pass.*must be bool"):
+        trials.record_trial(ev)
+
+
+def test_final_gate_rejects_non_int_total_trades():
+    ev = _base_event("final_gate")
+    ev["total_trades"] = 42.0  # float, not int
+    with pytest.raises(trials.TrialSchemaError, match="total_trades.*must be int"):
+        trials.record_trial(ev)
+
+
+def test_smoke_row_unchanged_in_v2():
+    """smoke rows do NOT need v2 fields; only schema_version bumps."""
+    trials.record_trial(_base_event("smoke"))
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[0]["trial_type"] == "smoke"
+    assert rows[0]["schema_version"] == 2
+    # No v2 fields should be present (helper doesn't populate them
+    # for smoke).
+    for k in ("verdict", "trade_count_pass", "sr_zero_expected_at_eval"):
+        assert k not in rows[0]
+
+
+def test_full_cpcv_row_unchanged_in_v2():
+    trials.record_trial(_base_event("full_cpcv"))
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[0]["trial_type"] == "full_cpcv"
+    assert rows[0]["schema_version"] == 2
+    for k in ("verdict", "trade_count_pass"):
+        assert k not in rows[0]

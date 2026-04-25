@@ -89,8 +89,32 @@ from backtest.logs import append_jsonl, iter_jsonl_filtered
 # Override in tests via monkeypatch.setattr.
 
 _TRIALS_LOG_PATH: Path = Path("backtest/trials.log")
-_SCHEMA_VERSION: int = 1
+_SCHEMA_VERSION: int = 2  # v2 (chunk 11): final_gate rows carry verdict + components
 _VALID_TRIAL_TYPES: frozenset[str] = frozenset({"smoke", "full_cpcv", "final_gate"})
+_VALID_VERDICTS: frozenset[str] = frozenset({"keep", "retire", "under_tested"})
+
+# v2 final_gate adds: verdict + four component bools + three at-eval
+# floats + total_trades.  Existing dsr_validation / dsr_holdout fields
+# stay (forensic, not gating).  smoke / full_cpcv rows are unchanged.
+_FINAL_GATE_V2_BOOL_FIELDS: tuple[str, ...] = (
+    "trade_count_pass",
+    "mintrl_pass",
+    "mt_mean_pass",
+    "baseline_pass",
+)
+_FINAL_GATE_V2_PRECONDITION_BOOLS: tuple[str, ...] = (
+    "trade_count_pass",
+    "mintrl_pass",
+)
+_FINAL_GATE_V2_QUALITY_BOOLS: tuple[str, ...] = (
+    "mt_mean_pass",
+    "baseline_pass",
+)
+_FINAL_GATE_V2_FLOAT_FIELDS: tuple[str, ...] = (
+    "sr_zero_expected_at_eval",
+    "mintrl_required_at_eval",
+    "baseline_sharpe_at_eval",
+)
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -200,6 +224,83 @@ def _validate_cpcv_block(event: dict) -> None:
             )
 
 
+def _validate_final_gate_v2_block(event: dict) -> None:
+    """Enforce schema-v2 final_gate fields and the verdict↔component
+    consistency rule.
+
+    Required v2 fields on every final_gate row:
+      verdict                   — {keep, retire, under_tested}
+      trade_count_pass          — bool
+      mintrl_pass               — bool
+      mt_mean_pass              — bool | None  (None iff under_tested)
+      baseline_pass             — bool | None  (None iff under_tested)
+      sr_zero_expected_at_eval  — float
+      mintrl_required_at_eval   — float
+      baseline_sharpe_at_eval   — float
+      total_trades              — int
+
+    Consistency rule:
+      verdict == "under_tested"  ⇒  mt_mean_pass and baseline_pass MUST
+                                    be None (they were not computed,
+                                    so False would be a lie).
+      verdict in {"keep","retire"} ⇒ all four bools MUST be non-None.
+    """
+    _check_str(event, "verdict")
+    verdict = event["verdict"]
+    if verdict not in _VALID_VERDICTS:
+        raise TrialSchemaError(
+            f"unknown verdict {verdict!r}; expected one of "
+            f"{sorted(_VALID_VERDICTS)}"
+        )
+
+    # Preconditions are always real bools (computed regardless of
+    # branch).
+    for k in _FINAL_GATE_V2_PRECONDITION_BOOLS:
+        if k not in event:
+            raise TrialSchemaError(f"missing required field {k!r}")
+        if not isinstance(event[k], bool):
+            raise TrialSchemaError(
+                f"{k!r} must be bool; got {type(event[k]).__name__}"
+            )
+
+    # Quality bools: bool when keep/retire, None when under_tested.
+    if verdict == "under_tested":
+        for k in _FINAL_GATE_V2_QUALITY_BOOLS:
+            if k not in event:
+                raise TrialSchemaError(f"missing required field {k!r}")
+            if event[k] is not None:
+                raise TrialSchemaError(
+                    f"{k!r} must be None for verdict=under_tested "
+                    f"(got {event[k]!r}); the field was not computed "
+                    "so False would be a lie"
+                )
+    else:  # keep / retire
+        for k in _FINAL_GATE_V2_QUALITY_BOOLS:
+            if k not in event:
+                raise TrialSchemaError(f"missing required field {k!r}")
+            if not isinstance(event[k], bool):
+                raise TrialSchemaError(
+                    f"{k!r} must be bool for verdict={verdict!r}; "
+                    f"got {type(event[k]).__name__}"
+                )
+
+    # At-eval floats are always present and finite-or-NaN; we accept
+    # NaN here because under_tested branches legitimately leave
+    # sr_zero_expected_at_eval and (sometimes) mintrl_required_at_eval
+    # uncomputed.  JSON serialises NaN as null, which we accept.
+    for k in _FINAL_GATE_V2_FLOAT_FIELDS:
+        if k not in event:
+            raise TrialSchemaError(f"missing required field {k!r}")
+        v = event[k]
+        if not _is_real_number(v):
+            raise TrialSchemaError(
+                f"{k!r} must be a number (NaN allowed); "
+                f"got {type(v).__name__}"
+            )
+
+    _check_int(event, "total_trades")
+
+
 def _validate_event(event: dict) -> None:
     """Raise TrialSchemaError if `event` does not satisfy the per-trial_type
     schema.  Called after default fields are filled but before params_hash
@@ -261,6 +362,7 @@ def _validate_event(event: dict) -> None:
 
     if trial_type == "final_gate":
         _check_float(event, "dsr_holdout")
+        _validate_final_gate_v2_block(event)
 
     # Optional fields are type-validated only when present.
     for opt_key in ("mintrl", "buy_and_hold_sharpe"):

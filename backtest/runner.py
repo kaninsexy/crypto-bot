@@ -29,10 +29,15 @@ USAGE
     BACKTEST_SPLIT=9          (months for in-sample period; rest = OOS)
 """
 
+import math
 import os
 import sys
 import time
+import uuid
+from typing import Literal, Optional
+
 import ccxt
+import numpy as np
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from loguru import logger
@@ -45,6 +50,10 @@ import config
 from backtest.engine import BacktestEngine, BacktestResult
 from backtest.cache import load_or_download_ohlcv, get_symbol_dev_cutoff
 from backtest.report import print_comparison_table, print_period_report
+from backtest import holdout as _holdout
+from backtest import trials as _trials
+from backtest.dsr import deflated_sharpe
+from backtest.verdict import compute_verdict, VerdictResult
 
 # Strategy factories — each returns a fresh, reset instance
 from strategies.dca import DCAStrategy
@@ -259,6 +268,7 @@ def run_all(
     balance: float = BALANCE,
     total_months: int = TOTAL_MONTHS,
     is_months: int = IS_MONTHS,
+    mode: Literal["dev", "final_gate"] = "dev",
 ) -> dict:
     """
     Run the full Phase C backtesting pipeline across the multi-symbol universe.
@@ -267,14 +277,32 @@ def run_all(
     DualMomentum rotates across its internal universe (BTC/ETH/BNB) using
     per-symbol OHLCV pulled from the download set.
 
+    Args:
+      mode:
+        "dev"        — default, preserves all prior behaviour exactly:
+                       universe-wide download, IS/OOS split, engine
+                       run on both periods, comparison report.  No
+                       holdout access, no trials.log write.
+        "final_gate" — Phase 3c deploy-gate path.  For each strategy:
+                       loads its holdout window via
+                       `holdout.load_holdout(...)`, runs the engine
+                       once on it, computes the keep/retire verdict
+                       via `compute_verdict`, and appends a schema-v2
+                       final_gate row to `trials.log`.  No universe
+                       download (data flows through the holdout
+                       accessor's bypass context).  The
+                       `FinalGateAlreadyRecorded` guard in trials.py
+                       enforces single-access-per-split-epoch.
+
     Returns a dict:
-        {
-          strategy_name: {
-            "is":  BacktestResult,
-            "oos": BacktestResult,
-          }
-        }
+        mode == "dev":
+          { strategy_name: {"is": BacktestResult, "oos": BacktestResult} }
+        mode == "final_gate":
+          { strategy_name: {"holdout": BacktestResult, "verdict": VerdictResult} }
     """
+    if mode == "final_gate":
+        return _run_all_final_gate(timeframe=timeframe, balance=balance)
+
     logger.remove()
     logger.add(
         sys.stderr,
@@ -573,6 +601,216 @@ def _save_report_files(results: dict, timeframe: str) -> None:
 
     except Exception as e:
         logger.warning(f"Could not save report files: {e}")
+
+
+# ── Phase 3c final_gate orchestration (chunk 11) ─────────────────────────────
+#
+# `mode="final_gate"` runs the deploy-gate machinery: each strategy's
+# holdout window is read via the audited accessor, the engine is run on
+# it, the keep/retire verdict is computed via `compute_verdict`, and a
+# schema-v2 final_gate row is appended to trials.log.  The runner
+# orchestrates calls — the actual gate logic lives in
+# `backtest/verdict.py` and the accessor enforcement lives in
+# `backtest/holdout.py`.
+
+
+def _latest_full_cpcv_event(strategy_id: str) -> dict | None:
+    """Return the most recent full_cpcv trial row for `strategy_id`,
+    or None.  Used to populate the cpcv block + dsr_validation on the
+    final_gate row — those fields are forensic context (the dev-window
+    CPCV results that justified running the gate at all)."""
+    latest: dict | None = None
+    for ev in _trials.read_trials(
+        strategy_id=strategy_id, trial_type="full_cpcv",
+    ):
+        ts = ev.get("ts", "")
+        if latest is None or (
+            isinstance(ts, str) and ts > latest.get("ts", "")
+        ):
+            latest = ev
+    return latest
+
+
+def _split_holdout_multi_symbol(
+    holdout_df: pd.DataFrame,
+    primary_symbol: str,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Split a multi-symbol holdout frame into (primary, universe_dfs).
+
+    `holdout.load_holdout` returns multi-symbol data as a single frame
+    with a 'symbol' column (rows for each symbol stacked + sorted by
+    timestamp).  `engine.run` for multi-symbol strategies wants
+    per-symbol frames keyed by symbol, with the strategy's primary
+    frame as `df`.  This helper does that split.
+    """
+    symbols = sorted(holdout_df["symbol"].unique().tolist())
+    universe_dfs: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        sub = holdout_df[holdout_df["symbol"] == sym].drop(columns=["symbol"])
+        sub = sub.sort_index()
+        universe_dfs[sym] = sub
+    if primary_symbol not in universe_dfs:
+        raise ValueError(
+            f"primary_symbol={primary_symbol!r} not in holdout symbols "
+            f"{sorted(universe_dfs.keys())}"
+        )
+    return universe_dfs[primary_symbol], universe_dfs
+
+
+def _run_strategy_final_gate(
+    strategy_id: str,
+    timeframe: str,
+    balance: float,
+) -> tuple[BacktestResult, VerdictResult]:
+    """Execute the final_gate flow for a single strategy.
+
+    Steps:
+      1. `holdout.load_holdout(...)` — single-access-audited read.
+      2. `engine.run(...)` on the holdout window (multi-symbol split
+         where applicable).
+      3. `compute_verdict(...)` to derive keep / retire / under_tested.
+      4. `trials.record_trial(...)` with a schema-v2 final_gate event.
+
+    The trial event's `cpcv` block + `dsr_validation` are populated
+    from the most recent prior `full_cpcv` row for this strategy in
+    trials.log (forensic context — the dev-window CPCV results that
+    justified putting the strategy in front of the gate).  If no
+    prior full_cpcv row exists, raises RuntimeError; final_gate is
+    not the right path for an un-validated strategy.
+
+    Returns (BacktestResult, VerdictResult).  The trials.log row is
+    written as a side-effect; the existing `FinalGateAlreadyRecorded`
+    guard in trials.py will raise on a second invocation in the same
+    split epoch.
+    """
+    sample = make_strategies(timeframe)[strategy_id]
+    primary_symbol = sample.symbol
+
+    prior = _latest_full_cpcv_event(strategy_id)
+    if prior is None:
+        raise RuntimeError(
+            f"final_gate for {strategy_id!r}: no prior full_cpcv row "
+            "in trials.log.  Run a dev-window CPCV pass first; "
+            "final_gate is not the entry point for un-validated "
+            "strategies."
+        )
+
+    caller = f"phase3c.{strategy_id}.final_dsr"
+    holdout_df = _holdout.load_holdout(
+        strategy_id=strategy_id,
+        caller=caller,
+        reason="phase3c final_gate",
+    )
+
+    is_multi_symbol = "symbol" in holdout_df.columns
+    if is_multi_symbol:
+        primary_df, universe_dfs = _split_holdout_multi_symbol(
+            holdout_df, primary_symbol,
+        )
+    else:
+        primary_df = holdout_df
+        universe_dfs = None
+
+    engine = BacktestEngine(
+        initial_balance=balance,
+        warm_up_candles=WARM_UP,
+        verbose=False,
+    )
+    fresh = make_strategies(timeframe)[strategy_id]
+    result = engine.run(
+        primary_df,
+        fresh,
+        period_label=f"final_gate-{strategy_id}",
+        universe_dfs=universe_dfs,
+    )
+
+    # Returns + verdict.  primary_df is the OHLCV frame for the
+    # baseline comparison (strategy's primary symbol over the same
+    # holdout window).
+    returns = (
+        result.equity_curve.pct_change().dropna().values.astype(float)
+    )
+    n_trials = _trials.count_trials_for_dsr(strategy_id)
+
+    verdict = compute_verdict(
+        strategy_id=strategy_id,
+        sr_candidate=float(result.metrics.sharpe_ratio),
+        returns=returns,
+        total_trades=int(result.metrics.total_trades),
+        baseline_df=primary_df,
+        n_trials=n_trials,
+    )
+
+    # dsr_holdout: for keep/retire branches the verdict already
+    # carries it (verdict.dsr).  For under_tested rows the gate
+    # explicitly did not compute DSR — the SR is acknowledged-
+    # untrustworthy at this T or trade-count, so recording a number
+    # off it would just look like data.  Leave NaN.
+    if not math.isnan(verdict.dsr):
+        dsr_holdout_value = float(verdict.dsr)
+    else:
+        dsr_holdout_value = float("nan")
+
+    # Build schema-v2 final_gate event.  cpcv block + dsr_validation
+    # are inherited from the prior dev-window full_cpcv run.
+    event = {
+        "strategy_id": strategy_id,
+        "variation_id": prior.get("variation_id", "final_gate"),
+        "trial_type": "final_gate",
+        "params": prior.get("params", {}),
+        "hypothesis": prior.get(
+            "hypothesis", "phase3c final_gate run",
+        ),
+        "split_holdout_start": prior.get(
+            "split_holdout_start",
+            _holdout.load_manifest()[strategy_id]["holdout_start"],
+        ),
+        "symbols": prior.get("symbols", [primary_symbol]),
+        "n_trades": int(result.metrics.total_trades),
+        "sharpe": float(result.metrics.sharpe_ratio),
+        "cpcv": prior["cpcv"],
+        "dsr_validation": prior["dsr_validation"],
+        "dsr_holdout": dsr_holdout_value,
+        # ── v2 fields ───────────────────────────────────────────────
+        "verdict": verdict.verdict,
+        "trade_count_pass": verdict.trade_count_pass,
+        "mintrl_pass": verdict.mintrl_pass,
+        "mt_mean_pass": verdict.mt_mean_pass,
+        "baseline_pass": verdict.baseline_pass,
+        "sr_zero_expected_at_eval": verdict.sr_zero_expected_at_eval,
+        "mintrl_required_at_eval": verdict.mintrl_required_at_eval,
+        "baseline_sharpe_at_eval": verdict.baseline_sharpe_at_eval,
+        "total_trades": int(result.metrics.total_trades),
+    }
+    _trials.record_trial(event)
+
+    return result, verdict
+
+
+def _run_all_final_gate(
+    timeframe: str,
+    balance: float,
+) -> dict:
+    """Iterate every strategy in `make_strategies` through the
+    final_gate flow.  A `FinalGateAlreadyRecorded` raise is a hard
+    integrity violation (single-access guard tripped) — re-raised
+    immediately rather than absorbed into the per-strategy error
+    dict.  Generic exceptions are logged and recorded per-strategy
+    so one bad strategy doesn't kill the run."""
+    results: dict = {}
+    for name in make_strategies(timeframe).keys():
+        logger.info(f"[FinalGate] Running: {name}")
+        try:
+            r, v = _run_strategy_final_gate(
+                strategy_id=name, timeframe=timeframe, balance=balance,
+            )
+            results[name] = {"holdout": r, "verdict": v}
+        except _trials.FinalGateAlreadyRecorded:
+            raise
+        except Exception as e:
+            logger.error(f"[FinalGate] {name} failed: {e}")
+            results[name] = {"holdout": None, "verdict": None, "error": str(e)}
+    return results
 
 
 if __name__ == "__main__":
