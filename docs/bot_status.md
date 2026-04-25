@@ -1,16 +1,18 @@
 # Bot Status
 
-Last updated: 2026-04-25 (post Phase 3b Chunks 1-4)
+Last updated: 2026-04-25 (post Phase 3b Chunks 1-6)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
 
 ## Current state
 
-- **Current commit:** Phase 3b Chunks 1-4 stack pushed to `main` (4 
-  commits on top of `f2d29cf`: holdout accessor + JSONL plumbing; 
-  manifest generator + initial manifest; cache enforcement + runner 
-  dev-only loading; validation_framework.md correction). Plus the 
-  earlier research consolidation commits (Phase 3a.1 vectorization, 
-  docs consolidation, milestone backtest reports, research_log 
+- **Current commit:** `80fc2c9` — Phase 3b Chunks 1-6 stack pushed 
+  to `main` (6 commits on top of `f2d29cf`: holdout accessor + 
+  JSONL plumbing; manifest generator + initial manifest; cache 
+  enforcement + runner dev-only loading; validation_framework.md 
+  correction; `trials.py` writer + `cpcv.py` skeleton; `cpcv.py` 
+  block Sharpe distribution). Plus the earlier research 
+  consolidation commits (Phase 3a.1 vectorization, docs 
+  consolidation, milestone backtest reports, research_log 
   Phase 1-3a findings).
 - **Working tree:** clean.
 - **Server deployment:** `kanin@104.248.145.189`, still on older commit `4a51f0b`
@@ -44,7 +46,7 @@ See `docs/strategies.md` for per-strategy diagnosis and next actions, and
 `docs/strategy_failure_analysis_2026-04-19.md` for the underlying failure
 write-up on the four broken strategies.
 
-## Phase 3b infrastructure (Chunks 1-4 complete)
+## Phase 3b infrastructure (Chunks 1-6 complete)
 
 The holdout split foundation is live. Future backtest data access 
 goes through `backtest/holdout.py`, not directly through the L1 
@@ -58,6 +60,8 @@ cache.
 | `backtest/generate_holdout_manifest.py` | `generate_initial()` for first setup; `regenerate_manifest()` for redrawing the split. |
 | `backtest/cache.py` | Enforces `HoldoutBypass` on any read overlapping holdout. Pass `until_ts=get_symbol_dev_cutoff(symbol)` to restrict to dev. |
 | `backtest/logs.py` | JSONL read/write plumbing, schema-agnostic. |
+| `backtest/trials.py` | Schema-validating JSONL writer for `backtest/trials.log`. Schema v1, sacred-harness-adjacent. Per-trial-type required-field enforcement; canonical sha256 `params_hash`; final-gate guard cross-referenced against `holdout_access.log`. |
+| `backtest/cpcv.py` | Block Sharpe distribution. Equal-row block split of the dev window, fresh `strategy_factory()` per block, per-block Sharpe via the engine's formula, purge/embargo at boundaries. Replaces López de Prado path-CPCV (see `docs/validation_framework.md` § "Block Sharpe distribution"). |
 
 Caller convention for `load_holdout`: 
 `<phase>.<strategy_id>.<purpose>` — phase ∈ {phase3c, phase3d, 
@@ -147,3 +151,10 @@ latter.
 - Strategy reality check: only 3 of 10 show positive OOS Sharpe on 3-year data,
   which forces the Phase 3b validation framework before any further
   iteration or deploy.
+- Phase 3b chunk 5 shipped: `trials.py` writer for `backtest/trials.log`,
+  CPCV skeleton, schema-validating JSONL append, final-gate guard.
+- Phase 3b chunk 6 shipped: block Sharpe distribution implementation in
+  `backtest/cpcv.py` replacing path-CPCV (rule-based strategies have no
+  fit/predict split, so path reassembly degenerates; block Sharpe preserves
+  the multi-sample basis DSR requires). `docs/validation_framework.md` §
+  "Block Sharpe distribution" updated to match.

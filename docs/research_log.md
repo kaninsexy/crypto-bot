@@ -60,6 +60,39 @@ Evaluated multi-agent Claude workflows for the strategy rescue project.
 - Jesse Vincent Superpowers (90k GitHub stars): single driver agent with
   ephemeral bounded subagents is the workable pattern.
 
+## CPCV vs Block Sharpe (decided 2026-04-25) — ADOPTED block Sharpe
+
+Evaluated López de Prado path-CPCV (Advances in Financial Machine
+Learning, ch. 7) vs a block-Sharpe distribution for the validation
+harness's input to DSR.
+
+**Decision:** Block Sharpe. See `backtest/cpcv.py` and
+`docs/validation_framework.md` § "Block Sharpe distribution".
+
+**Key evidence:**
+
+- Path-CPCV's path-variance generation depends on different models being
+  fit on different train/test combinations. With rule-based strategies
+  that have no in-window fitting, every reconstructed path runs identical
+  logic on identical data, so path Sharpes collapse to one value.
+  Verified during chunk 6 implementation.
+- The alternative — running the engine on concatenated held-out blocks
+  per combination — produces non-degenerate variance only via artificial
+  time-adjacency at the gluing boundaries. That's a leakage artifact,
+  not a property of the data.
+- Block Sharpe runs the engine once per block with fresh strategy state,
+  producing N independent Sharpe samples. Variance reflects genuine
+  across-period dispersion. Structurally similar to walk-forward but
+  multi-sample, preserving DSR's multi-sample basis.
+- DSR's required upstream inputs (observed Sharpe, σ of Sharpe, skew,
+  kurtosis, sample size) are all derivable from the block Sharpe
+  distribution.
+
+**Reconsideration trigger:** A future strategy class with a legitimate
+fit/predict split (e.g. an ML-meta-labeled strategy) would justify
+implementing path-CPCV alongside block Sharpe. `CPCVConfig.k_held_out`
+is reserved for that case.
+
 ## Passivbot Evolutionary Optimization — RETIRED
 
 See MASTER_PLAN "Future phases" section for rationale.

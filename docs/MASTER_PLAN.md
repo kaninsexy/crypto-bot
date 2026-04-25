@@ -1,6 +1,6 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-04-25 (Phase 3b Chunks 1-4 complete)
+Last updated: 2026-04-25 (Phase 3b Chunks 1-6 complete)
 Supersedes the 2026-04-17 plan (prior content preserved in git history). The
 primary change since: Phase 2c is complete, Phase 3a has shipped, and the
 plan is now organised around a validation-first rescue process rather than
@@ -54,7 +54,7 @@ noise. Changes sit in the working tree awaiting a human commit decision.
 Statistical validation framework. Built incrementally as 4-chunk human-
 gated commits.
 
-**Chunks 1-4 complete (2026-04-25):**
+**Chunks 1-6 complete (2026-04-25):**
 - **Chunk 1:** `backtest/holdout.py` accessor module with strict 
   single-access enforcement and structured caller validation 
   (`phase.strategy_id.purpose` regex grammar). `backtest/logs.py` 
@@ -73,15 +73,31 @@ gated commits.
 - **Chunk 4:** `docs/validation_framework.md` corrected to match 
   implementation (50/30/20 → 80/20 dev-only split; CPCV span 
   reference fixed; infrastructure pointer section added).
+- **Chunk 5 (commit `a7361a3`):** `backtest/trials.py` — 
+  schema-validating JSONL writer for `backtest/trials.log`. 
+  Schema v1, sacred-harness-adjacent. Per-trial-type required-field 
+  enforcement (smoke / full_cpcv / final_gate). Canonical sha256 
+  `params_hash`. Final-gate guard cross-referenced against 
+  `holdout_access.log`. Public API: `record_trial`, 
+  `count_trials_for_dsr`, `count_distinct_variations`, 
+  `read_trials`, `latest_final_gate`. `backtest/cpcv.py` shipped 
+  as skeleton. `CLAUDE.md` `trials.log` path corrected to 
+  `backtest/trials.log`.
+- **Chunk 6:** `backtest/cpcv.py` implements block Sharpe 
+  distribution (NOT López de Prado path-CPCV — see 
+  `docs/validation_framework.md` § "Block Sharpe distribution" 
+  for why path reassembly was rejected for rule-based strategies 
+  with no fit/predict split). `run_cpcv` runs the engine once per 
+  block via a `strategy_factory` pattern, computes per-block 
+  Sharpe via the engine's formula, applies purge/embargo at block 
+  boundaries, and produces an N-element Sharpe distribution that 
+  feeds DSR. `CPCVConfig.k_held_out` is reserved for future 
+  fit/predict-capable strategies. 133/133 tests pass.
 
-55/55 tests pass across `backtest/tests/` and `tests/`. Updated 
+133/133 tests pass across `backtest/tests/` and `tests/`. Updated 
 spec is in `docs/validation_framework.md`.
 
 **Remaining Phase 3b infrastructure (next sessions):**
-- `trials.log` schema and writer module (JSONL, separate schema 
-  module from `backtest/logs.py`).
-- CPCV (Combinatorial Purged Cross-Validation) implementation 
-  operating on the dev window per `docs/validation_framework.md`.
 - DSR (Deflated Sharpe Ratio) per Bailey & López de Prado 2014.
 - MinTRL secondary sanity check.
 - Buy-and-hold baseline comparison per strategy.
