@@ -52,8 +52,11 @@ from backtest.cache import load_or_download_ohlcv, get_symbol_dev_cutoff
 from backtest.report import print_comparison_table, print_period_report
 from backtest import holdout as _holdout
 from backtest import trials as _trials
-from backtest.dsr import deflated_sharpe
+from backtest.baseline import buy_and_hold_sharpe
+from backtest.cpcv import CPCVConfig, run_cpcv, CPCVResult
+from backtest.dsr import deflated_sharpe, min_track_record_length
 from backtest.verdict import compute_verdict, VerdictResult
+from rescue.policy import RESCUE_TRIAL_BUDGET
 
 # Strategy factories — each returns a fresh, reset instance
 from strategies.dca import DCAStrategy
@@ -268,7 +271,7 @@ def run_all(
     balance: float = BALANCE,
     total_months: int = TOTAL_MONTHS,
     is_months: int = IS_MONTHS,
-    mode: Literal["dev", "final_gate"] = "dev",
+    mode: Literal["dev", "final_gate", "dev_cpcv"] = "dev",
 ) -> dict:
     """
     Run the full Phase C backtesting pipeline across the multi-symbol universe.
@@ -293,15 +296,28 @@ def run_all(
                        accessor's bypass context).  The
                        `FinalGateAlreadyRecorded` guard in trials.py
                        enforces single-access-per-split-epoch.
+        "dev_cpcv"   — Phase 3c rescue-iteration path.  For each
+                       strategy: runs CPCV on the dev window only
+                       (holdout sealed), computes the buy-and-hold
+                       baseline + DSR (n_trials = `RESCUE_TRIAL_BUDGET`,
+                       NOT `count_trials_for_dsr`) + MinTRL + verdict,
+                       and appends a v1-schema full_cpcv row to
+                       trials.log.  This is the row that final_gate's
+                       prior-full_cpcv guard reads downstream.  No
+                       holdout access, no live API.
 
     Returns a dict:
         mode == "dev":
           { strategy_name: {"is": BacktestResult, "oos": BacktestResult} }
         mode == "final_gate":
           { strategy_name: {"holdout": BacktestResult, "verdict": VerdictResult} }
+        mode == "dev_cpcv":
+          { strategy_name: DevCpcvResult }
     """
     if mode == "final_gate":
         return _run_all_final_gate(timeframe=timeframe, balance=balance)
+    if mode == "dev_cpcv":
+        return _run_all_dev_cpcv(timeframe=timeframe, balance=balance)
 
     logger.remove()
     logger.add(
@@ -810,6 +826,377 @@ def _run_all_final_gate(
         except Exception as e:
             logger.error(f"[FinalGate] {name} failed: {e}")
             results[name] = {"holdout": None, "verdict": None, "error": str(e)}
+    return results
+
+
+# ── Phase 3c dev_cpcv orchestration ──────────────────────────────────────────
+#
+# `mode="dev_cpcv"` is the rescue-iteration path: runs CPCV + DSR +
+# MinTRL + baseline + verdict on the dev window, writes one v1
+# full_cpcv row per strategy to trials.log.  The row is the input
+# `final_gate`'s prior-full_cpcv guard reads downstream.
+#
+# Critically, n_trials for DSR is `RESCUE_TRIAL_BUDGET` (=20), NOT
+# `count_trials_for_dsr(strategy_id)`.  See `rescue/policy.py` for
+# the rationale; the short version is that gating against a fixed
+# Phase-3c iteration budget keeps the threshold symmetric across
+# variations and removes the incentive to gate-shop early.
+#
+# This mode does NOT touch holdout data.  All reads route through
+# `holdout.load_dev`, which is freely accessible per the
+# validation_framework spec.
+
+
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass(frozen=True)
+class DevCpcvResult:
+    """Outcome of one dev_cpcv strategy run.
+
+    Attributes:
+      strategy_id:        Manifest key.
+      observed_sharpe:    Engine-reported Sharpe over the full dev
+                          window (the headline number being judged).
+      sr_zero_expected:   BLP eq.7 Gumbel haircut at
+                          n_trials=`RESCUE_TRIAL_BUDGET`.
+      dsr_pvalue:         Φ((SR−sr_zero)/sr_std) — the deflated
+                          probability that the observed Sharpe is
+                          non-spurious given the multiple-testing
+                          context.  Recorded as `dsr_validation` in
+                          the trials.log row.
+      mintrl:             BLP eq.13 minimum sample size in bars.
+      baseline_sharpe:    Buy-and-hold Sharpe over the same dev
+                          window (strategy's primary symbol).
+      verdict:            VerdictResult — the keep/retire/under_tested
+                          decision and its component bools.
+      trial_row:          The exact dict appended to trials.log
+                          (post-validation: schema_version, trial_id,
+                          ts, params_hash, git_commit are all filled
+                          by `trials.record_trial`).
+    """
+    strategy_id: str
+    observed_sharpe: float
+    sr_zero_expected: float
+    dsr_pvalue: float
+    mintrl: float
+    baseline_sharpe: float
+    verdict: VerdictResult
+    trial_row: dict
+
+
+def _print_dev_cpcv_block(res: DevCpcvResult) -> None:
+    """Human-readable verdict block, verdict prominent."""
+    sep = "═" * 70
+    sub = "─" * 70
+    print()
+    print(sep)
+    print(f"  DEV_CPCV — {res.strategy_id}")
+    print(sep)
+    verdict_label = res.verdict.verdict.upper()
+    print(f"  VERDICT: {verdict_label}")
+    print(sub)
+    print(f"  observed_sharpe         {res.observed_sharpe:>+10.4f}")
+    print(f"  sr_zero_expected (N=20) {res.sr_zero_expected:>+10.4f}")
+    print(f"  dsr_pvalue              {res.dsr_pvalue:>10.4f}")
+    print(f"  mintrl (bars)           {res.mintrl:>10.2f}")
+    print(f"  baseline_sharpe         {res.baseline_sharpe:>+10.4f}")
+    print(sub)
+    print(f"  trade_count_pass        {res.verdict.trade_count_pass}")
+    print(f"  mintrl_pass             {res.verdict.mintrl_pass}")
+    print(f"  mt_mean_pass            {res.verdict.mt_mean_pass}")
+    print(f"  baseline_pass           {res.verdict.baseline_pass}")
+    print(f"  total_trades            {res.verdict.total_trades}")
+    print(f"  t_observed              {res.verdict.t_observed}")
+    print(sep)
+
+
+def _split_dev_multi_symbol(
+    dev_df: pd.DataFrame,
+    primary_symbol: str,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """Split a multi-symbol dev frame into (primary, universe_dfs).
+
+    Mirrors `_split_holdout_multi_symbol` but for the dev window.
+    Multi-symbol `holdout.load_dev` returns a stacked frame with a
+    'symbol' column; the engine wants per-symbol frames.
+    """
+    symbols = sorted(dev_df["symbol"].unique().tolist())
+    universe_dfs: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        sub = dev_df[dev_df["symbol"] == sym].drop(columns=["symbol"])
+        sub = sub.sort_index()
+        universe_dfs[sym] = sub
+    if primary_symbol not in universe_dfs:
+        raise ValueError(
+            f"primary_symbol={primary_symbol!r} not in dev symbols "
+            f"{sorted(universe_dfs.keys())}"
+        )
+    return universe_dfs[primary_symbol], universe_dfs
+
+
+def _concat_per_block_returns(cpcv_result: CPCVResult) -> np.ndarray:
+    """Concatenate non-empty `per_block_returns` arrays into a single
+    series for DSR / MinTRL / verdict consumption.
+
+    Mirrors the contract documented on `deflated_sharpe`'s `returns`
+    arg: "For dsr_validation: concatenate CPCVResult.per_block_returns,
+    skipping empty arrays."  Empty arrays are blocks whose trade
+    count fell below `_MIN_TRADES_PER_BLOCK`; skipping them lines up
+    with how `dsr_from_cpcv_result` and `mintrl_from_cpcv_result`
+    handle the same input.
+
+    Raises RuntimeError (not a numpy message) if every block is
+    empty — that's a CPCV that should not have produced a result
+    we'd feed to DSR.
+    """
+    valid = [r for r in cpcv_result.per_block_returns if len(r) > 0]
+    if not valid:
+        raise RuntimeError(
+            "dev_cpcv: CPCVResult has no non-empty per_block_returns "
+            "arrays; cannot compute dsr_validation. Every block fell "
+            "below the trade-count floor, or the CPCV run produced "
+            "empty equity curves throughout.  Refusing to feed an "
+            "empty series to DSR."
+        )
+    return np.concatenate(valid).astype(float)
+
+
+def _build_full_cpcv_row(
+    *,
+    strategy_id: str,
+    primary_symbol: str,
+    cpcv_result: CPCVResult,
+    cpcv_config: CPCVConfig,
+    headline_result: BacktestResult,
+    dsr_validation_value: float,
+    n_trials: int,
+) -> dict:
+    """Assemble the v1 full_cpcv row dict.  Caller passes to
+    `trials.record_trial` which fills schema_version, trial_id, ts,
+    git_commit, params_hash.
+
+    Schema-v1 required (full_cpcv): strategy_id, variation_id,
+    trial_type, params, hypothesis, split_holdout_start, symbols,
+    n_trades, sharpe, cpcv (block), dsr_validation.
+
+    The cpcv block's `n_blocks`, `k_held_out`, `purge_periods` and
+    `embargo_periods` come from the supplied `CPCVConfig` — never
+    hardcoded.  `n_paths` comes from the CPCVResult (it's the
+    realised count, which equals `n_blocks` in block-Sharpe mode but
+    stays a separate field for forward compatibility with future
+    path-CPCV).
+
+    Extras:
+      - n_trials (recorded explicitly per the rescue/policy.py budget;
+        downstream consumers can audit which budget was used without
+        recomputing).
+    """
+    manifest = _holdout.load_manifest()
+    entry = manifest[strategy_id]
+    is_multi_symbol = "symbols" in entry
+    symbols = (
+        list(entry["symbols"]) if is_multi_symbol else [entry["symbol"]]
+    )
+
+    return {
+        "strategy_id": strategy_id,
+        "variation_id": "rescue-default",
+        "trial_type": "full_cpcv",
+        "params": {},  # default-config rescue run; per-strategy
+                       # parameter sweeps add their own variation_id
+                       # and params.
+        "hypothesis": (
+            f"phase3c rescue: default {strategy_id} configuration on "
+            "the dev window with CPCV block-Sharpe distribution + DSR "
+            "(n_trials=RESCUE_TRIAL_BUDGET) + MinTRL + buy-and-hold "
+            "baseline.  Tests whether the strategy clears the verdict "
+            "tree without parameter tuning."
+        ),
+        "split_holdout_start": entry["holdout_start"],
+        "symbols": symbols,
+        "n_trades": int(headline_result.metrics.total_trades),
+        "sharpe": float(headline_result.metrics.sharpe_ratio),
+        "cpcv": {
+            "n_paths": int(cpcv_result.n_paths),
+            "n_blocks": int(cpcv_config.n_blocks),
+            "k_held_out": int(cpcv_config.k_held_out),
+            "purge_periods": int(cpcv_config.purge_periods),
+            "embargo_periods": int(cpcv_config.embargo_periods),
+            "sharpe_distribution": cpcv_result.sharpe_distribution,
+        },
+        "dsr_validation": float(dsr_validation_value),
+        # ── Forensic extras (not v1 required, but recorded so the row
+        #    is self-describing for audit).
+        "n_trials": int(n_trials),
+    }
+
+
+def _run_strategy_dev_cpcv(
+    strategy_id: str,
+    timeframe: str,
+    balance: float,
+) -> DevCpcvResult:
+    """Execute the dev_cpcv flow for a single strategy.
+
+    Sequence:
+      1. CPCV on dev window (run_cpcv).
+      2. Engine.run on the full dev window — produces the headline
+         observed Sharpe and the trade count.  Per-bar engine returns
+         are NOT used downstream; DSR / MinTRL / verdict consume the
+         per-block CPCV concat instead (dsr_validation contract).
+      3. Buy-and-hold baseline on the strategy's primary-symbol dev
+         frame.
+      4. Concatenate non-empty `cpcv_result.per_block_returns` —
+         this single series feeds DSR, MinTRL, and verdict.
+      5. DSR via `deflated_sharpe` with n_trials=RESCUE_TRIAL_BUDGET
+         (20), explicitly NOT `count_trials_for_dsr`.
+      6. MinTRL via `min_track_record_length`.
+      7. Verdict via `compute_verdict` (which re-runs deflated_sharpe
+         internally with the same n_trials — the duplication is
+         deliberate: it lets us record the standalone DSR value
+         without coupling the verdict surface to a precomputed
+         result, and the cost is microseconds).
+      8. Build the v1 full_cpcv row.  ALL prior steps must succeed
+         before `trials.record_trial` is called — that's the
+         atomicity guarantee.
+      9. Append to trials.log.
+     10. Print the verdict block.
+     11. Return DevCpcvResult.
+
+    Atomicity: trials.record_trial is the only mutation, and it is
+    the last step before return.  Any earlier raise leaves trials.log
+    unmodified.  `record_trial` itself validates the row dict before
+    the append_jsonl call, so a malformed row also leaves no trace.
+    """
+    factory = lambda: make_strategies(timeframe)[strategy_id]
+    sample = factory()
+    primary_symbol = sample.symbol
+
+    # 1. CPCV.
+    cpcv_config = CPCVConfig()
+    cpcv_result = run_cpcv(
+        strategy_id=strategy_id,
+        params={},
+        config=cpcv_config,
+        strategy_factory=factory,
+    )
+
+    # 2. Headline engine.run on the full dev window.
+    dev_df = _holdout.load_dev(strategy_id)
+    is_multi_symbol = "symbol" in dev_df.columns
+    if is_multi_symbol:
+        primary_dev_df, universe_dfs = _split_dev_multi_symbol(
+            dev_df, primary_symbol,
+        )
+    else:
+        primary_dev_df = dev_df
+        universe_dfs = None
+
+    engine = BacktestEngine(
+        initial_balance=balance,
+        warm_up_candles=WARM_UP,
+        verbose=False,
+    )
+    headline_result = engine.run(
+        primary_dev_df,
+        factory(),
+        period_label=f"dev_cpcv-{strategy_id}",
+        universe_dfs=universe_dfs,
+    )
+
+    observed_sharpe = float(headline_result.metrics.sharpe_ratio)
+    total_trades = int(headline_result.metrics.total_trades)
+
+    # 3. Baseline.
+    baseline_result = buy_and_hold_sharpe(primary_dev_df)
+    baseline_sharpe = float(baseline_result.sharpe)
+
+    # 4. DSR / MinTRL / verdict input series.
+    #    Per `dsr.py`'s contract for `dsr_validation`: concatenate
+    #    `CPCVResult.per_block_returns`, skipping empty arrays.
+    #    `min_track_record_length` documents the same input
+    #    convention; `compute_verdict` plumbs `returns` straight
+    #    through to both, so the same series feeds all three.
+    #    Engine-bar returns (equity_curve.pct_change()) are NOT used
+    #    here — that's the dsr_holdout convention, which dev_cpcv
+    #    isn't.
+    returns_for_dsr = _concat_per_block_returns(cpcv_result)
+
+    # 5. DSR — n_trials=RESCUE_TRIAL_BUDGET, explicit.
+    n_trials = RESCUE_TRIAL_BUDGET
+    dsr_result = deflated_sharpe(
+        sr_candidate=observed_sharpe,
+        returns=returns_for_dsr,
+        n_trials=n_trials,
+    )
+
+    # 6. MinTRL.
+    mintrl_result = min_track_record_length(
+        sr_candidate=observed_sharpe,
+        returns=returns_for_dsr,
+    )
+
+    # 7. Verdict.  Pass the same n_trials so the verdict's internal
+    #    DSR call agrees with our standalone one.
+    verdict = compute_verdict(
+        strategy_id=strategy_id,
+        sr_candidate=observed_sharpe,
+        returns=returns_for_dsr,
+        total_trades=total_trades,
+        baseline_df=primary_dev_df,
+        n_trials=n_trials,
+    )
+
+    # 8. Build the row.
+    row = _build_full_cpcv_row(
+        strategy_id=strategy_id,
+        primary_symbol=primary_symbol,
+        cpcv_result=cpcv_result,
+        cpcv_config=cpcv_config,
+        headline_result=headline_result,
+        dsr_validation_value=float(dsr_result.dsr),
+        n_trials=n_trials,
+    )
+
+    # 9. Append (atomic — last side-effect).
+    _trials.record_trial(row)
+
+    res = DevCpcvResult(
+        strategy_id=strategy_id,
+        observed_sharpe=observed_sharpe,
+        sr_zero_expected=float(dsr_result.sr_zero_expected),
+        dsr_pvalue=float(dsr_result.dsr),
+        mintrl=float(mintrl_result.min_trl),
+        baseline_sharpe=baseline_sharpe,
+        verdict=verdict,
+        trial_row=row,
+    )
+
+    # 10. Print.
+    _print_dev_cpcv_block(res)
+
+    return res
+
+
+def _run_all_dev_cpcv(
+    timeframe: str,
+    balance: float,
+) -> dict:
+    """Iterate every strategy in `make_strategies` through the
+    dev_cpcv flow.  Per-strategy failures are logged and the result
+    entry is `None` for that strategy; one bad strategy doesn't kill
+    the run."""
+    results: dict = {}
+    for name in make_strategies(timeframe).keys():
+        logger.info(f"[DevCpcv] Running: {name}")
+        try:
+            results[name] = _run_strategy_dev_cpcv(
+                strategy_id=name, timeframe=timeframe, balance=balance,
+            )
+        except Exception as e:
+            logger.error(f"[DevCpcv] {name} failed: {e}")
+            results[name] = None
     return results
 
 
