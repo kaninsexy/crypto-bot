@@ -15,7 +15,7 @@ current state.
 ## Core principles
 
 - **Validation harness is sacred.** Files under `validation/`, `backtest/cpcv.py`,
-  `backtest/dsr.py`, `backtest/engine.py`, and `trials.log` must not be modified
+  `backtest/dsr.py`, `backtest/engine.py`, and `backtest/trials.log` must not be modified
   by iteration-phase agents. Changes to these require human approval.
 - **Every experiment counts.** Every backtest, every parameter variation, every
   exploratory test appends a row to `trials.log`. Multiple-testing correction via
