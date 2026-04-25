@@ -1,6 +1,6 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-04-25
+Last updated: 2026-04-25 (Phase 3b Chunks 1-4 complete)
 Supersedes the 2026-04-17 plan (prior content preserved in git history). The
 primary change since: Phase 2c is complete, Phase 3a has shipped, and the
 plan is now organised around a validation-first rescue process rather than
@@ -49,11 +49,44 @@ Supertrend and BearShort vectorization. Approximately 10× speedup on the two
 slowest strategies. Supertrend math is identical; BearShort drifts within
 noise. Changes sit in the working tree awaiting a human commit decision.
 
-### Phase 3b — NEXT
+### Phase 3b — IN PROGRESS
 
-Statistical validation framework. CPCV + Deflated Sharpe Ratio + three-way
-data split (train / validation / holdout). Will be built before any further
-strategy work. Detailed spec in `docs/validation_framework.md`.
+Statistical validation framework. Built incrementally as 4-chunk human-
+gated commits.
+
+**Chunks 1-4 complete (2026-04-25):**
+- **Chunk 1:** `backtest/holdout.py` accessor module with strict 
+  single-access enforcement and structured caller validation 
+  (`phase.strategy_id.purpose` regex grammar). `backtest/logs.py` 
+  JSONL plumbing.
+- **Chunk 2:** `backtest/generate_holdout_manifest.py` with 
+  `generate_initial()` and `regenerate_manifest()` entry points. 
+  `backtest/holdout_manifest.json` generated for all 10 strategies. 
+  Calendar 80/20 split at 2025-09-12 UTC (~29 months dev, ~7 months 
+  holdout). `backtest/holdout_access.log` initialised empty.
+- **Chunk 3:** Cache-layer enforcement in `backtest/cache.py`. 
+  `HoldoutBypass` raised on any read overlapping holdout window 
+  unless caller is `load_holdout` (via contextvar). 
+  `EnforcementManifestMissing` and `EnforcementManifestMalformed` 
+  raised on bad manifest state — no silent fallback. `backtest/runner.py` 
+  routes dev-only via `until_ts=get_symbol_dev_cutoff(sym)`.
+- **Chunk 4:** `docs/validation_framework.md` corrected to match 
+  implementation (50/30/20 → 80/20 dev-only split; CPCV span 
+  reference fixed; infrastructure pointer section added).
+
+55/55 tests pass across `backtest/tests/` and `tests/`. Updated 
+spec is in `docs/validation_framework.md`.
+
+**Remaining Phase 3b infrastructure (next sessions):**
+- `trials.log` schema and writer module (JSONL, separate schema 
+  module from `backtest/logs.py`).
+- CPCV (Combinatorial Purged Cross-Validation) implementation 
+  operating on the dev window per `docs/validation_framework.md`.
+- DSR (Deflated Sharpe Ratio) per Bailey & López de Prado 2014.
+- MinTRL secondary sanity check.
+- Buy-and-hold baseline comparison per strategy.
+- Empirical threshold calibration (synthetic signal-vs-noise 
+  test bench at 0.80 / 0.85 / 0.90 / 0.95).
 
 ### Phase 3c
 

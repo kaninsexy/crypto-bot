@@ -1,14 +1,18 @@
 # Bot Status
 
-Last updated: 2026-04-25
+Last updated: 2026-04-25 (post Phase 3b Chunks 1-4)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
 
 ## Current state
 
-- **Current commit:** `f2d29cf` on `main` (Phase 3a redesign + `base.py` kwarg fix).
-- **Working tree:** has uncommitted Supertrend and BearShort vectorization
-  (~10× speedup verified on a 3-month smoke; identical math on Supertrend,
-  within-noise drift on BearShort). Not yet committed pending decision.
+- **Current commit:** Phase 3b Chunks 1-4 stack pushed to `main` (4 
+  commits on top of `f2d29cf`: holdout accessor + JSONL plumbing; 
+  manifest generator + initial manifest; cache enforcement + runner 
+  dev-only loading; validation_framework.md correction). Plus the 
+  earlier research consolidation commits (Phase 3a.1 vectorization, 
+  docs consolidation, milestone backtest reports, research_log 
+  Phase 1-3a findings).
+- **Working tree:** clean.
 - **Server deployment:** `kanin@104.248.145.189`, still on older commit `4a51f0b`
   (pre-Phase 3a). The server has NOT been updated with Phase 3a changes yet.
 - **Bot state:** OKX paper mode. 10 strategies configured in code, of which
@@ -39,6 +43,32 @@ Bucket summary: 3 working (VWAP, BearShort, GridTrading), 4 broken
 See `docs/strategies.md` for per-strategy diagnosis and next actions, and
 `docs/strategy_failure_analysis_2026-04-19.md` for the underlying failure
 write-up on the four broken strategies.
+
+## Phase 3b infrastructure (Chunks 1-4 complete)
+
+The holdout split foundation is live. Future backtest data access 
+goes through `backtest/holdout.py`, not directly through the L1 
+cache.
+
+| File | Role |
+|------|------|
+| `backtest/holdout_manifest.json` | Per-strategy `data_start`, `dev_end`, `holdout_start`, `data_end`, `timeframe`. Source of truth for the split. |
+| `backtest/holdout.py` | Public accessors `load_dev(strategy_id)` and `load_holdout(strategy_id, caller=..., reason=...)`. Strict single-access enforced on holdout. |
+| `backtest/holdout_access.log` | Append-only audit log. Every `load_holdout` call appends one event; every regenerate appends one `regenerated=true` event. |
+| `backtest/generate_holdout_manifest.py` | `generate_initial()` for first setup; `regenerate_manifest()` for redrawing the split. |
+| `backtest/cache.py` | Enforces `HoldoutBypass` on any read overlapping holdout. Pass `until_ts=get_symbol_dev_cutoff(symbol)` to restrict to dev. |
+| `backtest/logs.py` | JSONL read/write plumbing, schema-agnostic. |
+
+Caller convention for `load_holdout`: 
+`<phase>.<strategy_id>.<purpose>` — phase ∈ {phase3c, phase3d, 
+phase4, phase5, manual}, strategy_id matches manifest key 
+case-sensitively, purpose ∈ {final_dsr, regression_check, 
+manual_inspection}. Validated by regex; invalid callers raise 
+without writing to the audit log.
+
+Modifying `backtest/holdout.py`, `backtest/holdout_manifest.json` 
+schema, or `docs/validation_framework.md` requires human approval 
+per `CLAUDE.md` (sacred harness).
 
 ## Kelly sizing state
 
