@@ -51,29 +51,63 @@ Agents may freely run 3-month smoke tests during iteration. Running 3-year
 CPCV is compute-intensive and should be reserved for candidates that survive
 smoke.
 
-## CPCV — Combinatorial Purged Cross-Validation
+## Block Sharpe distribution
 
-CPCV is the primary cross-validation method. Instead of producing a single
-Sharpe number for a strategy, it produces a *distribution* of Sharpe values
-across many reconstructed backtest paths.
+The dev window is split into N non-overlapping equal-row blocks. The
+strategy runs through each block as a standalone `engine.run()` call
+with a fresh `strategy_factory()` instance — no state carryover
+between blocks. Each block produces a Sharpe via the same formula as
+`backtest/engine.py:_compute_metrics`. The resulting N-element Sharpe
+distribution is the input to DSR.
 
-Standard CPCV mechanics:
+### Why this rather than López de Prado's path-reassembly CPCV
 
-- Split the dev window into N non-overlapping blocks.
-- Form all combinations where k blocks are held out and N−k blocks are used
-  for training.
-- Purge overlapping periods around the held-out blocks to prevent leakage
-  from lookahead in feature engineering.
-- Embargo a short period after each held-out block to prevent leakage from
-  serial correlation.
+The standard CPCV path machinery generates path variance by fitting
+different models on different combinations of training blocks and
+producing different predictions on held-out blocks. That is an ML
+construct — for rule-based strategies with no fit, the same block
+data produces the same returns regardless of which combination it is
+nominally part of, so all reconstructed paths collapse to identical
+Sharpes. Running the engine on concatenated held-out blocks per
+combination would produce non-degenerate variance, but only via
+artificial time-adjacency at the gluing boundaries — a leakage
+artifact, not a property of the underlying data.
 
-Research finding from the López de Prado family of papers: CPCV materially
-outperforms walk-forward validation in false-discovery prevention, because
-walk-forward produces a single path and a single Sharpe that is easy to
-cherry-pick.
+The block Sharpe distribution avoids both failures. Blocks are
+independent runs with fresh strategy state, the variance reflects
+genuine across-period dispersion of strategy performance, and the
+distribution feeds DSR with honest inputs. It is structurally similar
+to walk-forward validation but produces N Sharpes per strategy
+instead of one, which preserves the multi-sample basis DSR requires.
 
-The number of paths N and the held-out count k are parameters — Phase 3b
-will calibrate both empirically (see Thresholds).
+### Block construction
+
+- Equal-row split into N = 10 blocks (configurable; calibration
+  pending in Phase 3b step 6).
+- For multi-symbol strategies (DualMomentum), the split is on the
+  timestamp intersection across symbols so per-symbol blocks cover
+  the same calendar window.
+- Each block must clear MIN_TRADES_PER_BLOCK = 5 to contribute. A
+  block with fewer trades produces NaN.
+- If more than 50 % of blocks are NaN, `run_cpcv` raises CPCVError;
+  the result is statistically unreliable.
+
+### Purge and embargo
+
+- `purge_periods` bars are zeroed at the start of each block's return
+  series before Sharpe computation, neutralising
+  feature-engineering windows that straddle the boundary.
+- `embargo_periods` bars are zeroed at the end of each block before
+  Sharpe computation, absorbing serial-correlation leakage.
+- Defaults are 0 pending Phase 3b empirical calibration.
+
+### Reserved configuration
+
+`CPCVConfig.k_held_out` is preserved in the configuration dataclass
+but is unused in block-Sharpe mode. It remains for forward
+compatibility if a fit/predict-capable strategy class is added in
+the future, at which point true path-CPCV may be re-introduced
+alongside this approach.
 
 ## Deflated Sharpe Ratio — the accept/reject gate
 
