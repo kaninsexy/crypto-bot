@@ -29,7 +29,7 @@ intersection window: `data_start = max(per-symbol starts)`,
 
 The holdout is sacred. It is accessed **exactly once per strategy**, at the
 end of that strategy's rescue iteration, to produce a final DSR that
-determines keep / monitor / retire. Any earlier peek invalidates the split —
+determines the verdict (keep / retire / under_tested). Any earlier peek invalidates the split —
 if a holdout peek happens, the holdout must be discarded and the split
 redrawn (which is expensive and pushes out the schedule).
 
@@ -124,21 +124,76 @@ The output is a probability that the observed Sharpe is not a false positive
 given the multiple-testing context. This probability is the keep / reject
 gate.
 
-## Thresholds
+At production T (~20k bars on hourly candles), the deflated test statistic
+Z = (SR − sr_zero_expected) / σ_SR has very large leverage on the SR gap
+because √(T−1) ≈ 141. The transition between DSR ≈ 0 and DSR ≈ 1 collapses
+into a Sharpe band roughly 0.05 wide, narrower than typical strategy
+run-to-run noise. The implication: DSR is no longer a graded probability
+but a binary "above or below sr_zero_expected(N)" indicator. The verdict
+tree below uses that binary directly; the DSR float is recorded for
+forensics, not used for gating. Empirically confirmed via
+`backtest/calibration.py` (synthetic harness across student-t and
+skewed-student-t at T=20000, N ∈ {1, 5, 10, 20, 50}).
 
-To be empirically calibrated in Phase 3b. Plan: run DSR against known-signal
-and known-noise synthetic cases at thresholds 0.80, 0.85, 0.90, 0.95, and
-pick the level that correctly separates signal from noise on that test bench.
+## Verdict tree
 
-Default tiers, pending calibration:
+At production T (~20k bars), DSR collapses to a step function at
+sr_zero_expected(N): strategies are either confidently above the
+multiple-testing null (DSR ≈ 1) or confidently below (DSR ≈ 0), with a
+transition band narrower than typical strategy run-to-run noise. The
+probability is no longer a tunable gate. The verdict logic reflects this:
+binary keep/retire on the quality side, with an under-tested precondition
+for strategies that don't have enough data to render a verdict at all.
 
-- DSR ≥ 0.95 — production sizing (Kelly active, full allocation within caps).
-- 0.90 ≤ DSR < 0.95 — keep-for-monitoring (sized at a floor, paper only).
-- DSR < 0.90 — retire.
+### Three signals
 
-These defaults may be tightened or loosened after calibration. Calibration
-itself is an agent-autonomy item (see `CLAUDE.md` — "empirically calibrate
-thresholds").
+- SR > sr_zero_expected(N) — multiple-testing null. PASS = the observed
+  Sharpe is above what N rounds of trial-fishing would produce on average.
+  FAIL = indistinguishable from MT noise.
+- SR > buy_and_hold_sharpe — passive baseline. PASS = the strategy adds
+  value over holding the asset. FAIL = passive does as well or better, net
+  of strategy fees and operational risk.
+- MinTRL preconditions — bar-count via BLP eq. 13 plus a heuristic
+  trade-count floor (total_trades >= 30). PASS = enough data for the SR
+  estimate to be statistically meaningful. FAIL = under-tested.
+
+### Tree
+
+    Precondition (compute first):
+      if total_trades < 30 OR T < min_trl:
+          verdict = "under_tested"
+          # quality bools not computed; recorded as None
+
+    Quality (only if precondition passes):
+      if SR > sr_zero_expected(N) AND SR > buy_and_hold_sharpe:
+          verdict = "keep"
+      else:
+          verdict = "retire"
+
+### State definitions
+
+- keep — cleared for production sizing (Kelly active, full allocation
+  within caps). Goes to Phase 4 paper deploy.
+- retire — does not deploy. Either fails the multiple-testing null or
+  fails the baseline floor. Archive per `CLAUDE.md` ("archive by default,
+  delete only with approval").
+- under_tested — neither pass nor fail. Insufficient data to render a
+  verdict. Keep on paper for further data accumulation; does not clear
+  the deploy gate on its own.
+
+No "monitor" state. Phase 4 paper monitoring is the real monitor state —
+strategies that pass keep go there and get killed if they underperform
+backtest expectations.
+
+### Forensic recording
+
+Every final_gate row in `trials.log` records the full DSR float, the three
+at-eval thresholds (`sr_zero_expected_at_eval`, `mintrl_required_at_eval`,
+`baseline_sharpe_at_eval`), and the four component booleans
+(`trade_count_pass`, `mintrl_pass`, `mt_mean_pass`, `baseline_pass`). The
+verdict itself is binary; the floats are forensic context for the rare
+borderline cases that warrant human review per `CLAUDE.md` ("DSR within
+±0.05 of threshold on holdout").
 
 ## `trials.log`
 
@@ -169,6 +224,15 @@ distinguishable from zero at a given confidence level. If a strategy has
 fewer observations than MinTRL, it is flagged as *under-tested* rather than
 passed or failed. An under-tested strategy can be kept on paper for further
 data collection, but it does not clear the deploy gate on its own.
+
+The implementation is bar-level: T = len(returns), where the returns series
+is the per-bar return vector that the CPCV adapter produces by concatenating
+per-block returns from each `engine.run()` call. Bar-level MinTRL works
+well for high-trade strategies, but for low-trade strategies (DCA,
+MeanReversion) the bar-level Sharpe is dominated by zero returns between
+trades and MinTRL will not catch the under-testing. A heuristic trade-count
+floor of 30 trades acts as a second precondition for those cases, paired
+with bar-level MinTRL inside the verdict tree's under-tested branch.
 
 ## Baseline comparison
 

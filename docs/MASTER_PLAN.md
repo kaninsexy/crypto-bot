@@ -8,13 +8,15 @@ feature expansion.
 
 ## Project integrity principle
 
-**Nothing deploys until Phase 3b validates it via DSR on holdout data.**
+**Nothing deploys until Phase 3b's verdict tree clears it on holdout data —
+meaning a "keep" verdict from compute_verdict, which requires passing the
+multiple-testing null (SR > sr_zero_expected(N)), the buy-and-hold baseline,
+and both preconditions (trade-count floor + MinTRL).**
 
 This is the single rule that overrides everything else in this document. No
 strategy gets paper-deployed, and no paper-deployed strategy gets live-deployed,
-until the Deflated Sharpe Ratio on the untouched holdout window clears the
-threshold set in Phase 3b. See `docs/validation_framework.md` for the
-methodology.
+until `compute_verdict` returns "keep" on the untouched holdout window. See
+`docs/validation_framework.md` for the methodology.
 
 ## Phase status
 
