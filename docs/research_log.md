@@ -68,6 +68,128 @@ See MASTER_PLAN "Future phases" section for rationale.
 
 See MASTER_PLAN "Future phases" section for rationale.
 
+## 3-Year Backtest Cross-Strategy Lessons (consolidated 2026-04-25) — REFERENCE
+
+Generalisable findings extracted from the per-strategy diagnostics in
+`docs/strategy_failure_analysis_2026-04-19.md`. The detailed per-strategy
+analysis stays in that file; this section captures the patterns that apply
+across strategies and should inform Phase 3c rescue thinking.
+
+**Win rate alone is meaningless.** DCA shows 92.3% OOS win rate with -7.15%
+return — wins were small, a handful of large losses dragged the total
+negative. The diagnostic question is always expected value per trade:
+`win_rate × avg_win - (1 - win_rate) × avg_loss`. Win rate divorced from
+avg-win/avg-loss ratio is not a quality signal.
+
+**Required win rate scales with payoff ratio.** At avg_win/avg_loss ≈ 1.1
+(TrendFollowing OOS), break-even win rate is ~48%; 28.6% observed win rate
+yields -$30 per trade. At avg_win/avg_loss ≈ 0.9 (Supertrend OOS) the bar
+is even higher and 29.5% produces -$47 per trade. A trend strategy with
+sub-40% win rate is structurally negative-EV regardless of the strategy's
+"reputation."
+
+**Structural exit design can guarantee negative EV.** VolatilityBreakout
+exits every trade at the next candle's open regardless of P&L. With 37%
+win rate and near-symmetric win/loss size, expected value is -$3.63 per
+trade × 1,640 trades = -$5,950. No parameter change can fix a strategy
+whose exit rule prevents winners from running. Distinguish parameter
+problems (rescuable) from design problems (not).
+
+**OOS-better-than-IS is the anti-overfit signature.** VWAP improved from
++1.00 IS Sharpe to +2.30 OOS Sharpe. The reverse — IS-better-than-OOS — is
+the overfitting signature (Supertrend, TrendFollowing, Breakout all show
+catastrophic IS→OOS degradation). Phase 3b DSR will catch this formally;
+the heuristic is robust enough to use during iteration.
+
+**Pair-specific overfitting is real.** Breakout on AVAX showed +$248 avg
+win IS, +$138 OOS — winner size collapsed by ~45% out-of-sample. Moving
+this strategy to a different pair is a pair-substitution decision (per
+`CLAUDE.md`, requires human approval) but the IS performance is consistent
+with overfitting to a specific AVAX regime that didn't persist.
+
+**Reconsideration trigger:** None — these are reference findings, not
+decisions. They become actionable inputs to Phase 3c rescue parameter
+proposals (must satisfy the no-p-hacking rule's "explicit theoretical
+justification" requirement per `CLAUDE.md`).
+
+## Per-Strategy Pair Selection Rationale (consolidated 2026-04-25) — REFERENCE
+
+The current `config.STRATEGY_SYMBOLS` mapping was chosen during initial
+strategy creation. Rationales were captured in code comments at the time
+but not consolidated. Recording here so Phase 3c pair-substitution
+decisions can be made with full context.
+
+| Strategy | Pair | Original rationale | 3-year OOS verdict |
+|---|---|---|---|
+| DCA | BTC/USDT | Blue-chip, reliable long-term upside | Negative; martingale design issue, not pair |
+| TrendFollowing | BTC/USDT | Most reliable directional instrument | Negative; choppy regime + EMA9/21 too noisy |
+| Supertrend | ETH/USDT | Liquid, well-behaved trend structure | Catastrophic; flip-exit gives back too much |
+| MeanReversion | ETH/USDT (was LINK) | LINK strong range-reversion → moved to ETH for liquidity | Failing; barely fires under current EMA filter |
+| GridTrading | SOL/USDT | Volatile but bounded, high grid profit density | Working (small edge) |
+| Breakout | AVAX/USDT | Strong momentum moves, clean volume surges | Catastrophic; 91.5% stop_loss exits, fakeouts dominate |
+| BearShort | BTC/USDT | Most reliable directional futures instrument | Working (hedge contributor, small return) |
+| VWAP | ETH/USDT | Institutional volume patterns present | Strongest OOS Sharpe in portfolio |
+| VolatilityBreakout | BTC/USDT | High liquidity for high-frequency entries | Catastrophic; structural design flaw not pair |
+| DualMomentum | BTC/USDT (rotates BTC/ETH/BNB) | Multi-symbol momentum rotation | Incomplete (3-year run timeout) |
+
+**Pair-substitution candidates suggested by the OOS data:**
+
+- **Breakout away from AVAX.** 91.5% stop_loss exits suggests the pair
+  doesn't produce clean breakouts at 1h. Pair substitution is human-approval
+  per `CLAUDE.md` — flag for explicit Phase 3c discussion if the parameter
+  variations (volume threshold, retest entry) don't recover EV on AVAX.
+- **MeanReversion pair re-evaluation.** ETH at 1h with 14-period RSI / 20-period
+  Bollinger may not have enough mean-reversion signal at this timeframe.
+  Original LINK choice was theoretically motivated; the move to ETH was for
+  liquidity. If parameter variations don't fire enough trades on ETH,
+  testing on LINK 1h or moving to a higher timeframe on ETH are both
+  candidates — but each is a fresh pair-substitution decision, not a
+  parameter variation.
+
+**Pairs to leave alone:** BTC for DCA / TrendFollowing / BearShort /
+VolatilityBreakout / DualMomentum — diagnoses are not pair-related. ETH
+for VWAP / Supertrend — VWAP is the portfolio's best performer on this
+pair, Supertrend's failure is the exit logic, not the pair.
+
+## Regime Allocation History (consolidated 2026-04-25) — REFERENCE
+
+Notable past changes to `REGIME_ALLOCATIONS` in `portfolio/regime_detector.py`.
+These entries explain *why* current weights are what they are, so Phase 3c/3d
+adjustments don't undo prior reasoned decisions without knowing what they were.
+
+**MeanReversion in BULL/RANGE — re-enabled with funded reduction.**
+
+- **Before:** 0% in all regimes (paper-trading suspension after OOS backtest
+  showed -9.36% return, Sharpe -2.80 in a bear-market test period — an
+  inappropriate regime for MeanReversion anyway, but the broader allocation
+  was suspended out of caution).
+- **After:** RANGE 10%, BULL 5%, all other regimes 0%.
+- **Funding source:** DCA reduced by 0.10 in RANGE (0.30→0.20) and 0.05 in BULL
+  (0.20→0.15). DCA chosen as donor because it is the most buffer-like strategy
+  and least harmed by a small trim in regimes where MeanReversion is actively
+  earning.
+- **Phase 3c implication:** If MeanReversion is retired in Phase 3c, return
+  the donated allocation to DCA in those regimes rather than leaving it
+  unallocated.
+
+**STRONG_BULL adjustments to fund VolatilityBreakout and DualMomentum.**
+
+- Supertrend: -0.05 (was 0.30, now 0.25)
+- Breakout: -0.05 (was 0.35, now 0.30)
+- TrendFollowing: -0.05 (was 0.15, now 0.10)
+- → VolatilityBreakout: +0.05, DualMomentum: +0.10
+- **Phase 3c implication:** If VolatilityBreakout and/or DualMomentum are
+  retired (likely for VolBreakout per the failure analysis), return their
+  STRONG_BULL allocation to Supertrend / Breakout / TrendFollowing in the
+  proportions they were taken from — but only if those strategies survive
+  Phase 3c. If they don't either, the regime needs a fresh allocation
+  design rather than a revert.
+
+**General principle observed:** Allocation changes were funded explicitly
+(donor → recipient) rather than expanding total weight. This preserves the
+constraint that each regime row sums to 1.0. Future Phase 3c/3d allocation
+edits should follow the same convention.
+
 ## Strategy Failure Analysis Reference
 
 A detailed per-strategy diagnostic from the 9-of-10 3-year backtest (2026-04-19) lives at `docs/strategy_failure_analysis_2026-04-19.md` (6.5KB). This file predates the consolidated research log but remains authoritative for the specific failure-mode diagnosis of each strategy:
