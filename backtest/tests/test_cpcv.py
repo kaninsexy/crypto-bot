@@ -604,3 +604,120 @@ def test_run_cpcv_rejects_unknown_strategy(patch_holdout_for_cpcv):
 
     with pytest.raises(holdout.StrategyNotInManifest):
         run_cpcv("Ghost", {}, config, factory)
+
+
+# ── per_block_returns invariants ─────────────────────────────────────────────
+
+def test_per_block_returns_length_invariant(patch_holdout_for_cpcv):
+    """`len(per_block_returns) == n_blocks` after any successful run.
+    Consumed by `backtest.dsr.dsr_from_cpcv_result`."""
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    config = CPCVConfig(n_blocks=4, k_held_out=2)
+    factory = lambda: _PeriodicStrategy(
+        symbol="BTC/USDT", trade_period=30, hold_candles=5,
+    )
+    result = run_cpcv("TestStrat", {}, config, factory)
+
+    assert len(result.per_block_returns) == config.n_blocks
+    # All entries are np.ndarrays (never None, never missing).
+    for arr in result.per_block_returns:
+        assert isinstance(arr, np.ndarray)
+
+
+def test_per_block_returns_empty_for_nan_blocks(patch_holdout_for_cpcv):
+    """Blocks below `_MIN_TRADES_PER_BLOCK` produce both a NaN Sharpe
+    AND an empty (`size == 0`) returns array.  This is the contract
+    DSR relies on to skip insufficient blocks via
+    `arr.size > 0` filtering."""
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    config = CPCVConfig(n_blocks=4, k_held_out=2)
+
+    # Factory that yields an "active" strategy for blocks {0, 1, 2}
+    # and an "inactive" strategy for block 3.  run_cpcv calls the
+    # factory once at the top of the function for primary-symbol
+    # detection (throwaway), then once per block.  The block_idx
+    # mapping below accounts for that throwaway.  Three valid blocks
+    # + one NaN block = 25 % NaN, safely below the > 50 % guard.
+    inactive_blocks = {3}
+    n_calls = [0]
+
+    def mixed_factory():
+        call_idx = n_calls[0]
+        n_calls[0] += 1
+        # First call is run_cpcv's throwaway primary-symbol probe;
+        # block calls start at call_idx == 1.
+        block_idx = call_idx - 1
+        if block_idx in inactive_blocks:
+            # trade_period larger than per-block candle count so the
+            # strategy never fires a BUY → 0 trades.
+            return _PeriodicStrategy(
+                symbol="BTC/USDT", trade_period=100_000, hold_candles=5,
+            )
+        return _PeriodicStrategy(
+            symbol="BTC/USDT", trade_period=30, hold_candles=5,
+        )
+
+    result = run_cpcv("TestStrat", {}, config, mixed_factory)
+
+    nan_indices = [
+        i for i, s in enumerate(result.per_path_sharpes) if math.isnan(s)
+    ]
+    valid_indices = [
+        i for i, s in enumerate(result.per_path_sharpes) if not math.isnan(s)
+    ]
+    assert nan_indices == [3], (
+        f"expected only block 3 to be NaN; got nan_indices={nan_indices}"
+    )
+    assert sorted(valid_indices) == [0, 1, 2]
+
+    for i in nan_indices:
+        assert result.per_block_returns[i].size == 0, (
+            f"block {i} has NaN Sharpe but per_block_returns is "
+            f"non-empty (size={result.per_block_returns[i].size})"
+        )
+    for i in valid_indices:
+        assert result.per_block_returns[i].size > 0, (
+            f"block {i} has valid Sharpe but per_block_returns is empty"
+        )
+
+
+def test_per_block_returns_matches_pct_change_shape(patch_holdout_for_cpcv):
+    """For valid blocks (purge=embargo=0), the returns array length
+    equals the engine's equity_curve length minus 1 — the bar lost to
+    `pct_change().dropna()`."""
+    from backtest.cpcv import _run_engine_per_block, _split_blocks
+
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    config = CPCVConfig(
+        n_blocks=4, k_held_out=2, purge_periods=0, embargo_periods=0,
+    )
+    factory = lambda: _PeriodicStrategy(
+        symbol="BTC/USDT", trade_period=30, hold_candles=5,
+    )
+    result = run_cpcv("TestStrat", {}, config, factory)
+
+    # Reconstruct the engine results to compare equity-curve lengths.
+    blocks = _split_blocks(dev_df, n_blocks=config.n_blocks)
+    engine_results = _run_engine_per_block(
+        strategy_factory=factory,
+        blocks=blocks,
+        primary_symbol=None,
+        is_multi_symbol=False,
+    )
+
+    for i, (engine_r, block_arr) in enumerate(
+        zip(engine_results, result.per_block_returns)
+    ):
+        # Only check valid (non-empty) blocks.
+        if block_arr.size == 0:
+            continue
+        assert block_arr.size == len(engine_r.equity_curve) - 1, (
+            f"block {i}: per_block_returns size {block_arr.size} != "
+            f"equity_curve len - 1 ({len(engine_r.equity_curve) - 1})"
+        )

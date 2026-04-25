@@ -174,11 +174,26 @@ class CPCVResult:
                               accurate alias.
         trades_per_path:      Per-block trade counts, same length and
                               order as `per_path_sharpes`.
+        per_block_returns:    Per-block per-bar return arrays, in
+                              block order.  Always length `n_blocks`.
+                              For NaN-Sharpe blocks (insufficient
+                              trades) the entry is an empty
+                              `np.ndarray` (`size == 0`), never None
+                              and never missing.  For valid blocks
+                              the entry is the same array passed to
+                              `_sharpe_from_returns`: post
+                              `pct_change().dropna()` and
+                              post-purge/embargo.  Consumed by
+                              `backtest.dsr.dsr_from_cpcv_result`,
+                              which concatenates the non-empty
+                              entries to drive T / skew / kurtosis
+                              for DSR.
     """
     n_paths: int
     sharpe_distribution: dict
     per_path_sharpes: list[float]
     trades_per_path: list[int]
+    per_block_returns: list[np.ndarray]
 
     @property
     def per_block_sharpes(self) -> list[float]:
@@ -520,9 +535,10 @@ def run_cpcv(
             is_multi_symbol=False,
         )
 
-    # 2. Per-block Sharpe and trade count.
+    # 2. Per-block Sharpe, trade count, and post-trim returns.
     block_sharpes: list[float] = []
     trade_counts: list[int] = []
+    block_returns: list[np.ndarray] = []
 
     for r in engine_results:
         n_trades = r.metrics.total_trades
@@ -530,6 +546,7 @@ def run_cpcv(
 
         if n_trades < _MIN_TRADES_PER_BLOCK:
             block_sharpes.append(float("nan"))
+            block_returns.append(np.array([], dtype=float))
             continue
 
         rets = _block_returns_from_result(r)
@@ -539,6 +556,7 @@ def run_cpcv(
             config.embargo_periods,
         )
         block_sharpes.append(_sharpe_from_returns(rets, candle_duration_h))
+        block_returns.append(rets)
 
     # 3. > 50 % NaN check.
     valid = sum(1 for s in block_sharpes if not math.isnan(s))
@@ -559,6 +577,7 @@ def run_cpcv(
         sharpe_distribution=distribution,
         per_path_sharpes=block_sharpes,
         trades_per_path=trade_counts,
+        per_block_returns=block_returns,
     )
 
 
