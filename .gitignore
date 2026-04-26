@@ -49,3 +49,7 @@ backtest/cache/
 backtest/reports/
 backtest/trials.log
 backtest/holdout_access.log
+
+# Runtime artifacts
+dashboard/data/
+logs/
