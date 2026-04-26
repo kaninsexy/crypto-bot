@@ -45,13 +45,13 @@ Backtest redesign. Per-strategy symbols via `config.STRATEGY_SYMBOLS`, L1
 OHLCV parquet cache with 24h TTL, DualMomentum multi-symbol rotation,
 `base.py` kwarg fix. This is the current `main` tip.
 
-### Phase 3a.1 — PENDING COMMIT
+### Phase 3a.1 — COMPLETE (commit `abb796e`)
 
 Supertrend and BearShort vectorization. Approximately 10× speedup on the two
 slowest strategies. Supertrend math is identical; BearShort drifts within
-noise. Changes sit in the working tree awaiting a human commit decision.
+noise.
 
-### Phase 3b — IN PROGRESS
+### Phase 3b — COMPLETE
 
 Statistical validation framework. Built incrementally as 4-chunk human-
 gated commits.
@@ -99,26 +99,37 @@ gated commits.
 133/133 tests pass across `backtest/tests/` and `tests/`. Updated 
 spec is in `docs/validation_framework.md`.
 
-**Remaining Phase 3b infrastructure (next sessions):**
-- DSR (Deflated Sharpe Ratio) per Bailey & López de Prado 2014.
-- MinTRL secondary sanity check.
-- Buy-and-hold baseline comparison per strategy.
-- Empirical threshold calibration (synthetic signal-vs-noise 
-  test bench at 0.80 / 0.85 / 0.90 / 0.95).
+All Phase 3b infrastructure shipped: holdout split, trials.log writer,
+block-Sharpe CPCV, DSR, MinTRL, buy-and-hold baseline, verdict tree,
+threshold calibration. See `docs/validation_framework.md` for the live spec.
 
-### Phase 3c
+### Phase 3c — RAN, BLOCKED on Phase 4 scope decision (2026-04-26)
 
-Per-strategy rescue or retire decisions using the Phase 3b framework.
-Target: 2–4 weeks of evening sessions. See `docs/strategies.md` for the
-current rescue list. Within-strategy iteration cap is 20 variations
-(`CLAUDE.md`).
+All-strategy dev_cpcv ran 2026-04-25. Result: 9/10 RETIRE + 1/10 CPCVError
+(MeanReversion, treated as `under_tested`). Zero strategies cleared
+`sr_zero_expected = +1.9007` at N=20. Only VWAP beat its baseline (+1.14
+vs +0.68 ETH B&H). Detailed empirical breakdown:
+`docs/strategy_evidence_audit_2026-04-26.md`. The structural diagnosis
+(1H single-pair substrate, retail-template strategies) means N=20 rescue
+variations on the same substrate would be additional draws from the same
+noise distribution. Phase 3c rescue iteration is therefore NOT the next
+step. The next step is the Phase 4 scope decision (Branch A/B/C) tracked
+in `docs/open_questions.md`.
 
-**Execution pattern:** Phase 3c uses the multi-agent framework documented in
-`CLAUDE.md`. Specifically: parallel literature-review subagents (one per
-strategy), cross-model adversarial review of every parameter proposal, and
-`trials.log` discipline for multiple-testing correction. See
-`docs/research_log.md` section on multi-agent patterns for the full evidence
-basis.
+BearShort post-fix re-run (commit `25bd843`, 2026-04-26): observed_sharpe
+−2.9643 (was +1.3129 pre-fix), all-quantiles-negative dist, RETIRE. Sign
+flipped clean from the simulator short-pnl bug; magnitude amplified ~2.2×
+by balance-scaled compounding asymmetry. Branch B (BearShort-only
+deployment) effectively foreclosed.
+
+**If Branch A is chosen, the original Phase 3c rescue framing applies to
+the redesigned strategies only:** per-strategy rescue or retire decisions
+using the Phase 3b framework. Within-strategy iteration cap is 20
+variations (`CLAUDE.md`). Execution pattern uses the multi-agent framework
+documented in `CLAUDE.md` (parallel literature-review subagents,
+cross-model adversarial review, `trials.log` discipline). See
+`docs/research_log.md` for the multi-agent evidence basis. If Branch B or
+C is chosen, this subsection does not apply.
 
 ### Phase 3d
 
@@ -136,6 +147,15 @@ position gets scaled by `target_vol / rolling_vol_30d`
 inverse of their realized return volatility.
 
 ### Phase 4
+
+> **Branch decision pending.** The current Phase 4 description below
+> assumes the original "deploy validated portfolio" path. The 2026-04-26
+> Phase 3c structural finding requires choosing among Branch A (rebuild
+> around daily/multi-pair), Branch B (BearShort-only — effectively
+> foreclosed by the post-fix verdict), or Branch C (pivot off systematic
+> crypto). See `docs/open_questions.md` "Phase 4 scope decision". The
+> original Phase 4 description applies only if a path produces validated
+> strategies — currently none.
 
 Paper deploy of the validated portfolio only. 4-week monitoring vs backtest
 expectations. No live money on the table in this phase.

@@ -72,7 +72,10 @@ TAKE_PROFIT_PCT: float = float(os.getenv("TAKE_PROFIT_PCT", "0.06"))
 #
 # Rationale for defaults:
 #   DCA / TrendFollowing — BTC/USDT: blue-chip, reliable long-term upside
-#   MeanReversion        — LINK/USDT: strong range-reversion tendencies
+#   MeanReversion        — ETH/USDT: liquid, defensible mean-reversion substrate
+#                          (originally chosen as LINK for strong range-reversion;
+#                          moved to ETH for liquidity — see docs/research_log.md
+#                          "Per-Strategy Pair Selection Rationale")
 #   GridTrading          — SOL/USDT: volatile but bounded, high grid profit density
 #   Breakout             — AVAX/USDT: strong momentum moves, clean volume surges
 #   Supertrend           — ETH/USDT: liquid, well-behaved trend structure

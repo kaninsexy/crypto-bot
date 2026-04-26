@@ -1,6 +1,6 @@
 # Bot Status
 
-Last updated: 2026-04-25 (post Phase 3b Chunks 1-6)
+Last updated: 2026-04-26 (post Phase 4 scope decision)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
 
 ## Current state
@@ -21,9 +21,64 @@ Supersedes the 2026-04-17 snapshot (preserved in git history).
   3 are genuinely working, 4 are broken (diagnosed), 3 are borderline
   (need rescue or retire decision).
 
-## Per-strategy status
+## Per-strategy status — Phase 3c verdicts (2026-04-26)
 
-From the 3-year backtest analysis (9/10 completed; DualMomentum killed mid-run).
+Source: `backtest/trials.log` rows from 2026-04-25 19:48 onward + the
+BearShort post-fix re-run on commit `25bd843`. All strategies tested at
+N=20 against `sr_zero_expected = +1.9007`.
+
+| Strategy | Symbol | Phase 3c verdict | observed_sharpe | dist mean | n_trades | Notes |
+|---|---|---|---|---|---|---|
+| DCA | BTC/USDT | RETIRE | +1.3527 | +2.0295 | 194 | Failed multiple-testing null at N=20 |
+| Supertrend | ETH/USDT | RETIRE | -1.6388 | -1.6235 | 302 | Net-losing in dev |
+| GridTrading | SOL/USDT | RETIRE | +1.5004 | +2.3377 | 1035 | Failed multiple-testing null |
+| Breakout | AVAX/USDT | RETIRE | -1.3337 | -1.3870 | 134 | Net-losing |
+| TrendFollowing | BTC/USDT | RETIRE | -1.7708 | -1.7672 | 374 | Net-losing |
+| BearShort | BTC/USDT | RETIRE | -2.9643 | -3.4565 | 198 | Post-fix re-run on commit `25bd843`; pre-fix +1.3129 was sign-inverted by simulator bug |
+| VWAP | ETH/USDT | RETIRE | +1.1389 | +1.9539 | 319 | Beat baseline (+0.68 ETH B&H); failed multiple-testing null |
+| VolatilityBreakout | BTC/USDT | RETIRE | -3.6221 | -3.9081 | 1687 | Net-losing |
+| DualMomentum | BTC/USDT (rotates) | RETIRE | -2.3906 | -2.2850 | 1095 | Net-losing on dev_cpcv; supersedes the incomplete-3-year-run open question |
+| MeanReversion | ETH/USDT | UNDER_TESTED | (CPCVError) | — | — | 4-filter stack self-suppressed below `_MIN_TRADES_PER_BLOCK` in 7/10 blocks; no row written (atomicity) |
+
+Phase 3c bucket summary: 9/10 RETIRE + 1/10 UNDER_TESTED (MeanReversion).
+Zero strategies cleared the deploy gate. Phase 4 branch decision pending
+per `docs/open_questions.md`.
+
+See `docs/strategies.md` for per-strategy diagnosis and next actions
+(includes both the Phase 3c verdict and the historical 3-year-backtest
+diagnosis), `docs/strategy_evidence_audit_2026-04-26.md` for the
+mechanism-level audit, and `docs/strategy_failure_analysis_2026-04-19.md`
+for the original failure write-up.
+
+## Phase 4 scope: Branch C (selected 2026-04-26)
+
+Phase 3c dev_cpcv at N=20 against sr_zero_expected = +1.9007 produced
+9/10 RETIRE + 1/10 UNDER_TESTED, and the BearShort post-fix re-run
+(observed_sharpe -2.9643, all block-Sharpe quantiles negative,
+dsr_validation 0.0) forecloses Branch B. The dominant input from
+`docs/strategy_evidence_audit_2026-04-26.md` is that Hypothesis B
+(retail templates lack edge regardless of timeframe) dominates
+Hypothesis A (1H/single-pair is the structural issue): the audit's own
+best case for Branch A is "rescues 1-2 borderline cases; does not
+unlock the cohort," and Cakici et al. (2024) — sophisticated ML on
+weekly barely surviving transaction costs — caps the upside of a
+daily/multi-pair retail-template redesign well below what 3-4 months
+of work justifies.
+
+Branch C preserves the Phase 3b validation harness (block-Sharpe CPCV,
+DSR, MinTRL, verdict tree, B&H baseline, threshold calibration) as
+substrate-agnostic infrastructure for whichever follow-on direction
+comes next, rather than spending it on continued retail-crypto
+iteration. The 9/10 RETIRE result is itself a real finding — the
+harness correctly identifying that this substrate doesn't carry edge
+is what it was built to do. Specific Phase 5 direction (prediction
+market bot or alternative) deliberated separately.
+
+## Pre-Phase-3c reference (2026-04-19 3-year backtest)
+
+Preserved for context. Superseded as a deploy signal by the Phase 3c
+verdicts above; retained because the OOS bucket diagnosis is still useful
+for any future redesign.
 
 | Strategy | Symbol | Status | OOS Ret% | OOS Sharpe | Trades | Notes |
 |---|---|---|---|---|---|---|
@@ -38,19 +93,12 @@ From the 3-year backtest analysis (9/10 completed; DualMomentum killed mid-run).
 | VolatilityBreakout | BTC/USDT | Broken | -21.87% | -2.98 | 415 | 1-candle exit design flaw, net-negative EV |
 | DualMomentum | BTC/USDT (rotates BTC/ETH/BNB) | Incomplete | — | — | — | 3-year run killed at 150-min timeout; 3-month smoke showed 55 rotations working |
 
-Bucket summary: 3 working (VWAP, BearShort, GridTrading), 4 broken
-(Supertrend, TrendFollowing, Breakout, VolatilityBreakout), 2 borderline
-(DCA, MeanReversion), 1 incomplete (DualMomentum).
+## Phase 3b infrastructure (COMPLETE)
 
-See `docs/strategies.md` for per-strategy diagnosis and next actions, and
-`docs/strategy_failure_analysis_2026-04-19.md` for the underlying failure
-write-up on the four broken strategies.
-
-## Phase 3b infrastructure (Chunks 1-6 complete)
-
-The holdout split foundation is live. Future backtest data access 
-goes through `backtest/holdout.py`, not directly through the L1 
-cache.
+The full validation harness is live: holdout split, trials.log writer,
+block-Sharpe CPCV, DSR, MinTRL, buy-and-hold baseline, verdict tree, and
+threshold calibration all shipped. Future backtest data access goes
+through `backtest/holdout.py`, not directly through the L1 cache.
 
 | File | Role |
 |------|------|
@@ -62,6 +110,10 @@ cache.
 | `backtest/logs.py` | JSONL read/write plumbing, schema-agnostic. |
 | `backtest/trials.py` | Schema-validating JSONL writer for `backtest/trials.log`. Schema v1, sacred-harness-adjacent. Per-trial-type required-field enforcement; canonical sha256 `params_hash`; final-gate guard cross-referenced against `holdout_access.log`. |
 | `backtest/cpcv.py` | Block Sharpe distribution. Equal-row block split of the dev window, fresh `strategy_factory()` per block, per-block Sharpe via the engine's formula, purge/embargo at boundaries. Replaces López de Prado path-CPCV (see `docs/validation_framework.md` § "Block Sharpe distribution"). |
+| `backtest/dsr.py` | Deflated Sharpe Ratio per Bailey & López de Prado 2014. Inputs: observed Sharpe, σ of Sharpe, skew, kurtosis, sample size, multiple-testing N. |
+| `backtest/baseline.py` | Buy-and-hold baseline Sharpe per strategy. Comparison surface, NOT sacred (per file docstring). |
+| `backtest/verdict.py` | Verdict tree orchestration. Combines DSR + MinTRL + trade-count + baseline tests into a final keep / retire / under_tested decision. |
+| `backtest/calibration.py` | Empirical threshold calibration via synthetic signal-vs-noise test bench. NOT sacred (per file docstring). |
 
 Caller convention for `load_holdout`: 
 `<phase>.<strategy_id>.<purpose>` — phase ∈ {phase3c, phase3d, 
@@ -89,13 +141,14 @@ if n_trades >= 20 else quarter_kelly`, and line 336 returns
 therefore have Kelly sizing at zero or quarter fractions. Phase 3c/3d will
 resolve this as validated strategies accumulate enough trades.
 
-## Backtest performance
+## Validation performance
 
-- Full 3-year run currently takes ~245 min on the dev machine with vectorized
-  Supertrend and BearShort committed in the working tree.
-- Supertrend alone accounts for roughly 50 min of that.
-- This is acceptable for deploy-gate runs but too slow for tight iteration —
-  Phase 3b work will lean heavily on shorter CPCV paths and cached data.
+- Single-strategy dev_cpcv (10 blocks, BTC/USDT 1H, ~29 months dev):
+  ~15-30 minutes wall-clock on the dev machine.
+- All-strategy dev_cpcv: ~13 hours wall-clock (the 2026-04-25 run from
+  19:48 ICT to ~next-day-morning UTC).
+- 3-year full backtest: deprecated as a deploy gate. CPCV on dev + DSR
+  on holdout is the gate per `docs/validation_framework.md`.
 
 ## Infrastructure
 
@@ -158,3 +211,28 @@ latter.
   fit/predict split, so path reassembly degenerates; block Sharpe preserves
   the multi-sample basis DSR requires). `docs/validation_framework.md` §
   "Block Sharpe distribution" updated to match.
+- Phase 3b infrastructure completed: DSR, MinTRL, buy-and-hold baseline,
+  verdict tree, and empirical threshold calibration all live alongside
+  CPCV. Phase 3b is now a closed item.
+- Phase 3c all-strategies dev_cpcv ran 2026-04-25: 9/10 RETIRE +
+  1/10 UNDER_TESTED (MeanReversion CPCVError). Zero strategies cleared
+  the deploy gate. Per-strategy verdicts in the table above; structural
+  diagnosis in `docs/strategy_evidence_audit_2026-04-26.md`.
+- Simulator short-pnl sign bug fixed (commit `25bd843`,
+  `paper_trading/simulator.py`). BearShort dev_cpcv re-run on the post-fix
+  simulator: observed_sharpe −2.9643 (was +1.3129 pre-fix, sign-inverted),
+  RETIRE. Branch B of the Phase 4 fork is effectively foreclosed; see
+  `docs/open_questions.md`.
+
+## 2026-04-26 — Paper state reset
+
+Paper state reset to fresh $100k baseline (both `portfolio_checkpoint.json`
+and `paper_state.json` moved to `.corrupted-pre-shortpnl-fix-*` backups).
+
+Reason: short-position realized PnL was sign-inverted by simulator bug;
+fixed in commit `25bd843`. All accumulated paper-state numbers prior to
+this reset reflected the inverted accounting and are not a valid baseline.
+
+Trials.log invalidation policy is a separate followup — historical trial
+rows touching shorts are sign-flipped but remain in the file pending
+policy decision.

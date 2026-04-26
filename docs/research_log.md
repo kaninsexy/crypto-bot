@@ -236,3 +236,89 @@ A detailed per-strategy diagnostic from the 9-of-10 3-year backtest (2026-04-19)
 - DualMomentum: incomplete run (150-min timeout)
 
 Phase 3c rescue work should start from that file's diagnosis for each strategy before proposing parameter variations.
+
+## 2026-04-26 — Phase 3c dev_cpcv all-strategies result + structural diagnosis
+
+**Empirical:** 9/10 RETIRE, 1/10 CPCVError (MeanReversion, treated as under_tested). Zero strategies cleared sr_zero_expected = +1.9007 at N=20. Only VWAP beat its baseline (+1.14 vs +0.68 ETH B&H). Four strategies net-losing in dev (Supertrend −1.64, Breakout −1.33, TrendFollowing −1.77, VolBreakout −3.62, DualMomentum −2.39). Logs: `logs/dev_cpcv_all_20260425_194818.log`. Trial rows: `backtest/trials.log` 2026-04-25 19:48 onward.
+
+**MeanReversion CPCVError diagnosis:** 4-filter AND stack (BB %B + StochRSI K cross + volume + EMA) self-suppressed below `_MIN_TRADES_PER_BLOCK` in 7/10 blocks. The strategy didn't fail to find edge — it failed to fire enough events. No row written (atomicity guarantee).
+
+**Structural diagnosis:** This is not bad luck or 10 independent overfitting events — it's overdetermined by shared substrate. 1H bar sits in a documented academic dead zone (HFT-arbitraged below, factor literature concentrates at weekly+). Single-pair forfeits the CTA √N diversification multiplier (~5× per HOP 2017). Retail-template strategies built on technical-indicator stacks have weak peer-reviewed footing pre-2000 and decayed post-2000 per Bajgrowicz/Scaillet 2012 and Marshall/Cahan/Cahan 2008.
+
+**Detailed audit:** `docs/strategy_evidence_audit_2026-04-26.md`. Per-strategy mechanism evidence, platform reliability, timeframe meta-pattern, recommendations.
+
+**Phase 3c rescue iteration is not the right next step.** N=20 rescue variations on the same substrate would be additional draws from the same noise distribution. The structural finding requires a Phase 4 scope decision before any further rescue work — see `docs/open_questions.md`.
+
+## 2026-04-26 — Simulator short-pnl fix and BearShort dev_cpcv re-run
+
+**Bug fix (commit `25bd843`).** `paper_trading/simulator.py`
+`_handle_full_sell` and `_handle_partial_sell` previously computed
+`pnl = net_proceeds − total_cost` regardless of side, inverting the realized
+PnL sign on every short close. The balance update `self.balance += net_proceeds`
+inherited the same flaw. `Position.unrealized_pnl` already branched correctly
+on `is_short`, so equity-curve points while a position was open were correct;
+the bug surfaced only on close. Refactor added a sign-aware `Position.realized_pnl`
+helper mirroring the unrealized variant, and both close paths now route
+through it. 6 unit tests in `paper_trading/tests/test_short_pnl.py` cover
+winning/losing short full-close, long-control full-close (regression guard),
+and the three matching partial-close cases. Independent verification via
+`scripts/verify_short_pnl.py` flipped both shorts ✗→✓ post-fix while longs
+remained ✓.
+
+**BearShort dev_cpcv re-run (trial_id `4f89d224107c4a61a958f051791c7a51`,
+ts 2026-04-26T14:56:07Z).** Same params_hash as the pre-fix row
+(`44136fa3...`); only the simulator changed. Result:
+
+- `observed_sharpe`: **−2.9643** (pre-fix +1.3129)
+- block Sharpe distribution: mean **−3.4565**, std 1.2563,
+  p05 −4.6607 / p25 −4.1574 / p50 −3.5887 / p75 −3.3381 / p95 −1.4290
+- `dsr_validation`: 0.0
+- `n_trades`: 198 (unchanged from pre-fix; signal logic untouched)
+- VerdictResult: **RETIRE**. trade_count_pass=True, mintrl_pass=True,
+  mt_mean_pass=False, baseline_pass=False, baseline_sharpe +1.6945,
+  mintrl 88.59 bars
+
+**Mechanistic observation.** The sign flipped cleanly but the magnitude
+amplified by ~2.2× over a clean-mirror hypothesis (clean mirror would predict
+~−1.31 / mean −1.58). Working hypothesis: **balance-scaled compounding
+asymmetry**. Pre-fix, the inverted PnL grew the simulator pot on phantom wins
+and scaled subsequent positions larger on a fictitious upward equity
+trajectory. Post-fix, the correct trajectory shrinks position size on real
+losses, compounding the drag. A single-block equity-curve diff pre vs
+post-fix would confirm but does not alter the verdict.
+
+**Scope of re-run.** BearShort is the only production strategy that opens
+shorts (verified via `is_short` grep across `strategies/`). No further
+short-affected re-runs needed. The trial appears as the last row in
+`backtest/trials.log` and is referenced from
+`docs/open_questions.md` "Phase 4 implications of the 2026-04-26 short-pnl
+fix" and the new "[OPEN, 2026-04-26] Trials.log invalidation policy after
+simulator fix" question.
+
+**Reconsideration trigger:** None on the bug fix itself — the test suite
+guards regression. The dependent `trials.log` invalidation policy is OPEN
+and tracked separately.
+
+## 2026-04-26 — Phase 4 scope decision: Branch C
+
+Phase 3c dev_cpcv at N=20 against sr_zero_expected = +1.9007 produced
+9/10 RETIRE + 1/10 UNDER_TESTED, and the BearShort post-fix re-run
+(observed_sharpe -2.9643, all block-Sharpe quantiles negative,
+dsr_validation 0.0) forecloses Branch B. The dominant input from
+`docs/strategy_evidence_audit_2026-04-26.md` is that Hypothesis B
+(retail templates lack edge regardless of timeframe) dominates
+Hypothesis A (1H/single-pair is the structural issue): the audit's own
+best case for Branch A is "rescues 1-2 borderline cases; does not
+unlock the cohort," and Cakici et al. (2024) — sophisticated ML on
+weekly barely surviving transaction costs — caps the upside of a
+daily/multi-pair retail-template redesign well below what 3-4 months
+of work justifies.
+
+Branch C preserves the Phase 3b validation harness (block-Sharpe CPCV,
+DSR, MinTRL, verdict tree, B&H baseline, threshold calibration) as
+substrate-agnostic infrastructure for whichever follow-on direction
+comes next, rather than spending it on continued retail-crypto
+iteration. The 9/10 RETIRE result is itself a real finding — the
+harness correctly identifying that this substrate doesn't carry edge
+is what it was built to do. Specific Phase 5 direction (prediction
+market bot or alternative) deliberated separately.
