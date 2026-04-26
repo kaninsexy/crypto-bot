@@ -1,0 +1,37 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml"
+  },
+  "include": [
+    "docs/**",
+    "backtest/**",
+    "portfolio/**",
+    "paper_trading/**",
+    "config.py",
+    "strategies/base.py",
+    "strategies/bear_short.py",
+    "strategies/trend_following.py",
+    "strategies/breakout.py",
+    "strategies/dual_momentum.py",
+    "CLAUDE.md"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "strategies/dca.py",
+      "strategies/grid_trading.py",
+      "strategies/vwap.py",
+      "strategies/mean_reversion.py",
+      "strategies/supertrend.py",
+      "strategies/volatility_breakout.py",
+      "docs/deploy_security.md",
+      "docs/strategy_failure_analysis_2026-04-19.md",
+      "docs/strategies.md",
+      "backtest/holdout_manifest.json",
+      "backtest/generate_holdout_manifest.py"
+    ]
+  }
+}
