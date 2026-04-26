@@ -72,6 +72,18 @@ class Position:
     def unrealized_pnl_pct(self, price: float) -> float:
         return self.unrealized_pnl(price) / self.total_cost * 100
 
+    def realized_pnl(
+        self, exit_price: float, exit_fee: float, exit_quantity: float
+    ) -> float:
+        # Excludes entry fee — matches the existing convention where the
+        # trade record's pnl is post-exit-fee only and entry fee is tracked
+        # separately in self.total_fees_paid.
+        raw = (
+            (self.avg_entry_price - exit_price) if self.is_short
+            else (exit_price - self.avg_entry_price)
+        )
+        return raw * exit_quantity - exit_fee
+
     def add_entry(self, price: float, quantity: float, cost: float):
         """Accumulate another buy into this position (DCA safety order)."""
         total_qty = self.quantity + quantity
@@ -364,11 +376,10 @@ class PaperTrading:
         fee_rate = FEE_LIMIT if signal.order_type == "limit" else FEE_MARKET
         proceeds = price * qty_to_sell
         fee = proceeds * fee_rate
-        net_proceeds = proceeds - fee
-        pnl = net_proceeds - cost_basis
+        pnl = self.position.realized_pnl(price, fee, qty_to_sell)
         pnl_pct = pnl / cost_basis * 100
 
-        self.balance += net_proceeds
+        self.balance += cost_basis + pnl
         self.total_fees_paid += fee
 
         # Reduce position
@@ -422,14 +433,15 @@ class PaperTrading:
             logger.debug("[PAPER] No position to close.")
             return
 
+        qty = self.position.quantity
+        cost_basis = self.position.total_cost
+        proceeds = price * qty
         fee_rate = FEE_LIMIT if order_type == "limit" else FEE_MARKET
-        proceeds = price * self.position.quantity
         fee = proceeds * fee_rate
-        net_proceeds = proceeds - fee
-        pnl = net_proceeds - self.position.total_cost
-        pnl_pct = pnl / self.position.total_cost * 100
+        pnl = self.position.realized_pnl(price, fee, qty)
+        pnl_pct = pnl / cost_basis * 100
 
-        self.balance += net_proceeds
+        self.balance += cost_basis + pnl
         self.total_fees_paid += fee
 
         emoji = "✅" if pnl >= 0 else "❌"
