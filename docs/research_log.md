@@ -322,3 +322,33 @@ iteration. The 9/10 RETIRE result is itself a real finding — the
 harness correctly identifying that this substrate doesn't carry edge
 is what it was built to do. Specific Phase 5 direction (prediction
 market bot or alternative) deliberated separately.
+
+## 2026-04-26 — Trials.log invalidation policy (c) implemented
+
+Policy (c) chosen from the three candidates surfaced in
+`docs/open_questions.md`: tag superseded rows in place with
+`superseded_by: '<fix-commit-sha>'`, and have `count_trials_for_dsr`
+exclude tagged rows. Implementation lives in `backtest/trials.py` —
+the optional `superseded_by` field is permitted on `smoke` and
+`full_cpcv` rows and forbidden on `final_gate` rows (a final_gate is
+the deploy-decision audit boundary; supersession would silently
+rewrite that boundary). Schema-version unchanged: the addition is
+backward-compatible with v2 because the field is optional and
+defaults to absent.
+
+The first concrete instance is the BearShort row pair: pre-fix
+trial_id `34cac215...` (commit `28cfc7a`) tagged with
+`superseded_by: "25bd843"`; post-fix trial_id `4f89d224...` (commit
+`25bd843`) untagged. After tagging, `count_trials_for_dsr("BearShort")
+= 1` (post-fix only) while `count_distinct_variations("BearShort") =
+1` (variation_id `rescue-default`, dedup unaffected).
+
+The asymmetry between `count_trials_for_dsr` (excludes superseded
+rows) and `count_distinct_variations` (does not) is intentional. The
+former counts statistical trials — each non-superseded row is one DSR
+draw against the multiple-testing null. The latter counts attempted
+parameter sets for the 20-variation iteration cap, where re-running
+the same `variation_id` after a tooling fix is one variation tried,
+not two. Re-runs of the same parameter set under different commits
+naturally collapse via shared `variation_id` regardless of the
+supersession tag.

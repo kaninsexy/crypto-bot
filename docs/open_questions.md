@@ -148,42 +148,6 @@ Phase 4 branch implications (verdict-confirmed, not provisional):
 **Status: empirical leg resolved 2026-04-26. Linked to Phase 4 branches
 deliberation above.**
 
-## [OPEN, 2026-04-26] Trials.log invalidation policy after simulator fix
-
-**Trigger.** `backtest/trials.log` now contains two BearShort `full_cpcv`
-rows with identical `params_hash` (`44136fa3...`), distinguished only by
-`git_commit`: pre-fix `28cfc7a` and post-fix `25bd843`. Both rows count
-toward `count_trials_for_dsr`, which has no notion of "superseded by
-simulator fix" vs "fresh variation." Without a policy, BearShort's effective
-multiple-testing budget is silently consumed by an artifact of the bug fix.
-
-**Three candidate policies:**
-
-- **(a) Quarantine pre-fix rows.** Move them to a sidecar file (e.g.
-  `backtest/trials.log.quarantine`) and stop counting. Cleanest separation,
-  but requires defining a sidecar schema and a process for adding future
-  bug-superseded rows. No schema change to `trials.log` itself.
-- **(b) Leave both rows counting toward the N=20 budget.** Most
-  conservative — penalises the strategy for the simulator bug. Aligns with
-  the no-bypass spirit of `trials.log` but conflates a tooling defect with
-  the strategy's edge claim. After 19 more BearShort variations under
-  this policy, BearShort exhausts its iteration cap from this single
-  combined-row pair.
-- **(c) Tag pre-fix rows in place with a bug-suppression flag** (e.g.
-  `superseded_by: "simulator_fix_25bd843"`) and have `count_trials_for_dsr`
-  exclude tagged rows. Cleanest semantics, but requires a schema addition
-  to `trials.log` — a sacred-harness file. Per CLAUDE.md the schema change
-  itself needs human approval; the agent cannot implement (c) autonomously
-  even after policy is chosen.
-
-**Note.** This is the first concrete instance of the followup that was
-flagged at the 2026-04-26 paper-state reset discussion. A decision is
-needed before any future BearShort variation is run, since variation #1
-under whichever policy will set the precedent for downstream short-affected
-trials handling.
-
-**Status: OPEN. Awaiting Kanin.**
-
 ## Resolved
 
 Recently resolved items, kept here for one revision cycle so the audit
@@ -257,6 +221,37 @@ Those are downstream decisions inside whichever branch is chosen.
 2. Open a fresh chat with a tight handoff prompt referencing this open question. Don't re-litigate Phase 3c findings; treat them as established.
 3. State which branch you're leaning toward and why before exploring; otherwise the conversation drifts into re-justifying the data.
 3a. **If no lean exists**, the agent walks through the four decision criteria applied to the user's current situation and offers a tentative recommendation. The "no anchoring" rule resumes once the user has a position to push back from. The fallback exists because rule 3 produces a stuck state when the user genuinely hasn't formed a prior — leaving the user staring at a blank prompt is worse than a tentative recommendation that gets pressure-tested.
-4. Whichever branch is chosen, update `docs/MASTER_PLAN.md` and `docs/bot_status.md` deliberately as part of the Phase 4 kickoff — not before.
+4. Whichever branch is chosen, the deliberation chat ends with an EXIT RAMP — not just a rationale paragraph. The exit ramp lists the implementation paths (e.g., "Option A: ship the implementation now via Claude Code prompt / Option B: defer with one-line doc update / Option C: separate follow-on chat needed"), recommends one, and surfaces what files / re-uploads / next-chat handoffs are needed. The user should never finish a deliberation chat wondering "now what?" — the predictable next ask belongs in the chat's final message per CLAUDE.md "Single-message completeness."
+5. Whichever branch is chosen, update `docs/MASTER_PLAN.md` and `docs/bot_status.md` deliberately as part of the kickoff — not before. (Was step 4 in the prior version; renumbered.)
 
 **Resolved 2026-04-26 — Branch C selected.** See `docs/bot_status.md` '## Phase 4 scope: Branch C' for the rationale. Trials.log invalidation policy (separate question) remains OPEN.
+
+### Trials.log invalidation policy after simulator fix
+
+**Trigger.** `backtest/trials.log` now contains two BearShort `full_cpcv`
+rows with identical `params_hash` (`44136fa3...`), distinguished only by
+`git_commit`: pre-fix `28cfc7a` and post-fix `25bd843`. Both rows count
+toward `count_trials_for_dsr`, which has no notion of "superseded by
+simulator fix" vs "fresh variation." Without a policy, BearShort's effective
+multiple-testing budget is silently consumed by an artifact of the bug fix.
+
+**Three candidate policies:**
+
+- **(a) Quarantine pre-fix rows.** Move them to a sidecar file (e.g.
+  `backtest/trials.log.quarantine`) and stop counting. Cleanest separation,
+  but requires defining a sidecar schema and a process for adding future
+  bug-superseded rows. No schema change to `trials.log` itself.
+- **(b) Leave both rows counting toward the N=20 budget.** Most
+  conservative — penalises the strategy for the simulator bug. Aligns with
+  the no-bypass spirit of `trials.log` but conflates a tooling defect with
+  the strategy's edge claim. After 19 more BearShort variations under
+  this policy, BearShort exhausts its iteration cap from this single
+  combined-row pair.
+- **(c) Tag pre-fix rows in place with a bug-suppression flag** (e.g.
+  `superseded_by: "simulator_fix_25bd843"`) and have `count_trials_for_dsr`
+  exclude tagged rows. Cleanest semantics, but requires a schema addition
+  to `trials.log` — a sacred-harness file. Per CLAUDE.md the schema change
+  itself needs human approval; the agent cannot implement (c) autonomously
+  even after policy is chosen.
+
+**Resolved 2026-04-26 — Policy (c) implemented (tag in place + filter). See backtest/trials.py for the schema + filter, and the tagged BearShort pre-fix row trial_id 34cac215...** Future tooling-defect events follow the same pattern: tag superseded rows with `superseded_by: '<fix-commit-sha>'` and the DSR counter handles the rest.
