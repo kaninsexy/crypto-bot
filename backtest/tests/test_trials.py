@@ -622,3 +622,88 @@ def test_full_cpcv_row_unchanged_in_v2():
     assert rows[0]["schema_version"] == 2
     for k in ("verdict", "trade_count_pass"):
         assert k not in rows[0]
+
+
+# ── Policy (c): superseded_by tooling-fix invalidation tag ───────────────────
+
+def test_superseded_by_round_trips_on_full_cpcv():
+    """A full_cpcv row carrying superseded_by writes and reads back cleanly."""
+    ev = _base_event("full_cpcv", variation_id="v1")
+    ev["superseded_by"] = "25bd843"
+    trials.record_trial(ev)
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert len(rows) == 1
+    assert rows[0]["superseded_by"] == "25bd843"
+
+
+def test_count_trials_for_dsr_excludes_superseded_rows():
+    """A superseded full_cpcv row does not count toward the DSR trial budget."""
+    ev_pre = _base_event("full_cpcv", variation_id="v-pre")
+    ev_pre["superseded_by"] = "25bd843"
+    trials.record_trial(ev_pre)
+
+    ev_post = _base_event("full_cpcv", variation_id="v-post")
+    trials.record_trial(ev_post)
+
+    # 2 rows on disk, but only the post-fix one counts toward DSR.
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert len(rows) == 2
+    assert trials.count_trials_for_dsr("VWAP") == 1
+
+
+def test_count_trials_for_dsr_includes_non_superseded_rows_same_strategy():
+    """The supersession filter is per-row, not per-strategy: a strategy
+    with a tagged row plus an untagged row contributes its untagged row."""
+    ev_tagged = _base_event("full_cpcv", variation_id="vA")
+    ev_tagged["superseded_by"] = "25bd843"
+    trials.record_trial(ev_tagged)
+
+    ev_clean_1 = _base_event("full_cpcv", variation_id="vB")
+    trials.record_trial(ev_clean_1)
+
+    ev_clean_2 = _base_event("full_cpcv", variation_id="vC")
+    trials.record_trial(ev_clean_2)
+
+    assert trials.count_trials_for_dsr("VWAP") == 2
+
+
+def test_count_distinct_variations_unaffected_by_supersession():
+    """Regression guard for the intentional asymmetry: supersession does
+    not reduce the iteration-cap count. Two rows sharing variation_id
+    still collapse to one variation regardless of supersession state."""
+    ev_pre = _base_event("full_cpcv", variation_id="rescue-default")
+    ev_pre["superseded_by"] = "25bd843"
+    trials.record_trial(ev_pre)
+
+    # Same variation_id, post-fix run.
+    ev_post = _base_event("full_cpcv", variation_id="rescue-default")
+    trials.record_trial(ev_post)
+
+    # A genuinely new variation.
+    ev_new = _base_event("full_cpcv", variation_id="rescue-vol-scaled")
+    trials.record_trial(ev_new)
+
+    assert trials.count_distinct_variations("VWAP") == 2
+
+
+def test_superseded_by_rejected_on_final_gate():
+    """final_gate rows must not carry superseded_by — supersession of a
+    deploy-decision boundary would silently rewrite the audit trail."""
+    ev = _base_event("final_gate")
+    ev["superseded_by"] = "25bd843"
+    with pytest.raises(trials.TrialSchemaError, match="not allowed on final_gate"):
+        trials.record_trial(ev)
+
+
+def test_superseded_by_rejected_when_empty_string():
+    ev = _base_event("full_cpcv")
+    ev["superseded_by"] = ""
+    with pytest.raises(trials.TrialSchemaError, match="must be non-empty"):
+        trials.record_trial(ev)
+
+
+def test_superseded_by_rejected_when_non_string():
+    ev = _base_event("full_cpcv")
+    ev["superseded_by"] = 25
+    with pytest.raises(trials.TrialSchemaError, match="must be a string"):
+        trials.record_trial(ev)

@@ -55,6 +55,21 @@ Optional any time:
   buy_and_hold_sharpe: float | null
   notes: str | null
 
+Optional on trial_type ∈ {smoke, full_cpcv} only:
+  superseded_by: str | null   (commit sha of a tooling fix that
+                               invalidates this row; tagged rows are
+                               excluded from count_trials_for_dsr.
+                               Forbidden on final_gate rows — a
+                               final_gate is the audit boundary and
+                               cannot be silently superseded.)
+
+The superseded_by field is the in-place tag implementation of Policy
+(c) for trials.log invalidation after a simulator/tooling defect (see
+docs/research_log.md 2026-04-26 entry, "Trials.log invalidation policy
+(c)" and docs/open_questions.md "Resolved" section). The addition is
+backward-compatible: rows written under the prior schema parse cleanly
+because the field is optional and defaults to absent.
+
 Final-gate guard
 ────────────────
 A strategy may have at most one `final_gate` row per split epoch.  The
@@ -375,6 +390,24 @@ def _validate_event(event: dict) -> None:
         if not isinstance(event["notes"], str):
             raise TrialSchemaError("'notes' must be a string or null")
 
+    # superseded_by — Policy (c) tooling-fix invalidation tag.
+    # Optional on smoke / full_cpcv; forbidden on final_gate (a
+    # final_gate is the audit boundary; supersession would silently
+    # rewrite a deploy-decision artifact).
+    if "superseded_by" in event and event["superseded_by"] is not None:
+        if trial_type == "final_gate":
+            raise TrialSchemaError(
+                "'superseded_by' is not allowed on final_gate rows; "
+                "supersession of a final_gate would silently rewrite "
+                "the deploy-decision audit boundary"
+            )
+        if not isinstance(event["superseded_by"], str):
+            raise TrialSchemaError(
+                "'superseded_by' must be a string (commit sha) or null"
+            )
+        if event["superseded_by"] == "":
+            raise TrialSchemaError("'superseded_by' must be non-empty")
+
 
 # ── Canonical hashing ─────────────────────────────────────────────────────────
 
@@ -538,6 +571,14 @@ def count_trials_for_dsr(strategy_id: str) -> int:
 
     Smoke trials are excluded — they are diagnostic, not validation
     signal — per docs/validation_framework.md.
+
+    Rows with `superseded_by` set are also excluded — Policy (c) for
+    trials.log invalidation after a tooling defect: a row whose
+    underlying simulator behaviour has been corrected is no longer a
+    valid draw against the multiple-testing null. The supersession tag
+    is the agent-recorded, human-reviewed evidence of that. See
+    docs/research_log.md 2026-04-26 "Trials.log invalidation policy (c)
+    implemented".
     """
     n = 0
     for _ in iter_jsonl_filtered(
@@ -545,6 +586,7 @@ def count_trials_for_dsr(strategy_id: str) -> int:
         lambda e: (
             e.get("strategy_id") == strategy_id
             and e.get("trial_type") in {"full_cpcv", "final_gate"}
+            and not e.get("superseded_by")
         ),
     ):
         n += 1
@@ -556,6 +598,16 @@ def count_distinct_variations(strategy_id: str) -> int:
 
     Feeds the 20-variation iteration cap from CLAUDE.md.  All trial
     types contribute (a smoke run still counts as a variation tried).
+
+    NOTE: This function intentionally does NOT filter on
+    `superseded_by`. Variation-level dedup already collapses
+    pre-fix/post-fix re-runs of the same parameter set to one entry
+    (the BearShort `rescue-default` row pair shares its variation_id),
+    so the supersession tag is unnecessary here. Asymmetry with
+    count_trials_for_dsr is intentional: that function counts
+    statistical trials (each row is one DSR-trial draw), while this
+    one counts attempted parameter sets (each variation_id is one
+    iteration-cap slot).
     """
     seen: set[str] = set()
     for ev in iter_jsonl_filtered(
