@@ -99,6 +99,33 @@ all 10 blocks were valid. Tracked as an open harness-design
 question in `docs/open_questions.md` § "Block-isolated CPCV
 warmup amortization (structural)".
 
+## Phase 4.B kickoff — data layer running results
+
+Tracks A-D delivered 2026-04-29; Track C drift caught and
+corrected 2026-04-30.
+
+| Track | Deliverable | Status |
+|---|---|---|
+| A | data/okx_perp.py — OKX USDT-M perp OHLCV ingestion (CCXT swap-mode, separate cache namespace) + 13 unit tests | Landed |
+| B | data/okx_funding.py — funding-rate history with 1h mark-OHLCV snap-merge + 12 unit tests | Landed |
+| C | research/funding-rate-literature.md — hypothesis-of-record with Variation #1 single-pair + Variation #2 stub, pre-trial gates persisted | Landed (drift corrected 2026-04-30) |
+| D | research/funding-rate-risk-model.md — per-leg margin, liquidation, funding payment math, exit triggers (variation-agnostic per Task 2 scope statement) | Landed |
+
+Live OKX halt-consult verification (scripts/phase_4b_halt_consult_check.py):
+BTC-USDT-SWAP and ETH-USDT-SWAP both PASS history-depth (>= dev_end
+2025-09-12) and 8h funding cadence (90 settlements, exact 8h).
+
+Tests: 263 passed (238 pre-existing backtest + 25 new data layer).
+No changes to trials.log, holdout_manifest.json, holdout_access.log.
+
+Tracks E-I (perp simulator, engine_perp, run_cpcv_perp, manifest
+schema for first pair, position management) are gated on G1/G2/G3
+chat decisions (G1 = StrategySlot unchanged + new BaseSimulator
+Protocol; G2 = parallel run_cpcv_perp with shared cpcv_common.py;
+G3 = `legs` field + `funding_cadence_hours` for single-pair
+Variation #1 entry, multi-pair manifest schema deferred to
+Variation #2). Sign-offs not yet committed.
+
 ## Phase 4 scope: Branch C (selected 2026-04-26)
 
 Phase 3c dev_cpcv at N=20 against sr_zero_expected = +1.9007 produced

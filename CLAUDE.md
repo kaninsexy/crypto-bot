@@ -238,6 +238,35 @@ Before sending: does this message contain everything the user needs to act
 on the current goal without coming back to ask? If "now do X" is
 predictable, X belongs in the current response.
 
+### Pre-trial gates persist in project files, not just chat handoffs
+
+When a chat-level scoping decision creates a constraint on
+future variation design ("Variation #1 must be single-pair",
+"manifest schema extends additively only", etc.), the
+constraint is persisted in the relevant per-strategy
+literature file under `research/` AND in `docs/MASTER_PLAN.md`
+before the chat closes. Chat handoff prompts are ephemeral;
+project files are durable. A gate that lives only in a
+handoff prompt will be lost the moment a future chat starts
+without that prompt.
+
+The persistence pattern: each `research/<strategy>-
+literature.md` file carries a "Pre-trial gates (locked)"
+section near the top listing every locked constraint with
+source citation (chat date, venue chat, MASTER_PLAN section).
+Variation rows below reference these gates explicitly. A
+Variation row that contradicts a gate is a drift bug — caught
+by reading the literature file end-to-end before any
+variation work, not by re-reading the chat handoff.
+
+Today's drift case (2026-04-30 chat): Phase 4.B venue scoping
+locked gate #8 ("first dev_cpcv trial single-pair before adding
+alts") in chat 2026-04-29. Track C produced a literature file
+with Variation #1 = top-1-from-basket because the gate wasn't
+persisted in any project file and the Claude Code prompt
+didn't carry it forward. Persistence rule prevents this class
+of drift.
+
 ### Response format after Claude Code output
 
 Terse summary. Do not list which lines were touched or explain code

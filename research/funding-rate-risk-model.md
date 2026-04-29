@@ -22,6 +22,20 @@ The model assumes:
   ETH SWAP at Phase 4.B kickoff.
 - Initial position is delta-neutral by equal-notional construction.
 
+## Variation scope
+
+Per-leg margin, liquidation calculation, funding-payment math,
+and exit triggers in this document apply to BOTH Variation #1
+(single-pair) AND Variation #2+ (multi-pair selection) — the
+leg-level risk model is variation-agnostic.
+
+Universe-selection layer (which pairs are eligible at any
+evaluation, refresh cadence, lookahead-bias avoidance) is
+EXPLICITLY OUT OF SCOPE for this document and is deferred to
+the Variation #2 hypothesis-of-record entry in research/
+funding-rate-literature.md. Variation #1 runs single-pair
+(BTC) per pre-trial gate #8.
+
 ## 1. Per-leg margin: cross vs isolated
 
 OKX USDT-M offers both **cross margin** (one collateral pool funds

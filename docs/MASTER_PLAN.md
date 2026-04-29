@@ -317,6 +317,16 @@ derivatives licensing — at that point 4.B (or surviving live-deploy
 of a 4.B passer) migrates to the licensed venue for the PIT
 exemption.
 
+**Variation scope — locked 2026-04-29 (persisted 2026-04-30):**
+Variation #1 = single-pair (legs: spot BTC/USDT + perp
+BTC-USDT-SWAP). Multi-pair top-N-from-basket selection is
+Variation #2 with its own hypothesis-of-record entry,
+manifest schema extension, and CPCV multi-pair path
+verification. Source: chat 2026-04-29 venue scoping pre-trial
+gates list (gate #8). See research/funding-rate-literature.md
+§ "Pre-trial gates (locked)" for the persistent
+statement of this constraint.
+
 #### Phase 4.C — Branch decision (revisited)
 
 After 4.A and 4.B verdicts are in, the Branch A vs Branch C question is

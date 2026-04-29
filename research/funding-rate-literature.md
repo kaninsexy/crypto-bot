@@ -31,6 +31,31 @@ trial results land. Funding-rate-harvest is the one Phase-4 entry
 where the synthesis acknowledged the citation slot as not-yet-locked;
 locking it is a pre-trial deliverable.
 
+## Pre-trial gates (locked)
+
+Constraints persisted from Phase 4.B venue scoping (chat
+2026-04-29) and Tracks A-D drift correction (2026-04-30). These
+are hard constraints on Variation #N hypothesis design.
+Deviation requires updating this section explicitly with
+rationale, not silent deviation in a Variation row.
+
+1. **Gate #8 — single-pair-first**: Variation #1 is single-pair
+   (legs: spot BTC/USDT + perp BTC-USDT-SWAP via OKX). Multi-
+   pair selection (top-N from basket) is Variation #2 with its
+   own hypothesis row. Source: chat 2026-04-29 venue scoping
+   pre-trial gates list.
+2. **Gate (no-p-hacking)**: Each variation requires a primary
+   peer-reviewed source citation before record_trial(trial_
+   type='full_cpcv'). Variation #1 currently has a citation
+   gap (placeholder <author / paper / year / venue>) — must be
+   filled before queue. Source: CLAUDE.md no-p-hacking rule.
+3. **Gate (post-tax economics)**: Per-strategy expected Sharpe
+   / required-funding-rate threshold derives from the post-tax
+   baseline (~7.1-8.2% APY after Thai PIT 25-35% per Section
+   40(4)(h) classification), not the pre-tax ~10.95% baseline.
+   Source: docs/research_log.md § "Thai SEC venue / derivatives
+   status (logged 2026-04-29)".
+
 ## Phase 3c context
 
 Funding-rate harvest was not in the Phase 3c portfolio — it requires a
@@ -40,51 +65,28 @@ extended in the venue resolution at commit `241983f`) added the
 substrate decision: OKX USDT-M perp + USDT spot, accept Thai PIT on
 funding income (Branch 1 of three branches surfaced at scoping).
 
-## Starting hypothesis (variation #1)
+## Strategy archetype
 
-**Delta-neutral cash-and-carry: long spot + short perpetual on the
-highest-funding-rate USDT-M majors. Position is held while the per-
-settlement funding rate is positive and the leg-margin / liquidation
-cushion is intact.**
+Delta-neutral cash-and-carry: long spot + short perpetual at equal
+notional. Income source: positive funding rate paid to shorts at
+each 8-hour OKX USDT-M settlement.
 
 Mechanism: when funding > 0, longs on the perp pay shorts at each
-8-hour settlement (OKX USDT-M cadence — verified by
-`data/okx_funding.py:detect_funding_cadence`, see Phase 4.B Track B
-HALT-AND-CONSULT check). The bot holds the short perp leg; an equal-
-notional long spot leg cancels first-order delta exposure. Positive
-funding is collected as cash on the perp leg; the spot leg
-contributes only a small basis P&L from spot↔perp price drift, which
-is bounded by the funding cadence × volatility within a settlement
-period.
+settlement (cadence verified live 2026-04-29 via
+`scripts/phase_4b_halt_consult_check.py` — median/min/max all
+8.00h over 90 settlements on BTC and ETH SWAP). The bot holds the
+short perp leg; an equal-notional long spot leg cancels first-
+order delta exposure. Positive funding is collected as cash on
+the perp leg; the spot leg contributes only a small basis P&L
+from spot↔perp price drift, bounded by the funding cadence ×
+volatility within a settlement period.
 
-Pre-tax baseline funding APY ~10.95% per the 2026-04-29 chat synthesis
-(`docs/research_log.md` § "AI/algo trading viability"). This is the
-*pool* APY before edge selection — picking only the top-funding majors
-at any moment increases this. The selection layer is itself a
-parameter that variation #1 fixes (top-1, rebalanced at each
-settlement) so the multi-testing surface stays bounded.
-
-### Source citations (variation #1)
-
-**Primary peer-reviewed citation — TO BE FILLED BEFORE FIRST TRIAL:**
-
-> *<author / paper / year / venue — must be one of the "multiple
-> 2024–2025 funding-rate-harvest papers" referenced in
-> `docs/research_log.md` § "AI/algo trading viability". Pre-trial
-> verification gate: confirm authors, exact title, journal, year,
-> and methodology section so this hypothesis cites a specific
-> empirical result, not a synthesis pointer.>*
-
-Supporting:
-
-- `docs/research_log.md` § "AI/algo trading viability" — synthesis
-  ranks funding-rate harvest #1 among retail-accessible crypto
-  edges; baseline ~10.95% pre-tax APY anchor.
-- `docs/research_log.md` § "Thai SEC venue / derivatives status
-  (logged 2026-04-29)" — venue / tax substrate.
-- OKX exchange documentation — funding mechanics, 8h settlement
-  cadence on USDT-M majors (verified empirically via the Track B
-  cadence detector against BTC/ETH SWAP).
+Pre-tax baseline funding APY ~10.95% per the 2026-04-29 chat
+synthesis (`docs/research_log.md` § "AI/algo trading viability").
+The pair-selection layer (single-pair vs multi-pair top-N) is
+NOT part of the strategy archetype — see "Pre-trial gates
+(locked)" above and the per-Variation entries below for the
+locked design choice per variation.
 
 ## Post-tax economic baseline
 
@@ -107,47 +109,92 @@ the post-tax APY baseline, not the pre-tax number. The 7.1–8.2%
 post-tax baseline is the gross-of-execution-and-financing-costs
 ceiling; net-of-fees net-of-borrow Sharpe is bounded below this.
 
-## Variation #1 — full specification
+## Variation #1 — `phase4b-delta-neutral-singlepair-btc-v1`
 
-| field | value |
-|---|---|
-| `strategy_id` | `FundingRateHarvest` (final name TBD; manifest schema is gated G3) |
-| variation_id | `phase4b-delta-neutral-top1-v1` |
-| Universe | OKX USDT-M perp + USDT spot, top-N majors by liquidity (initial: BTC, ETH; expand once Track A history depth + Track B cadence both verified for additional majors) |
-| Selection | At each 8h settlement, rank candidates by trailing 24-hour funding rate; long the spot + short the perp on the top-1 (winner-take-all) |
-| Sizing | Equal notional on long-spot + short-perp legs (delta-neutral at entry) |
-| Entry trigger | Top-1 funding rate > threshold (parameter; default = expected execution + financing cost band, sourced from the to-be-locked primary citation) |
-| Hold rule | Maintained while funding remains positive and maintenance-margin cushion ≥ threshold |
-| Exit trigger A | Funding flips to negative for N consecutive settlements (parameter) |
-| Exit trigger B | Maintenance-margin cushion breach (parameter) |
-| Rebalance | Re-rank at each settlement; rotate to new top-1 only on rank change |
-| Timeframe (manifest) | Settlement-aligned (8h native). Manifest entry shape is pending approval gate G3 — out of this prompt's scope |
+**Pre-trial gate #8 (locked, persisted from Phase 4.B venue
+scoping 2026-04-29):** Variation #1 must be single-pair. The
+legs are spot BTC/USDT (translated to OKX BTC-USDT at the
+data-layer boundary) and perp BTC-USDT-SWAP. Multi-pair
+selection (top-N by funding rate across a basket) is reserved
+for Variation #2 with its own hypothesis row.
 
-The threshold and N parameters are NOT free variables here; they will
-be set from the to-be-locked primary citation's reported execution-cost
-band and post-flip persistence statistics.
+**Hypothesis.** Equal-notional long-spot + short-perp on
+BTC-USDT-SWAP + BTC/USDT, held continuously while funding rate
+is positive. Income source: positive funding paid to shorts at
+each 8h settlement on OKX USDT-M.
 
-## Variations #2+ (stubs)
+**Substrate.** OKX (USDT-M perp + USDT spot). Funding cadence
+8h verified live 2026-04-29 via scripts/phase_4b_halt_consult_
+check.py (median/min/max all 8.00h over 90 settlements). Data
+layer: data/okx_perp.py + data/okx_funding.py with separate
+cache namespaces.
 
-These slots are RESERVED for later trial entries. Each requires its
-own source-cited justification appended below before any trial runs,
-per the no-p-hacking rule. **Stubs are not pre-justified hypotheses —
-they are placeholders so the variation accounting in
-`count_distinct_variations` is auditable.**
+**Source citations.**
+- <author / paper / year / venue> — primary funding-rate-
+  harvest empirical paper, baseline ~10.95% pre-tax annualised
+  APY before edge selection. CITATION GAP: must be filled
+  before the first trial appends a full_cpcv row to trials.log
+  per CLAUDE.md no-p-hacking rule.
+- docs/research_log.md § "Thai SEC venue / derivatives status
+  (logged 2026-04-29)" — post-tax baseline ~7.1-8.2% after
+  Thai PIT 25-35% on Section 40(4)(h) classification.
+- docs/MASTER_PLAN.md § "Phase 4.B" — Branch 1 venue resolution.
 
-### Variation #2 — TBD
+**Parameters.** [TBD before trial-queue per Variation #1
+parameter design; below are placeholder slots, fill before
+record_trial(trial_type='full_cpcv'):]
+- timeframe: <TBD per timeframe-per-strategy principle; OHLCV
+  resolution affects liquidation monitoring + slippage
+  modeling, not the funding signal itself which fires at 8h>
+- target_vol_annual: <TBD>
+- notional_capital_per_leg: <TBD; must be equal across legs
+  for delta-neutrality at entry>
+- exit_funding_flip_n_settlements: <TBD; consecutive negative
+  funding settlements that trigger close>
+- exit_margin_breach_threshold: <TBD; cushion above
+  maintenance margin that triggers de-risk>
 
-> *Citation slot:* <author / paper / year / venue>
-> *Hypothesis:* (to be filled — must specify exactly what changes
-> from variation #1: selection layer, sizing rule, exit trigger,
-> universe expansion, etc.)
-> *Why this and not random sweep:* (must answer with a peer-
-> reviewed source — generic appeals to "more parameters" or "different
-> threshold" do not clear the bar.)
+**Expected Sharpe direction.** Positive but materially below
+the pre-tax-APY-implied bound. Post-tax baseline ~7.1-8.2%
+before perp fees, spot fees, slippage, and long-leg vol drag
+(the long-spot leg's price-PnL is hedged by the short-perp
+leg, but tracking error from price moves is bounded by funding
+cadence × volatility — see research/funding-rate-risk-model.md
+§ "Combined-position sanity").
 
-### Variation #3+ — TBD (slots open up to 20-cap minus prior-trial slots)
+**Verdict-tree precondition.** trade-count floor: continuous
+hold means n_trades may be ~1 per dev block (one open + one
+close per regime period). The verdict tree's
+min_trade_count=30 floor is at risk; the strategy's CPCV
+interpretability depends on funding-payment-event count, not
+trade count. Surface this as an open question before queuing
+CPCV — may require harness adaptation or a different signal
+boundary definition.
 
-Same shape as variation #2.
+## Variation #2 — `phase4b-delta-neutral-top-N-funding-v1` (STUB, NOT QUEUED)
+
+Multi-pair selection layer: rank OKX USDT-M perps by current
+funding rate, pick top-N by some criterion (top-1 by raw rate,
+top-N by liquidity-adjusted rate, threshold-based, etc.),
+refresh at funding-cadence boundaries. Equal-notional two-leg
+position on each selected pair.
+
+**Status: STUB, not queued.** Variation #1 must run first per
+pre-trial gate #8. This variation gets its own hypothesis-of-
+record fill before queue, including:
+- Universe specification (which pairs are eligible; refresh
+  cadence; lookahead-bias avoidance)
+- Selection rule (top-N, threshold, liquidity-adjusted)
+- Citation: <author / paper / year / venue> — must name the
+  primary peer-reviewed source for cross-sectional funding-
+  rate selection edge before queue
+- Manifest schema extension: Variation #1's single-pair
+  manifest entry doesn't support multi-pair basket. New
+  manifest schema (e.g., `basket: [...]` field) is sacred-
+  harness change and requires explicit chat approval.
+- CPCV path: Variation #1 uses run_cpcv_perp on a single leg
+  pair. Variation #2's basket adds per-pair leg state — the
+  block-Sharpe contract preservation needs verification.
 
 ## Variation discipline
 

@@ -352,3 +352,22 @@ mid-2026.
 
 See `docs/research_log.md` § "Thai SEC venue / derivatives status
 (logged 2026-04-29)" for the full evidence base.
+
+### Phase 4.B Variation #1 scope (single-pair vs multi-pair)
+
+**Resolved 2026-04-29 (persisted 2026-04-30) — single-pair
+for Variation #1.** Variation #1 trades equal-notional long
+spot BTC/USDT + short perp BTC-USDT-SWAP. Multi-pair selection
+(top-N by funding rate across a basket) is Variation #2 with
+its own hypothesis row, manifest schema extension, and CPCV
+multi-pair path.
+
+Today's Tracks A-D produced research/funding-rate-literature.md
+with a Variation #1 that drifted to multi-pair top-1 selection.
+Drift caught and corrected 2026-04-30; pre-trial gate #8 now
+persisted in research/funding-rate-literature.md § "Pre-trial
+gates (locked)" + docs/MASTER_PLAN.md Phase 4.B section so the
+gate cannot be lost in a future chat handoff.
+
+See research/funding-rate-literature.md for the persistent
+gate statement and Variation #1/#2 hypothesis structure.
