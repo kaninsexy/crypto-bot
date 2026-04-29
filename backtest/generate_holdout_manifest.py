@@ -53,7 +53,7 @@ _TIMEFRAME: str = "1h"
 # DualMomentum rotates across a 3-asset universe; config.STRATEGY_SYMBOLS only
 # records its primary symbol.  Any future multi-symbol strategy needs an entry here.
 _MULTI_SYMBOL_OVERRIDES: dict[str, list[str]] = {
-    "DualMomentum": ["BTC/USDT", "ETH/USDT", "BNB/USDT"],
+    "DualMomentum": ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "XRP/USDT"],
 }
 
 _MONTHS_RE = re.compile(r"_(\d+)mo\.parquet$")

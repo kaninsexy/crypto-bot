@@ -1,0 +1,2 @@
+{"ts": "2026-04-29T10:41:00.262607+00:00", "strategy_id": "DualMomentum", "regenerated": true, "old_holdout_start": "2025-09-12T14:12:00+00:00", "new_holdout_start": "2025-09-14T13:24:00+00:00"}
+{"ts": "2026-04-29T10:41:00.263975+00:00", "type": "stale_dsr_warning", "message": "STALE DSR: the following strategies had their split redrawn. Prior holdout DSR results are invalid and must be recomputed on the new split: ['DualMomentum']", "affected_strategies": ["DualMomentum"]}

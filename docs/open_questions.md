@@ -33,6 +33,18 @@ and CPCV sweeps off the MacBook.
   and "Phase D + E combined". Both are pre-OKX-migration phase letters and
   the wrong slot count (current portfolio is 10 strategies). Batch cleanup
   task, not urgent.
+- `paper_trading/simulator.py:107-108` — `TradeRecord.entry_time` and
+  `exit_time` record `datetime.now()` (wall-clock at the moment the
+  simulator processes the trade), not the historical candle's timestamp.
+  Surfaced during DualMomentum smoke v2 (2026-04-29): bucketing the 44
+  dev-period trades by `t.entry_time` placed all of them in the actual
+  wall-clock instant of the backtest run (2026-04-29 ~11:45 UTC) rather
+  than across the 2023-04-30 → 2025-09-12 dev window. Workaround used:
+  wrap `generate_signal` in the strategy and capture `df.index[-1]` on
+  every non-HOLD signal. Affects any retrospective trade-time analysis
+  that consumes `TradeRecord.entry_time` directly. Not blocking; needs a
+  separate fix that threads the candle timestamp through
+  `simulator.execute_signal` → `_handle_buy` / `_handle_full_sell`.
 
 (`config.py` MeanReversion comment was fixed alongside this batch — line 75
 now correctly reflects the ETH/USDT pair with the LINK→ETH provenance noted
@@ -147,6 +159,64 @@ Phase 4 branch implications (verdict-confirmed, not provisional):
 
 **Status: empirical leg resolved 2026-04-26. Linked to Phase 4 branches
 deliberation above.**
+
+## Harness design notes
+
+### Block-isolated CPCV warmup amortization (structural)
+
+Both Supertrend trial #1 (commit `d29e604`, daily-TF resurrection) and
+DualMomentum trial #1 (this commit, weekly-equivalent on a 5-asset
+basket) hit the same wall: block-isolated CPCV pays the strategy's
+formation/warmup period in *every* block, eating a significant fraction
+of each ~2078-candle block on the current dev-window length. Long-
+formation strategies (≥168 candles or so) risk falling below
+`_MIN_TRADES_PER_BLOCK = 5` in a majority of blocks regardless of how
+many trades the strategy fires on a single full-dev-window pass.
+
+Numerical pattern observed:
+
+| Strategy | Lookback | Single-pass trades | Block-isolated CPCV result |
+|---|---:|---:|---|
+| Supertrend (daily TF) | 21 daily ≈ 504 hourly | 13 over ~880 days | 0/10 valid blocks (severe) |
+| DualMomentum (weekly-eq, 5-asset) | 504 hourly | 44 over ~865 days | 4/10 valid blocks (marginal) |
+
+Implication for remaining Phase 4.A resurrections:
+
+- **TrendFollowing daily-multi-asset HOP-style:** likely affected (HOP
+  needs ≥126-day vol windows per Daniel-Moskowitz pattern).
+- **Breakout Zarattini ensemble:** definitely affected (lookbacks up to
+  250–360 candles, with the 360-candle lookback at ~17% of each
+  2078-candle block).
+- **MeanReversion BTC-residual:** depends on residual-estimation window
+  length; if rolling-beta lookback ≥168 candles, affected.
+
+Decision deferred until those resurrections are scoped. Three candidate
+responses, none locked in yet:
+
+(a) **Accept the rejection as harness-correct** — strategies whose
+    warmup-to-block ratio is too high are genuinely under-tested on
+    this dev-window length. Long-formation strategies need more dev
+    history to validate; the harness is correctly refusing to certify
+    them on insufficient data.
+
+(b) **Reduce CPCV block count from 10 to a smaller value** to increase
+    per-block size. Trade-off: fewer Sharpe samples → weaker DSR
+    statistical power. Phase 3c was calibrated at `n_blocks=10`;
+    changing it changes the multiple-testing math across all strategies
+    and is sacred-harness-adjacent. Probably not the right move.
+
+(c) **Add a strategy-warmup-aware block sizer to `cpcv.py`** that gives
+    long-warmup strategies fewer/larger blocks automatically (e.g.,
+    via a new `min_block_candles_after_warmup` config field). This is a
+    contract-preserving change to `cpcv.CPCVConfig` if added as an
+    optional field; could be a contract change if the block-count
+    semantics shift. Sacred-harness schema-stable code change, requires
+    explicit human approval per CLAUDE.md.
+
+Tracked separately from per-strategy retirement decisions — both
+Supertrend and DualMomentum are retired regardless of which response
+is chosen, since neither has academic foundation supporting further
+variation under the no-p-hacking rule.
 
 ## Resolved
 

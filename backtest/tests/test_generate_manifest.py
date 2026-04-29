@@ -24,14 +24,31 @@ import backtest.logs as logs
 # not the end date itself.  All expected holdout_start values below are derived
 # from idx.min()/idx.max() of the fixtures so they match what the generator reads.
 
-BTC_START = pd.Timestamp("2022-01-01T00:00:00", tz="UTC")
-BTC_END   = pd.Timestamp("2024-01-01T00:00:00", tz="UTC")
+# Per-symbol bounds.  BTC / ETH / BNB carry the historical extremes that
+# exercise the intersection math (ETH = latest start; BNB = earliest end).
+# Any other symbol that ends up in _MULTI_SYMBOL_OVERRIDES gets the
+# baseline range, which is wider than both extremes and therefore does
+# not perturb max(starts) or min(ends).  This keeps the fixture
+# generator-aware: whenever a new symbol is added to the override
+# constant the fixture covers it automatically without further edits.
+
+_BASELINE_START = pd.Timestamp("2022-01-01T00:00:00", tz="UTC")
+_BASELINE_END   = pd.Timestamp("2024-01-01T00:00:00", tz="UTC")
+
+BTC_START = _BASELINE_START
+BTC_END   = _BASELINE_END
 
 ETH_START = pd.Timestamp("2022-03-01T00:00:00", tz="UTC")   # later start → tests max(starts)
-ETH_END   = pd.Timestamp("2024-01-01T00:00:00", tz="UTC")
+ETH_END   = _BASELINE_END
 
-BNB_START = pd.Timestamp("2022-01-01T00:00:00", tz="UTC")
+BNB_START = _BASELINE_START
 BNB_END   = pd.Timestamp("2023-12-01T00:00:00", tz="UTC")   # earlier end → tests min(ends)
+
+SYMBOL_BOUNDS: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {
+    "BTC/USDT": (BTC_START, BTC_END),
+    "ETH/USDT": (ETH_START, ETH_END),
+    "BNB/USDT": (BNB_START, BNB_END),
+}
 
 # Fixture config: 3 strategies (includes one multi-symbol)
 FIXTURE_STRATEGY_SYMBOLS = {
@@ -44,6 +61,40 @@ FIXTURE_STRATEGY_SYMBOLS = {
 def _expected_holdout_start(data_start: pd.Timestamp, data_end: pd.Timestamp) -> pd.Timestamp:
     """Replicate the generator's 80/20 formula so tests stay in sync."""
     return data_start + (data_end - data_start) * 0.80
+
+
+def _bounds_for(symbol: str) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return the fixture bounds for `symbol`, falling back to the baseline range
+    so any future addition to `_MULTI_SYMBOL_OVERRIDES` is covered automatically.
+    The baseline is wider than both ETH's start and BNB's end, so unknown
+    symbols never perturb the intersection extremes."""
+    return SYMBOL_BOUNDS.get(symbol, (_BASELINE_START, _BASELINE_END))
+
+
+def _all_fixture_symbols() -> list[str]:
+    """Union of single-symbol strategies' primary symbols and every symbol
+    that appears in `_MULTI_SYMBOL_OVERRIDES` on the module under test.
+    Reading the override constant at call-time keeps the fixture in sync
+    when production baskets change."""
+    syms: set[str] = set(FIXTURE_STRATEGY_SYMBOLS.values())
+    for basket in gen._MULTI_SYMBOL_OVERRIDES.values():
+        syms.update(basket)
+    return sorted(syms)
+
+
+def _expected_multi_symbol_intersection(
+    symbols: list[str],
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Replicate the generator's data_start = max(starts), data_end = min(ends)
+    over `symbols`, using the same fixture DataFrames the generator reads."""
+    starts: list[pd.Timestamp] = []
+    ends:   list[pd.Timestamp] = []
+    for sym in symbols:
+        s, e = _bounds_for(sym)
+        df = make_ohlcv(s, e)
+        starts.append(df.index.min())
+        ends.append(df.index.max())
+    return max(starts), min(ends)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -65,11 +116,14 @@ def make_ohlcv(start: pd.Timestamp, end: pd.Timestamp, freq: str = "7D") -> pd.D
 
 
 def write_fixture_cache(cache_dir: Path) -> None:
-    """Write parquet fixtures for all symbols used by FIXTURE_STRATEGY_SYMBOLS."""
+    """Write parquet fixtures for every symbol referenced by FIXTURE_STRATEGY_SYMBOLS
+    or by `_MULTI_SYMBOL_OVERRIDES`.  Reading the override constant at fixture
+    build time means new basket symbols are picked up automatically."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    make_ohlcv(ETH_START, ETH_END).to_parquet(cache_dir / "ETH-USDT_1h_36mo.parquet")
-    make_ohlcv(BTC_START, BTC_END).to_parquet(cache_dir / "BTC-USDT_1h_36mo.parquet")
-    make_ohlcv(BNB_START, BNB_END).to_parquet(cache_dir / "BNB-USDT_1h_36mo.parquet")
+    for sym in _all_fixture_symbols():
+        s, e = _bounds_for(sym)
+        filename = f"{sym.replace('/', '-')}_1h_36mo.parquet"
+        make_ohlcv(s, e).to_parquet(cache_dir / filename)
 
 
 # ── Autouse fixture: redirect paths and patch config ─────────────────────────
@@ -111,20 +165,17 @@ def test_generate_initial_raises_if_manifest_exists():
 # ── Test 3: multi-symbol intersection math ─────────────────────────────────────
 
 def test_multi_symbol_intersection_math():
-    """DualMomentum holdout_start uses max(starts) and min(ends) across BTC/ETH/BNB."""
-    # Derive expected bounds from the same fixture DataFrames the generator reads.
-    df_btc = make_ohlcv(BTC_START, BTC_END)
-    df_eth = make_ohlcv(ETH_START, ETH_END)
-    df_bnb = make_ohlcv(BNB_START, BNB_END)
-    exp_data_start = max(df_btc.index.min(), df_eth.index.min(), df_bnb.index.min())
-    exp_data_end   = min(df_btc.index.max(), df_eth.index.max(), df_bnb.index.max())
+    """DualMomentum holdout_start uses max(starts) / min(ends) across whatever
+    basket the generator's `_MULTI_SYMBOL_OVERRIDES` currently declares."""
+    expected_basket = gen._MULTI_SYMBOL_OVERRIDES["DualMomentum"]
+    exp_data_start, exp_data_end = _expected_multi_symbol_intersection(expected_basket)
     exp_holdout_start = _expected_holdout_start(exp_data_start, exp_data_end)
 
     gen.generate_initial()
     manifest = json.loads(gen._MANIFEST_PATH.read_text())
     dm = manifest["DualMomentum"]
 
-    assert dm["symbols"] == ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
+    assert dm["symbols"] == expected_basket
     assert pd.Timestamp(dm["data_start"]) == exp_data_start
     assert pd.Timestamp(dm["data_end"])   == exp_data_end
     assert abs(pd.Timestamp(dm["holdout_start"]) - exp_holdout_start) < pd.Timedelta(seconds=1)
@@ -274,12 +325,10 @@ def test_regenerate_subset_only_updates_listed_strategies():
     assert manifest_after["BearShort"]["holdout_start"] == "2020-01-01T00:00:00+00:00", (
         "BearShort was not in the target list and should not have been updated"
     )
-    # DualMomentum should now reflect the correct computed value.
-    df_btc = make_ohlcv(BTC_START, BTC_END)
-    df_eth = make_ohlcv(ETH_START, ETH_END)
-    df_bnb = make_ohlcv(BNB_START, BNB_END)
-    exp_dm_start = max(df_btc.index.min(), df_eth.index.min(), df_bnb.index.min())
-    exp_dm_end   = min(df_btc.index.max(), df_eth.index.max(), df_bnb.index.max())
+    # DualMomentum should now reflect the correct computed value over whatever
+    # basket the override constant currently declares.
+    expected_basket = gen._MULTI_SYMBOL_OVERRIDES["DualMomentum"]
+    exp_dm_start, exp_dm_end = _expected_multi_symbol_intersection(expected_basket)
     exp_dm_hs = _expected_holdout_start(exp_dm_start, exp_dm_end)
     dm_hs = pd.Timestamp(manifest_after["DualMomentum"]["holdout_start"])
     assert abs(dm_hs - exp_dm_hs) < pd.Timedelta(seconds=1)

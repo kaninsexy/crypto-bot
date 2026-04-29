@@ -284,6 +284,40 @@ N=20 against `sr_zero_expected = +1.9007`.
   Liu/Tsyvinski/Wu 2022. Branch B drops DualMomentum. Branch C drops
   the strategy.
 
+#### Phase 4.A outcome (2026-04-29) — weekly 5-basket RETIRED
+
+- **Variation tested:** `phase4a-weekly-5basket-v1`. Five-major
+  basket [BTC, ETH, BNB, SOL, XRP] with `lookback=504` (3 weeks ×
+  7 days × 24 hours, candle-count approximation of weekly 3-week
+  formation per Liu/Tsyvinski/Wu 2022) and `rebalance_every=168`
+  (weekly cadence). Hypothesis-of-record at
+  `research/dualmomentum-literature.md`, committed `bf4b9ca`.
+- **Harness result:** CPCV-10 raised `CPCVError` — 4/10 blocks
+  valid (≥5 trades), 6 below the floor due to warmup amortization
+  (504-candle formation × 10 blocks = 24% of each 2078-candle
+  block lost to warmup). Per-block trades:
+  `[5, 3, 2, 9, 4, 5, 2, 4, 5, 3]`. Trial appended as
+  `trial_type="smoke"` (excluded from DSR multiple-testing); same
+  precedent as Supertrend trial #1 (`d29e604`).
+- **Headline run (full dev window, single backtest):** Sharpe
+  −1.1973 on 44 trades, −16.09% return, 20.17% max DD, 29.6% win
+  rate. Active-symbol distribution rotated cleanly across all 5
+  majors (BTC 11.4%, ETH 13.6%, BNB 22.7%, SOL 31.8%, XRP 20.5%) —
+  the strategy is firing as designed; the economic verdict is
+  negative on its own merits.
+- **Why no variation #2:** academic-foundation-exhausted
+  precondition. Liu/Tsyvinski/Wu 2022 is the strongest peer-
+  reviewed crypto-momentum source; current parameters are at the
+  academic standard. Further variation lacks a citation —
+  parameter sweeps without per-variation justification are exactly
+  what CLAUDE.md's no-p-hacking rule forecloses.
+  `count_distinct_variations("DualMomentum")` is now 2/20 with the
+  cap effectively closed.
+- **Branch implication:** Branch C of `MASTER_PLAN.md` strengthens
+  for this strategy.
+- **Forensic:** `research/dualmomentum-literature.md` § "Trial #1
+  outcome (2026-04-29)".
+
 ---
 
 ## Summary

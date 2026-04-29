@@ -55,6 +55,7 @@ for the original failure write-up.
 | Strategy | Variation | Trial date | Result | Status |
 |---|---|---|---|---|
 | Supertrend | `phase4a-daily-resurrection-v1` | 2026-04-29 | CPCVError (per-block trades < 5 floor); headline Sharpe +1.12 vs B&H +0.68 on 13 trades, but `under_tested` per `min_trade_count=30` | Retired — no variation #2 (literature pre-condition) |
+| DualMomentum | `phase4a-weekly-5basket-v1` | 2026-04-29 | CPCVError (4/10 valid blocks; warmup amortization on block-isolated CPCV); headline Sharpe −1.20 / 44 trades single-pass; valid-block Sharpe mean −1.11 | Retired — no variation #2 (academic foundation exhausted) |
 
 `count_distinct_variations("Supertrend")` = 2 / 20 (slot consumed by
 the retired variation; cap effectively closed per the
@@ -62,9 +63,27 @@ indicator-provenance pre-condition).
 `count_trials_for_dsr("Supertrend")` = 1 (smoke row excluded — DSR
 multiple-testing inflation unaffected by this trial).
 
+`count_distinct_variations("DualMomentum")` = 2 / 20 (slot consumed
+by the retired variation; cap effectively closed per the
+academic-foundation-exhausted precondition — Liu/Tsyvinski/Wu 2022
+parameters are at the academic standard, further variation requires
+a citation that does not exist).
+`count_trials_for_dsr("DualMomentum")` = 1 (smoke row excluded — DSR
+multiple-testing inflation unaffected by this trial; Phase 3c
+`rescue-default` row remains the sole full_cpcv contributor).
+
 Source: `research/supertrend-literature.md` § "Trial #1 outcome
-(2026-04-29)" for the full forensic; `backtest/trials.log` last row
-for the harness record.
+(2026-04-29)" and `research/dualmomentum-literature.md` § "Trial #1
+outcome (2026-04-29)" for the full forensics; `backtest/trials.log`
+last two rows for the harness records.
+
+Cross-strategy harness finding: both Supertrend and DualMomentum
+hit `CPCVError` for the same structural reason (block-isolated
+CPCV pays the warmup window in every block, eating a significant
+fraction of each ~2078-candle block on the current dev-window
+length). Tracked as an open harness-design question in
+`docs/open_questions.md` § "Block-isolated CPCV warmup amortization
+(structural)".
 
 ## Phase 4 scope: Branch C (selected 2026-04-26)
 

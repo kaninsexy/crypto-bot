@@ -73,14 +73,16 @@
   },
   "DualMomentum": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
+    "data_start": "2023-04-30T11:00:00+00:00",
     "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
+    "dev_end": "2025-09-14T13:24:00+00:00",
+    "holdout_start": "2025-09-14T13:24:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
-      "BNB/USDT"
+      "BNB/USDT",
+      "SOL/USDT",
+      "XRP/USDT"
     ]
   }
 }
