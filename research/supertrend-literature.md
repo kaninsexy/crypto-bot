@@ -35,3 +35,90 @@ Per `CLAUDE.md`:
 ## Note on the indicator's provenance
 
 The Supertrend indicator has no peer-reviewed foundation (Olivier Seban, 2009). The hypothesis is that vol-scaled, regime-gated, daily-TF execution can produce positive edge *despite* the indicator's weak provenance, by removing the structural failure modes the Phase 3c result diagnosed. If this fails, the lack of academic foundation becomes the dominant prior and further Supertrend variations should be capped well below 20.
+
+## Trial #1 outcome (2026-04-29)
+
+**Status:** Retired. No variation #2 queued.
+
+**Hypothesis tested as written.** All three structural changes from the
+starting hypothesis were applied jointly: daily TF (resampled internally
+from the manifest's 1h frame), Barroso & Santa-Clara (2015) vol-scaling
+on position size, and 6-regime gate restricting long entries to
+STRONG_BULL ∪ BULL.
+
+### Validation harness outcome
+
+CPCV-10 (the Phase 3c block count, retained for trials.log
+comparability) raised `CPCVError` because every one of the 10 dev-window
+blocks fell under the harness's `_MIN_TRADES_PER_BLOCK = 5` floor:
+
+```
+per-block trades:  [1, 1, 0, 1, 1, 1, 1, 0, 1, 2]   total = 9
+per-block Sharpe:  [+0.44, -3.43,  0,  +5.17, -0.87, +0.06, +2.70,  0, +3.29, -0.02]
+blocks ≥ 5 trades:  0 / 10  →  >50% NaN, harness aborts
+```
+
+The structural cause is daily-TF trade density: ~13 trades over ~880 dev
+days produces 88-day blocks with ~1.3 trades each.  This is intrinsic to
+daily-TF Supertrend on a single-asset dev window — not a bug or
+mis-tuning.
+
+### Headline run (single full dev-window backtest)
+
+| metric | value |
+|---|---|
+| Sharpe | +1.1182 |
+| baseline (ETH B&H) Sharpe | +0.6836 |
+| n_trades | 13 |
+| return | +26.39% |
+| max DD | 11.59% |
+| win rate | 46.1% |
+| profit factor | 2.78 |
+| avg win / avg loss | +25.2% / −7.3% |
+
+The headline result clears the buy-and-hold floor by +0.43 Sharpe.
+However, the verdict tree's `min_trade_count = 30` precondition fires
+on n=13: the strategy is `under_tested` regardless of headline-Sharpe
+margin.  The trade-count floor exists because per-bar MinTRL alone
+under-detects low-trade-frequency strategies (see
+`backtest/verdict.py` § "Why MinTRL gate is paired with a trade-count
+floor").
+
+### trials.log row
+
+Appended as `trial_type="smoke"` with `variation_id =
+"phase4a-daily-resurrection-v1"` because the harness could not
+produce a valid CPCV block-Sharpe distribution (full_cpcv schema
+requires it).  Smoke is excluded from `count_trials_for_dsr` per
+docs/validation_framework.md, so this trial does not inflate the
+multiple-testing correction for any later Supertrend variation;
+`count_distinct_variations("Supertrend")` did increment from 1 to 2,
+consuming one slot of the 20-variation cap.
+
+### Why no variation #2
+
+The hypothesis-of-record's pre-condition (above, "Note on the
+indicator's provenance") triggered: Supertrend has no peer-reviewed
+foundation, so a single failed structural-change variation is enough
+to make the lack-of-academic-foundation prior dominant.  Further
+parameter sweeps would burn iteration-cap slots and (if any reached
+full_cpcv) DSR multiple-testing inflation in service of an indicator
+without a proper edge theory.
+
+The variation budget for Supertrend is therefore capped at 1 attempt
+post-Phase-3c.  The strategy is retired for Phase 4.A; Branch C of the
+MASTER_PLAN strengthens for this strategy.
+
+### Reusable lesson
+
+Daily-TF strategies on the current single-asset dev window face a
+structural density floor: 880 days × 1 asset ÷ 10 CPCV blocks × ≥5
+trades/block ⇒ minimum signal cadence of one trade per ~17.6 days for
+the harness to validate.  Strategies whose theory implies daily-or-
+slower entry cadence on a single asset cannot pass CPCV-10 without
+either (a) multi-asset breadth multiplying trades-per-block, or (b) a
+manifest re-cut that reduces dev breadth in favour of harness fit
+(sacred-harness change, not casually invokable).  This constraint
+applies to any future single-asset, daily-TF resurrection candidate;
+candidates pre-flagged as low-cadence should consider multi-asset
+designs from the start.

@@ -221,7 +221,7 @@ each strategy remains open per the iteration discipline above.
 
 | Strategy | Phase 3c verdict | Starting hypothesis | Resurrection status |
 |---|---|---|---|
-| Supertrend | RETIRE, −1.64 dev | Daily TF + Barroso-Santa-Clara vol-scaling, regime-gated to trending only | Resurrect candidate |
+| Supertrend | RETIRE, −1.64 dev | Daily TF + Barroso-Santa-Clara vol-scaling, regime-gated to trending only | Retired (Phase 4.A trial #1, 2026-04-29 — daily-TF density floor) |
 | TrendFollowing | RETIRE, −1.77 dev | Daily multi-asset, HOP-style vol-targeting, ≥10 instruments | Resurrect candidate (harness extension required, see below) |
 | DualMomentum | RETIRE, −2.39 dev | Weekly TF, ≥5 majors per Liu/Tsyvinski/Wu (2022) | Resurrect candidate |
 | MeanReversion | UNDER_TESTED (CPCVError) | Rebuild as **BTC-residual mean-reversion on alt basket** (not absolute-price MR) | Resurrect candidate (harness extension required, see below) |

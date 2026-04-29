@@ -507,3 +507,121 @@ before Phase 4.B begins — that strategy depends most heavily on a
 specific empirical literature, and the exact paper set should be in
 `research/funding-rate-literature.md` per the no-p-hacking rule before
 the first 4.B trial appends to `trials.log`.
+
+## TradingAgents Multi-Agent Framework (logged 2026-04-29) — REFERENCE
+
+Logged as a reference for the deferred prediction market bot, which
+enters scope only on the MASTER_PLAN Phase 4.C / Phase 5 "0 survivors"
+branch. NOT applicable to current crypto bot work. No adoption decision
+attached — purpose is so future Claude sessions don't re-research the
+same repo.
+
+### Source
+
+github.com/TauricResearch/TradingAgents, paper arXiv 2412.20138 (Xiao,
+Sun, Luo, Wang 2025). Multi-agent LLM trading framework built on
+LangGraph. Originally for equities (Fundamentals/Sentiment/News
+analysts → bullish/bearish researcher debate → Trader → Risk →
+Portfolio Manager). Community fork AlpacaTradingAgent adds crypto.
+Version 0.2.4 (April 2026) ships Pydantic structured-output decision
+agents and a persistent decision log with outcome-grounded reflections,
+replacing per-agent BM25 memory.
+
+### Patterns worth lifting
+
+For the prediction market bot's "scanner → parallel research agents →
+XGBoost+LLM calibration → Kelly sizing → postmortem loop" pipeline
+already sketched in MASTER_PLAN/memory:
+
+1. Bullish/bearish adversarial debate as a bias-reduction input before
+   XGBoost calibration — surfaces counter-evidence before probabilities
+   lock in. Use as calibration input only, NOT as the final trade
+   arbiter. The "Multi-Agent Claude Patterns" section in this same file
+   already flagged "agent-to-agent debate on retire/keep decisions" as
+   sycophancy- and confidence-cascade-prone; same risk applies if used
+   as the arbiter.
+2. Persistent decision log with outcome-grounded reflections —
+   ready-made substrate for the postmortem-loop stage.
+3. Pydantic structured outputs (`llm.with_structured_output(Schema)`)
+   for typed probability + rationale outputs feeding the Kelly sizer.
+   Adopt this hygiene pattern independent of any framework decision.
+
+### Patterns NOT to lift
+
+LangGraph as orchestration (too heavy for an inspectable bot); the
+equity-analyst roster (fundamentals / sentiment / news archetypes don't
+map to prediction-market substrate — base-rate research is the analog
+there, not earnings).
+
+**Reconsideration trigger:** prediction market bot enters active scope
+per MASTER_PLAN Phase 4.C "0 strategies pass" branch or Phase 5 "0
+survivors" branch.
+
+## Phase 4.A trial #1 — Supertrend daily-resurrection retired (2026-04-29)
+
+### Trial outcome
+
+Variation `phase4a-daily-resurrection-v1` tested per
+`research/supertrend-literature.md` (committed `bf4b9ca`): daily TF
+(internal resample of the manifest's 1h frame) + Barroso & Santa-Clara
+(2015) vol-scaling + 6-regime gate restricting longs to STRONG_BULL ∪
+BULL.
+
+**Validation harness:** CPCV-10 raised `CPCVError`. All 10 dev-window
+blocks fell under `_MIN_TRADES_PER_BLOCK = 5`; per-block trade counts
+`[1, 1, 0, 1, 1, 1, 1, 0, 1, 2]`. The harness cannot certify the
+variation; trial appended as `trial_type="smoke"` (excluded from
+`count_trials_for_dsr` per Phase 3b Chunk 5; `count_distinct_variations`
+incremented from 1 to 2, consuming one slot of the 20-cap).
+
+**Headline run (full dev window, single backtest):** Sharpe +1.1182,
+n_trades 13, return +26.39%, max DD 11.59%, win rate 46.1%, profit
+factor 2.78. Beats ETH/USDT B&H baseline +0.6836 by +0.43 Sharpe — but
+verdict tree's `min_trade_count = 30` precondition fires (n=13), so
+forensic verdict is `under_tested`.
+
+**No variation #2.** The hypothesis-of-record's pre-condition triggered:
+Supertrend has no peer-reviewed academic foundation (Olivier Seban,
+2009), so a single failed structural-change variation is enough to make
+the indicator-without-edge-theory prior dominant. Variation budget
+capped at 1 attempt post-Phase-3c. Branch C of `MASTER_PLAN.md`
+strengthens for this strategy.
+
+### Reusable lesson — daily-TF density floor on single-asset dev windows
+
+The CPCV harness's `_MIN_TRADES_PER_BLOCK = 5` floor combines with
+single-asset 880-day dev windows to set a structural minimum signal
+cadence: 880 / 10 / 5 ≈ one trade per 17.6 days. Strategies whose theory
+implies daily-or-slower entry cadence on a single asset cannot pass
+CPCV-10 without either:
+
+- **(a) Multi-asset breadth** — more symbols multiply trades-per-block
+  proportionally. DualMomentum already runs multi-symbol (3 symbols);
+  any future single-asset, daily-TF candidate should consider a
+  multi-asset cousin from the start to clear the density floor.
+- **(b) A manifest re-cut** that reduces `n_blocks`, extends
+  `data_start`, or changes `timeframe` — sacred-harness change, not
+  casually invokable. Reducing `n_blocks` also degrades the block
+  Sharpe distribution's statistical power (fewer Sharpe samples for
+  DSR), so this is rarely a win.
+- **(c) Faster signal cadence within the same TF** — but for Supertrend
+  this would mean tighter ATR multipliers, which on daily candles
+  reintroduces chop whipsaws (the failure mode the daily-TF
+  hypothesis was specifically designed to escape). Self-defeating for
+  trend-following indicators.
+
+The lesson is not Supertrend-specific. Any strategy proposed in
+extension-track or Phase 5 work that operates on daily-or-slower TF on a
+single asset should expect to either be multi-asset by design or to
+hit this density floor on first CPCV. Pre-flag low-cadence candidates
+during literature review, not at trial-execution time.
+
+### Aside: smoke-tagging as the natural overflow path
+
+This trial's outcome confirmed an expected use case for the
+`trial_type="smoke"` row: when CPCV raises `CPCVError` for reasons
+intrinsic to the variation (not infrastructure failure), the headline
+single-window backtest is still a meaningful data point but is not
+DSR-quality. Smoke captures the signal without inflating multiple-
+testing accounting. The schema's three trial-types (smoke, full_cpcv,
+final_gate) cover this case cleanly without needing a fourth type.

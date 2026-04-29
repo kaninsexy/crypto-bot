@@ -158,6 +158,39 @@ N=20 against `sr_zero_expected = +1.9007`.
   verified to have no lookahead. Indicator has no academic foundation.
   Branch A drops Supertrend; same for B and C.
 
+#### Phase 4.A outcome (2026-04-29) — daily-resurrection RETIRED
+
+- **Variation tested:** `phase4a-daily-resurrection-v1`. Daily TF
+  (resampled internally from the manifest's 1h frame) +
+  Barroso & Santa-Clara (2015) vol-scaling +
+  6-regime gate restricting longs to STRONG_BULL ∪ BULL.
+  Hypothesis-of-record at `research/supertrend-literature.md`,
+  committed `bf4b9ca`.
+- **Harness result:** CPCV-10 raised `CPCVError`. Every block produced
+  fewer than `_MIN_TRADES_PER_BLOCK = 5` trades because daily-TF
+  density on a single asset over 880 days yields ~1.3 trades per
+  88-day block (per-block trades
+  `[1, 1, 0, 1, 1, 1, 1, 0, 1, 2]`). The validation harness cannot
+  certify this variation as configured; trial appended as
+  `trial_type="smoke"` (excluded from DSR multiple-testing per
+  `count_trials_for_dsr`).
+- **Headline run (full dev window, single backtest):** Sharpe +1.1182
+  on 13 trades, +26.39% return, 11.59% max DD, win rate 46.1%,
+  profit factor 2.78. Beats ETH/USDT B&H baseline +0.6836 by +0.43
+  Sharpe — but verdict tree's `min_trade_count = 30` precondition
+  fires (n=13), so the forensic verdict is `under_tested`.
+- **Why no variation #2:** the literature note's pre-condition triggered
+  — Supertrend's lack of peer-reviewed foundation makes a single
+  failed structural-change variation enough to make the
+  "indicator-without-edge-theory" prior dominant. Variation budget
+  capped at 1 attempt post-Phase-3c; further parameter sweeps would
+  burn iteration-cap slots in service of an indicator without a
+  proper edge theory. `count_distinct_variations("Supertrend")` is
+  now 2/20 with the cap effectively closed.
+- **Branch implication:** Branch C of `MASTER_PLAN.md` strengthens for
+  this strategy — Supertrend stays out of the deployed portfolio
+  regardless of which Phase 4 branch is selected.
+
 ---
 
 ### TrendFollowing — BTC/USDT

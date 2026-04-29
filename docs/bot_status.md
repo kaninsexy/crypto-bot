@@ -1,6 +1,6 @@
 # Bot Status
 
-Last updated: 2026-04-26 (post Phase 4 scope decision)
+Last updated: 2026-04-29 (post Phase 4.A trial #1 — Supertrend retired)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
 
 ## Current state
@@ -49,6 +49,22 @@ See `docs/strategies.md` for per-strategy diagnosis and next actions
 diagnosis), `docs/strategy_evidence_audit_2026-04-26.md` for the
 mechanism-level audit, and `docs/strategy_failure_analysis_2026-04-19.md`
 for the original failure write-up.
+
+## Phase 4.A resurrection batch — running results
+
+| Strategy | Variation | Trial date | Result | Status |
+|---|---|---|---|---|
+| Supertrend | `phase4a-daily-resurrection-v1` | 2026-04-29 | CPCVError (per-block trades < 5 floor); headline Sharpe +1.12 vs B&H +0.68 on 13 trades, but `under_tested` per `min_trade_count=30` | Retired — no variation #2 (literature pre-condition) |
+
+`count_distinct_variations("Supertrend")` = 2 / 20 (slot consumed by
+the retired variation; cap effectively closed per the
+indicator-provenance pre-condition).
+`count_trials_for_dsr("Supertrend")` = 1 (smoke row excluded — DSR
+multiple-testing inflation unaffected by this trial).
+
+Source: `research/supertrend-literature.md` § "Trial #1 outcome
+(2026-04-29)" for the full forensic; `backtest/trials.log` last row
+for the harness record.
 
 ## Phase 4 scope: Branch C (selected 2026-04-26)
 
