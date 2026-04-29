@@ -91,6 +91,43 @@ N=20 against `sr_zero_expected = +1.9007`.
   regime-conditional edge. Branch A and B drop GridTrading; Branch C
   drops the strategy.
 
+#### Phase 4.A outcome (2026-04-29) — regime-conditional RETIRED
+
+- **Variation tested:** `phase4a-regime-conditional-v1`. RANGE-only
+  regime gate added to GridTrading; Phase 3c grid params held
+  constant (BB(20, 2σ) + ATR(14)×0.75; 10 levels; $200/trade;
+  recalibrate_every=24); detector reads strategy pair df (SOL/USDT),
+  not BTC. Hypothesis-of-record at
+  `research/gridtrading-literature.md`, committed `bf4b9ca`.
+- **Harness result:** `full_cpcv` clean — all 10 blocks valid (the
+  gate did NOT hit the warmup-amortization wall the Supertrend and
+  DualMomentum trials did). Per-block trades
+  `[63, 64, 43, 63, 44, 57, 62, 55, 73, 44]`; per-block Sharpes
+  averaging +2.40 (std 1.37). `count_trials_for_dsr("GridTrading")`
+  advances from 1 to 2 (full_cpcv contributes to DSR).
+- **Verdict tree:** RETIRE. trade_count_pass=True (601 trades),
+  mintrl_pass=True. Quality gates fail decisively:
+  mt_mean_pass=False (observed_sharpe +0.8805 vs sr_zero_expected
+  +1.9007 at N=20, margin −1.02); baseline_pass=False (vs SOL B&H
+  +1.8133, margin −0.93). DSR p-value 3.7e-15. Not borderline.
+- **Headline run:** +0.61% return over 868-day dev window, max DD
+  0.24%, win rate 75.5%, profit factor 1.46. The gate is highly
+  restrictive — strategy is mostly dormant — so the conditional-
+  regime edge gets too few candles to compound a meaningful
+  headline return. Removing the trending-regime drag exposed that
+  the conditional firing's upside is also bounded.
+- **Why no variation #2:** No source-cited justification clears
+  the no-p-hacking bar. Gate widening (VOLATILE/BULL/etc.) lacks a
+  citation; parameter perturbation (BB/ATR/recalibrate constants)
+  is bot-convention not academic; multi-pair basket grids have no
+  literature; gate-confidence threshold tuning is dev-data
+  parameter dredging. `count_distinct_variations("GridTrading")`
+  is now 2/20 with the cap effectively closed.
+- **Branch implication:** Branch C of `MASTER_PLAN.md` strengthens
+  for this strategy.
+- **Forensic:** `research/gridtrading-literature.md` § "Trial #1
+  outcome (2026-04-29)".
+
 ---
 
 ### DCA — BTC/USDT

@@ -56,6 +56,7 @@ for the original failure write-up.
 |---|---|---|---|---|
 | Supertrend | `phase4a-daily-resurrection-v1` | 2026-04-29 | CPCVError (per-block trades < 5 floor); headline Sharpe +1.12 vs B&H +0.68 on 13 trades, but `under_tested` per `min_trade_count=30` | Retired — no variation #2 (literature pre-condition) |
 | DualMomentum | `phase4a-weekly-5basket-v1` | 2026-04-29 | CPCVError (4/10 valid blocks; warmup amortization on block-isolated CPCV); headline Sharpe −1.20 / 44 trades single-pass; valid-block Sharpe mean −1.11 | Retired — no variation #2 (academic foundation exhausted) |
+| GridTrading | `phase4a-regime-conditional-v1` | 2026-04-29 | RETIRE (full_cpcv, all 10 blocks valid). observed_sharpe +0.8805 vs sr_zero_expected +1.9007 (margin −1.02) and SOL B&H +1.8133 (margin −0.93); n_trades 601 (down from Phase 3c 1035, gate −42%); dist mean +2.40 / std 1.37; mt_mean_pass=False, baseline_pass=False | Retired — no variation #2 (no citation supports gate / param / basket perturbation under no-p-hacking) |
 
 `count_distinct_variations("Supertrend")` = 2 / 20 (slot consumed by
 the retired variation; cap effectively closed per the
@@ -72,18 +73,31 @@ a citation that does not exist).
 multiple-testing inflation unaffected by this trial; Phase 3c
 `rescue-default` row remains the sole full_cpcv contributor).
 
-Source: `research/supertrend-literature.md` § "Trial #1 outcome
-(2026-04-29)" and `research/dualmomentum-literature.md` § "Trial #1
-outcome (2026-04-29)" for the full forensics; `backtest/trials.log`
-last two rows for the harness records.
+`count_distinct_variations("GridTrading")` = 2 / 20 (slot consumed
+by the retired variation; cap effectively closed — none of the
+candidate variation #2 paths (gate widening, parameter perturbation,
+multi-pair basket) clears the no-p-hacking bar, see
+`research/gridtrading-literature.md` § "Why no variation #2").
+`count_trials_for_dsr("GridTrading")` = 2 (full_cpcv row, NOT smoke
+— the gate produced 601 trades distributed across all 10 blocks, so
+the harness produced a clean verdict; both this row and the Phase
+3c `rescue-default` row count toward DSR multiple-testing).
 
-Cross-strategy harness finding: both Supertrend and DualMomentum
-hit `CPCVError` for the same structural reason (block-isolated
-CPCV pays the warmup window in every block, eating a significant
+Source: `research/supertrend-literature.md` § "Trial #1 outcome
+(2026-04-29)", `research/dualmomentum-literature.md` § "Trial #1
+outcome (2026-04-29)", and `research/gridtrading-literature.md` §
+"Trial #1 outcome (2026-04-29)" for the full forensics;
+`backtest/trials.log` last three rows for the harness records.
+
+Cross-strategy harness finding: Supertrend and DualMomentum hit
+`CPCVError` for the same structural reason (block-isolated CPCV
+pays the warmup window in every block, eating a significant
 fraction of each ~2078-candle block on the current dev-window
-length). Tracked as an open harness-design question in
-`docs/open_questions.md` § "Block-isolated CPCV warmup amortization
-(structural)".
+length). GridTrading did NOT hit this — its 24-candle warmup is
+small relative to block size, the gate produced 601 trades, and
+all 10 blocks were valid. Tracked as an open harness-design
+question in `docs/open_questions.md` § "Block-isolated CPCV
+warmup amortization (structural)".
 
 ## Phase 4 scope: Branch C (selected 2026-04-26)
 

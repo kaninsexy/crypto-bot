@@ -80,6 +80,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from strategies.base import BaseStrategy, Signal
+from portfolio.regime_detector import RegimeDetector, REGIME_RANGE
 import config
 
 
@@ -174,6 +175,20 @@ class GridTradingStrategy(BaseStrategy):
         self._sl_consecutive: int = 0
         self._sl_exit_times: list[float] = []
         self._cb_paused_until: float = 0.0
+
+        # ── Regime gate (Phase 4.A variation #1) ──────────────────────────────
+        # Chen/Chen/Jang (2025) shows unconditional grid trading has zero EV;
+        # conditional firing on the regime that satisfies range AND low-trend
+        # AND mid-vol is the structural change.  In the 6-regime detector,
+        # REGIME_RANGE is the unique label that matches all three criteria.
+        # Detector reads the strategy's own pair df (asset-specific regime),
+        # not BTC, per the chat-locked design decision.
+        self._regime_detector = RegimeDetector()
+        # Detector floor = ema_slow + 10 = 200 + 10 = 210 candles.  Below this
+        # the detector returns RANGE/confidence=0 by default (line 225-234 of
+        # portfolio/regime_detector.py); we treat warmup as dormant explicitly
+        # rather than rely on the default-RANGE fallback firing entries.
+        self._regime_min_warmup_candles: int = 210
 
         logger.info(
             f"GridTrading (adaptive) | BB({bb_period}, {bb_std}σ) | "
@@ -311,6 +326,20 @@ class GridTradingStrategy(BaseStrategy):
         close = df["close"]
         high = df["high"]
         low = df["low"]
+
+        # ── Regime gate (Phase 4.A variation #1) ──────────────────────────────
+        # Block new ENTRIES outside REGIME_RANGE.  Existing positions still
+        # exit normally through the SELL / out-of-range / SL/TP branches
+        # below — the gate is entry-only.
+        if len(df) < self._regime_min_warmup_candles:
+            regime_blocks_entry = True
+            regime_label = (
+                f"warmup ({len(df)}/{self._regime_min_warmup_candles})"
+            )
+        else:
+            self._regime_detector.detect(df)
+            regime_label = self._regime_detector.current_regime
+            regime_blocks_entry = regime_label != REGIME_RANGE
 
         # ── ATR trend guard ────────────────────────────────────────────────────
         atr = ta.volatility.AverageTrueRange(
@@ -493,6 +522,17 @@ class GridTradingStrategy(BaseStrategy):
 
         # ── BUY: price dropped to a new (lower) grid level ────────────────────
         if not self._in_position and nearest_below is not None:
+            # Regime gate: dormant outside RANGE.  Existing positions still
+            # exit through SELL / out-of-range / SL/TP branches above.
+            if regime_blocks_entry:
+                return self.hold(
+                    current_price,
+                    reason=(
+                        f"Regime gate: dormant (regime={regime_label}, "
+                        f"need RANGE) | nearest level=${nearest_below:.2f}"
+                    ),
+                )
+
             # Circuit breaker: skip re-entry if tripped by consecutive SLs
             now = time.time()
             if self._cb_paused_until > now:
