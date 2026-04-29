@@ -325,3 +325,30 @@ multiple-testing budget is silently consumed by an artifact of the bug fix.
   even after policy is chosen.
 
 **Resolved 2026-04-26 — Policy (c) implemented (tag in place + filter). See backtest/trials.py for the schema + filter, and the tagged BearShort pre-fix row trial_id 34cac215...** Future tooling-defect events follow the same pattern: tag superseded rows with `superseded_by: '<fix-commit-sha>'` and the DSR counter handles the rest.
+
+### Phase 4.B venue choice (Thai-SEC vs offshore)
+
+**Resolved 2026-04-29 — OKX offshore, accept Thai PIT on funding income
+(Branch 1 of three branches surfaced at Phase 4.B kickoff scoping).**
+
+The 2025–2029 Thai PIT exemption applies only to SEC-licensed digital-
+asset operators, none of which currently offer perpetual futures with
+funding-rate settlement. The April 2026 SEC consultation (release No.
+81/2026, closes 20 May 2026) proposes a path to licensed perp products
+but no Thai venue offers the substrate today. OKX selected for offshore
+deployment over Binance.com because the bot's existing OKX paper-mode
+plumbing reduces operational migration cost.
+
+Implication for edge claim: post-tax funding APY is ~7.1–8.2% before
+costs, vs the ~10.95% pre-tax baseline cited in the 2026-04-29 research
+synthesis. Per-strategy hypotheses in `research/funding-rate-literature.md`
+must use post-tax expected Sharpe.
+
+**Watch item (reconsideration trigger):** A Thai-SEC-licensed exchange
+launches a perp + funding product with SEC-final derivatives licensing.
+At that point 4.B runs (or surviving live-deploy migrates) to the
+licensed venue for the PIT exemption. Currently TBD; earliest
+mid-2026.
+
+See `docs/research_log.md` § "Thai SEC venue / derivatives status
+(logged 2026-04-29)" for the full evidence base.

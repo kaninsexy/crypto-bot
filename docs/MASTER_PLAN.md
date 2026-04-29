@@ -300,11 +300,22 @@ dev_cpcv trial).**
 
 **Pass/fail.** Same Phase 3b verdict tree, applied unchanged.
 
-**Open question (deferred, not blocking 4.A):** exchange/venue choice for
-4.B has Thai tax-residence implications. The 2025–2029 Thai personal-
-income-tax exemption applies only to Thai-SEC-licensed exchanges; Binance.com
-is not on that list. Decision deferred until 4.A verdicts are in and 4.B
-is actually scheduled. Tracked in `docs/open_questions.md`.
+**Open question — RESOLVED 2026-04-29:** Phase 4.B venue locked to OKX
+(USDT-M perp + USDT spot), accept Thai PIT on funding income (Branch 1
+of three branches surfaced at scoping). The 2025–2029 Thai PIT
+exemption applies only to SEC-licensed digital-asset operators, none of
+which currently offer perpetual futures with funding-rate settlement.
+The April 2026 SEC consultation (release No. 81/2026, closes 20 May
+2026) proposes a path to licensed perp products but no Thai venue
+offers the substrate today. OKX selected over Binance.com because the
+bot's existing OKX paper-mode plumbing reduces operational migration
+cost. See `docs/open_questions.md` § "Phase 4.B venue choice" and
+`docs/research_log.md` § "Thai SEC venue / derivatives status (logged
+2026-04-29)" for the full evidence base. Watch item: a Thai-SEC-
+licensed exchange launches a perp + funding product with SEC-final
+derivatives licensing — at that point 4.B (or surviving live-deploy
+of a 4.B passer) migrates to the licensed venue for the PIT
+exemption.
 
 #### Phase 4.C — Branch decision (revisited)
 

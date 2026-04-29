@@ -625,3 +625,79 @@ single-window backtest is still a meaningful data point but is not
 DSR-quality. Smoke captures the signal without inflating multiple-
 testing accounting. The schema's three trial-types (smoke, full_cpcv,
 final_gate) cover this case cleanly without needing a fourth type.
+
+## Thai SEC venue / derivatives status (logged 2026-04-29) — Phase 4.B venue resolution
+
+Logged at Phase 4.B kickoff scoping to capture the venue/tax research
+behind the OKX-offshore-with-PIT decision. Locks in Branch 1 of the
+three branches surfaced in the kickoff chat. Companion entry to the
+"AI/algo trading viability" synthesis above; that entry treated funding-
+rate harvest as the strongest peer-reviewed substrate but did not
+model the Thai-PIT haircut. This entry closes that gap.
+
+### Findings
+
+**Thai-SEC-licensed digital-asset operator list (as of 2026-04-29) is
+spot-only.** The licensed-exchange tier (Bitkub, Gulf Binance / Binance
+TH, Orbix, Upbit, KuCoin TH / ERX, WaanX, TDX, Bitazza, plus broker
+tier — 17 licensed entities total) does not currently include any
+operator offering perpetual futures with funding-rate settlement. The
+2025–2029 personal-income-tax exemption (Ministerial Regulation 399)
+applies only to trades executed via these SEC-licensed digital-asset
+operators. Net effect: Phase 4.B's required substrate is not available
+on tax-exempt terms today.
+
+**Thai SEC consultation (release No. 81/2026, 20 April 2026; closes
+20 May 2026)** proposes letting licensed digital-asset operators apply
+for derivatives licenses without setting up separate entities. This is
+a proposal; no exchange has yet been granted a derivatives license. SEC
+has not published a target date for finalizing the rules. Earliest
+plausible Thai-licensed perp + funding product launch: Q3 2026
+optimistic / 2027 realistic.
+
+**OKX is not on the Thai-SEC-licensed list.** The bot's existing OKX
+paper-mode plumbing is operationally cheap to extend but carries no
+tax-exemption benefit. Same applies to Binance.com, Bybit, and other
+offshore venues.
+
+### Decision
+
+**Phase 4.B runs on OKX (USDT-M perp + USDT spot), Thai PIT applies to
+funding income.** Branch 1 of the three branches surfaced at scoping.
+Selected over Branch 2 (defer pending Thai-licensed perp launch) and
+Branch 3 (skip 4.B entirely) by the user.
+
+### Implications for the edge claim
+
+The 2026-04-29 chat synthesis quoted a baseline ~10.95% annualised
+funding APY before edge selection. After Thai PIT (marginal rate
+estimated 25–35% on funding income classified as Section 40(4)(h)
+benefit per the Revenue Code) the post-tax baseline narrows to
+~7.1–8.2% before perp fees, spot fees, slippage, and long-leg vol
+drag. The edge gate is materially tighter than the pre-tax framing
+suggested. Per-strategy hypotheses in `research/funding-rate-literature.md`
+must derive their expected Sharpe / required-funding-rate threshold
+*post-tax*, not pre-tax.
+
+### Reconsideration trigger
+
+A Thai-SEC-licensed exchange launches a perp + funding product with
+SEC-final derivatives licensing. At that point Phase 4.B runs (or any
+surviving live-deployment of a 4.B passer migrates) to that venue for
+the PIT exemption. Watch item: SEC consultation final rules date
+(currently TBD; earliest mid-2026).
+
+### Sources
+
+- Fintech Singapore "List of Licensed Cryptocurrency Exchanges in
+  Thailand" (March 2026) — licensed-list snapshot
+- BitcoinIst "Thailand Considers Opening Door Wider To Crypto Futures
+  in Licensing Revamp" (~2026-04-22) — consultation paper coverage
+- The CCPress "Thailand SEC Weighs Rule Changes to Let Crypto Firms
+  Offer Derivatives" — release No. 81/2026 dates and license categories
+  (S-3, D-DAIA, D-DAF)
+- BitZup 2026 guide — Ministerial Regulation 399 PIT exemption scope
+  (trades executed via SEC-licensed digital-asset operators only)
+- Global Legal Insights "Blockchain & Cryptocurrency Laws 2026 |
+  Thailand" — Revenue Code Section 40(4)(h)(i) tax classification of
+  crypto-derived income
