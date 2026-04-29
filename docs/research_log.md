@@ -352,3 +352,158 @@ the same `variation_id` after a tooling fix is one variation tried,
 not two. Re-runs of the same parameter set under different commits
 naturally collapse via shared `variation_id` regardless of the
 supersession tag.
+
+## AI/algo trading viability and strategy-archetype evidence (consolidated 2026-04-29)
+
+Synthesised from chat 2026-04-29 research tasks. Purpose: future Claude
+sessions see *why* the Phase 4.A resurrection hypotheses were chosen
+without re-running the underlying research. Hypotheses themselves are in
+`docs/MASTER_PLAN.md` Phase 4.A table; this entry covers the evidence
+basis.
+
+### Context
+
+This research informed the Phase 4.A Resurrection Batch + Phase 4.B
+Funding-Rate Harvest scope decisions. The user explicitly opted not to
+commit to Branch A vs Branch C vs hybrid before testing — the
+resurrection hypotheses below are *starting points* for the validation
+harness, not commitments.
+
+### Edge-source ranking (retail-accessible crypto strategies)
+
+In rough order of peer-reviewed support strength:
+
+1. **Funding-rate harvest** (delta-neutral long-spot / short-perp).
+   Strongest peer-reviewed support of any retail-accessible crypto
+   strategy candidate. Multiple 2024–2025 papers; baseline funding APY
+   ~10.95% before edge selection. Promoted to Phase 4.B.
+2. **Time-series momentum at daily/weekly multi-asset.** Moskowitz/Ooi/
+   Pedersen 2012, Hurst/Ooi/Pedersen 2017, Liu/Tsyvinski/Wu 2022.
+   Diversified TSMOM Sharpe ~1.3 across 67 markets vs 0.3–0.5 single-
+   instrument — ~80% of Sharpe from cross-market diversification.
+   Informs TrendFollowing daily-multi-asset and DualMomentum weekly-
+   majors hypotheses.
+3. **BTC-residual mean-reversion on alts.** Published evidence: Sharpe
+   ~2 post-2021 on BTC-neutral residual MR. Substantially different
+   substrate from absolute-price MR. Informs MeanReversion rebuild.
+4. **Daily ensemble breakouts on rotational basket.** Zarattini/Pagani/
+   Barbon 2025 — ensemble Donchian on top-20 rotational basket, vol-sized
+   positions, Sharpe >1.5, alpha 10.8% vs BTC. Informs Breakout redesign.
+5. **Volatility breakouts on daily multi-coin with relative-volume
+   selection.** Williams (1999) practitioner-only at single-name, but
+   modern academic edge (Zarattini/Barbon/Aziz 2024) is in the selection
+   layer. Informs VolatilityBreakout redesign.
+
+### Strategy-archetype regime suitability
+
+- **Trend-following** concentrates at multi-day to monthly. 1H is in an
+  academic dead zone — Brock/Lakonishok/LeBaron 1992 EMA-crossover edge
+  was killed out-of-sample by Sullivan/Timmermann/White 1999 and
+  Bajgrowicz/Scaillet 2012 under FDR with realistic costs. Supertrend
+  has zero peer-reviewed support at any timeframe.
+- **Mean-reversion** in crypto specifically: Caporale/Plastun/Oliinyk
+  2019 tested hourly counter-movement on BTC/LTC/Ripple/Dash and found
+  it not profitable after costs. Crypto evidence points the other
+  direction at retail timeframes — momentum at daily, not reversal.
+  Residual MR (cross-sectional, BTC-neutral) is the substrate where
+  evidence supports MR.
+- **Momentum** literature concentrates at monthly (Jegadeesh/Titman 1993,
+  Antonacci 2012/2014, Asness/Moskowitz/Pedersen 2013, Geczy/Samonov
+  2017) or weekly for crypto (Liu/Tsyvinski/Wu 2022, 3-week formation).
+  Hourly momentum is a ~720× contraction of the framework with no
+  peer-reviewed support.
+- **Breakout** literature: Lukac/Brorsen/Irwin 1988 found channel
+  breakouts profitable on 12 commodity futures 1978–1984. Park/Irwin
+  2007 meta-survey shows post-1990 weakening; Marshall/Cahan/Cahan 2008
+  and Park/Irwin 2010 (Reality Check / Hansen SPA) show no consistent
+  profitability post-1990 after data-snooping correction. Crypto-
+  specific edge (Zarattini 2025) is in the ensemble + rotational-basket
+  + vol-sizing layer, not single-pair single-lookback.
+- **Grid trading** is mathematically zero-EV pre-fees under symmetric
+  random walk (Chen/Chen/Jang 2025). Edge requires regime-detection
+  conditioning to range/low-trend/mid-vol — informs the GridTrading
+  regime-conditional demotion hypothesis.
+
+### Why daily/weekly/multi-asset, not hourly/single-pair
+
+The 1H single-pair substrate sits in an academic dead zone for nearly
+every retail strategy archetype. Hourly is too noisy for trend
+(literature monthly), too coarse for high-frequency mean-reversion
+(literature minute-level or below), and lacks the cross-sectional
+breadth that drives most published Sharpe in TSMOM. The Phase 3c 9/10
+RETIRE result is consistent with this — the substrate, not the
+strategies, is the dominant failure mode for most of the cohort.
+
+The Phase 4.A resurrection hypotheses move each strategy to the
+timeframe / instrument-set / substrate where its archetype has the
+strongest published support. Whether *any* of them survive Phase 3b
+validation in our specific implementation remains an open empirical
+question — that's what 4.A is for.
+
+### Operational risk patterns
+
+- **Capital floor matters more than strategy count.** Spreading thin
+  capital across 10 strategies leaves each below minimum viable
+  threshold given exchange fee structure. Paper trading all 10 was
+  correct (to identify performers); real capital deployment must
+  concentrate. This argues for the Phase 4.C verdict-tree approach (≥2
+  passes → portfolio; 1 pass → user decides; 0 → Branch C confirmed)
+  rather than auto-deploy of any survivor.
+- **Pair selection is strategy-critical.** LINK trends rather than
+  reverts — wrong pairing for MeanReversion. VWAP has structural
+  limitations in 24/7 crypto markets (no session anchor for the daily
+  VWAP that the literature uses).
+- **Simulator fix can flip sign, not just magnitude.** The BearShort
+  Sharpe inversion (pre-fix +1.31 → post-fix −2.96, commit `25bd843`)
+  demonstrates that pre-fix backtest results can be directionally
+  wrong, not just imprecise. The trials.log supersession-tagging policy
+  (open_questions.md, resolved 2026-04-26) was implemented in response
+  to this.
+
+### Thai tax considerations (Phase 4.B venue choice)
+
+The 2025–2029 Thai personal-income-tax exemption applies only to
+Thai-SEC-licensed exchanges. Binance.com is not on that list. This
+affects the venue choice for Phase 4.B funding-rate harvest if the
+strategy survives the 4.A → 4.B sequence. Decision deferred until 4.A
+verdicts are in and 4.B is actually scheduled. Tracked in
+`docs/open_questions.md`.
+
+### Sources
+
+Primary literature touched in the chat 2026-04-29 research synthesis (not
+exhaustive; the named-paper citations in `docs/strategies.md` and
+`docs/strategy_evidence_audit_2026-04-26.md` cover the per-strategy
+evidence in more detail):
+
+- Brock, Lakonishok, LeBaron 1992; Sullivan, Timmermann, White 1999;
+  Bajgrowicz, Scaillet 2012 (technical-rule profitability under FDR)
+- Moskowitz, Ooi, Pedersen 2012; Hurst, Ooi, Pedersen 2017 (TSMOM)
+- Jegadeesh, Titman 1993; Antonacci 2012, 2014; Asness, Moskowitz,
+  Pedersen 2013; Geczy, Samonov 2017 (momentum)
+- Liu, Tsyvinski, Wu 2022 (crypto momentum at weekly)
+- Caporale, Plastun, Oliinyk 2019 (crypto hourly counter-movement)
+- Lukac, Brorsen, Irwin 1988; Park, Irwin 2007, 2010; Marshall, Cahan,
+  Cahan 2008 (channel breakouts)
+- Zarattini, Pagani, Barbon 2025; Zarattini, Barbon, Aziz 2024
+  (crypto rotational-basket breakouts and selection-layer edge)
+- Chen, Chen, Jang 2025 (grid trading EV)
+- Wen, Bouri, Xu, Zhao 2022; Li, Sakkas, Urquhart 2022 (1H crypto TSM,
+  rare peer-reviewed support — informs BearShort academic basis)
+- Cakici et al. 2024 (sophisticated ML on weekly crypto barely
+  surviving costs — caps upside of retail-template daily/multi-pair
+  redesign)
+- Daniel, Moskowitz; Barroso, Santa-Clara (vol-scaling for momentum
+  crash protection)
+- Constantinides 1979 (averaging-down dominated under standard expected
+  utility — informs DCA structural diagnosis)
+- DeMiguel, Garlappi, Uppal 2009 + 2024 replication (1/N nearly
+  impossible to beat OOS — informs Phase 3d weighting choice)
+- Funding-rate-harvest 2024–2025 papers (multiple; specific citations to
+  be re-verified before Phase 4.B harness extension scoping)
+
+The funding-rate-harvest citations should be re-verified specifically
+before Phase 4.B begins — that strategy depends most heavily on a
+specific empirical literature, and the exact paper set should be in
+`research/funding-rate-literature.md` per the no-p-hacking rule before
+the first 4.B trial appends to `trials.log`.
