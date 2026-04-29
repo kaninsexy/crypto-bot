@@ -238,34 +238,137 @@ Before sending: does this message contain everything the user needs to act
 on the current goal without coming back to ask? If "now do X" is
 predictable, X belongs in the current response.
 
-### Pre-trial gates persist in project files, not just chat handoffs
+### Drift prevention
 
-When a chat-level scoping decision creates a constraint on
+Seven mandates persisted from chat 2026-04-30 audit, where a
+Phase 4.B Track C drift bug surfaced a class of failures: the
+constraint existed in chat memory or a handoff prompt but
+not in any project file, and the agent producing work didn't
+read the right evidence to catch the drift.
+
+**A. Read evidence end-to-end before acting.** When working on
+a strategy, trial, or harness component, read the following
+end-to-end before responding or acting (each is a separate
+authority and skipping any of them produces drift):
+  1. `research/<strategy>-literature.md` — hypothesis-of-
+     record + locked pre-trial gates + Variation #1/#N rows
+  2. `backtest/holdout_manifest.json` entry — substrate
+     truth (timeframe, symbol/symbols/legs, dev/holdout
+     boundaries)
+  3. `backtest/trials.log` rows for the strategy — ground
+     truth for what's been tested (variation_id, params_hash,
+     observed_sharpe, distribution stats, smoke vs full_cpcv
+     tagging, supersession status)
+  4. `docs/bot_status.md` row — running results table +
+     forensic links
+  5. `docs/strategies.md` section — Phase 3c verdict + 3-year
+     diagnosis + Phase 4.A outcome subsection if applicable
+  6. `docs/research_log.md` relevant section — *why* the
+     hypothesis was chosen, especially "AI/algo trading
+     viability and strategy-archetype evidence (consolidated
+     2026-04-29)" for resurrection-batch hypotheses, and the
+     venue/tax sections for Phase 4.B work
+Do not pattern-match from variation names or chat-memory
+summaries. Variation names describe intent ("phase4a-daily-
+resurrection-v1"); the literature file describes what was
+actually tested. The chat 2026-04-30 audit-loop happened
+because variation names were treated as if they specified
+harness behavior; they don't.
+
+**B. holdout_manifest.json is source of truth for substrate.**
+Per-strategy timeframe AND symbol/symbols/legs are both in
+the manifest entry, not in code. When auditing a trial or
+designing a new entry, check the manifest's timeframe AND
+the manifest's symbol/symbols/legs against the strategy's
+hypothesis-of-record. Mismatch is drift; surface and fix the
+manifest before re-running, not after. Per the timeframe-per-
+strategy principle in MASTER_PLAN.md, the same applies to
+pair/basket — there is no global project pair, just as there
+is no global project timeframe.
+
+**C. Pre-trial gates persist in project files, not just chat
+handoffs.** Chat-level scoping decisions that constrain
 future variation design ("Variation #1 must be single-pair",
-"manifest schema extends additively only", etc.), the
-constraint is persisted in the relevant per-strategy
-literature file under `research/` AND in `docs/MASTER_PLAN.md`
-before the chat closes. Chat handoff prompts are ephemeral;
-project files are durable. A gate that lives only in a
-handoff prompt will be lost the moment a future chat starts
-without that prompt.
+"manifest schema extends additively only", etc.) are
+persisted in the relevant per-strategy literature file under
+`research/` AND in `docs/MASTER_PLAN.md` before the chat
+closes. Each `research/<strategy>-literature.md` carries a
+"Pre-trial gates (locked)" section near the top listing
+every locked constraint with source citation. Variation rows
+reference these gates; rows that contradict a gate are drift
+bugs caught by reading the literature end-to-end.
 
-The persistence pattern: each `research/<strategy>-
-literature.md` file carries a "Pre-trial gates (locked)"
-section near the top listing every locked constraint with
-source citation (chat date, venue chat, MASTER_PLAN section).
-Variation rows below reference these gates explicitly. A
-Variation row that contradicts a gate is a drift bug — caught
-by reading the literature file end-to-end before any
-variation work, not by re-reading the chat handoff.
+**D. Pre-trial gates carry verbatim into Claude Code prompts
+from chat handoffs.** When the chat agent drafts a Claude
+Code prompt from a handoff prompt, every numbered pre-trial
+gate, scoping constraint, and "must hold before X" item from
+the handoff copies verbatim into the Claude Code prompt — not
+summarized, not paraphrased, not dropped because they "feel
+covered" by track scope. Constraints not in the prompt do not
+bind the agent. Today's Track C drift happened because gate
+#8 ("first dev_cpcv trial single-pair before adding alts")
+was in the chat handoff prompt but not in the Claude Code
+prompt, so the literature stub the agent produced drifted to
+multi-pair selection without violating any constraint
+visible to it.
 
-Today's drift case (2026-04-30 chat): Phase 4.B venue scoping
-locked gate #8 ("first dev_cpcv trial single-pair before adding
-alts") in chat 2026-04-29. Track C produced a literature file
-with Variation #1 = top-1-from-basket because the gate wasn't
-persisted in any project file and the Claude Code prompt
-didn't carry it forward. Persistence rule prevents this class
-of drift.
+**E. Review agent output against original scoping, not just
+against tests.** Two passes: (1) Claude Code self-check
+before reporting completion — re-read the handoff prompt's
+pre-trial gates and verify each produced artifact (literature
+file, spec doc, manifest entry, code module) satisfies them.
+A test-passing artifact that contradicts a scoping decision
+is still wrong; surface as a drift flag, do not report
+completion as clean. (2) Chat agent review after Claude Code
+reports — open the produced artifact and compare substantive
+content against each gate from the handoff. Drift detection
+is the chat agent's job, not the implementation agent's, but
+the implementation agent's self-check makes drift visible
+earlier. Today's review missed Track C drift because the
+review was against test results and Claude Code's own report,
+not against the literature file's actual content vs. gate #8.
+
+**F. Decision authority — design choices are agent calls.**
+When the data answers the question (project files + past
+chats + handoff prompt), the agent decides and executes — no
+option-A/B/C menus, no "pick one and confirm" loops back to
+the human. Sign-off is reserved exclusively for: git commit,
+git push, deploy, and sacred-harness file schema changes per
+CLAUDE.md "Human only" list. Design choices like which
+abstraction layer, dispatch pattern, manifest field shape,
+module location, naming convention are agent calls when the
+evidence answers them. Bit-by-bit sign-off cycles waste time
+and tokens on already-planned work and create the failure
+mode where a chat fragments a decided plan into N approval
+rounds. The user has stated this preference repeatedly; the
+mandate persists it in the repo so it doesn't depend on
+chat-side memory.
+
+**G. Trial intentionality boundary at commit, not at run.**
+Per the existing "Trial intentionality" core principle:
+commits are the deliberate human act marking a trial as "this
+is what I tested, this is the variation I am claiming." The
+boundary fires at git commit, not at trial run. Agents may
+run trials, append rows to trials.log via record_trial, edit
+literature files, and update bot_status.md autonomously per
+the autonomy rules — but stop short of git add / git commit /
+git push every time. The user reviews the diff and commits
+manually. This is the same boundary as mandate F: design
+decisions don't need sign-off, but the persistence of those
+decisions in the git history does.
+
+**Worked example (today's drift case).** Phase 4.B venue
+scoping (chat 2026-04-29) locked gate #8: Variation #1 of
+funding-rate harvest must be single-pair (BTC-USDT-SWAP +
+BTC/USDT). Multi-pair top-N selection is Variation #2 with
+its own hypothesis. Track C produced
+`research/funding-rate-literature.md` with Variation #1 named
+`phase4b-delta-neutral-top1-v1` (top-1-from-basket, multi-
+pair selection). Drift caught in chat 2026-04-30 audit and
+corrected: literature rewritten single-pair, gate #8
+persisted in literature + MASTER_PLAN + open_questions +
+bot_status + this CLAUDE.md section. Mandates A-G above are
+the structural prevention.
 
 ### Response format after Claude Code output
 
