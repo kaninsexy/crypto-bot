@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-04-26
+Last updated: 2026-05-02 (post Phase 4.B Variation #1 dev_cpcv pass)
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -354,6 +354,63 @@ N=20 against `sr_zero_expected = +1.9007`.
   for this strategy.
 - **Forensic:** `research/dualmomentum-literature.md` § "Trial #1
   outcome (2026-04-29)".
+
+---
+
+## Phase 4.B verdicts (2026-05-02)
+
+Source: `backtest/trials.log` trial_id
+`f2c343c3fb2c4c029b66063d38a96605`. Test against
+`sr_zero_expected = 0.0000` (single-trial budget); BTC B&H
+baseline +1.6337.
+
+---
+
+### FundingRateHarvest — BTC/USDT (delta-neutral spot+perp)
+
+- **Phase 4.B verdict (2026-05-02):** DEV_CPCV PASS. observed_sharpe
+  +4.3395, cpcv mean +5.1669, std 4.8062, n_trades 36 (26
+  funding_flip + 10 backtest_end), signal_event_count 2620
+  funding settlements, dsr_validation 0.99999548. All four
+  verdict-tree bools True. Holdout/final_gate pending.
+- **Substrate:** OKX USDT-M perp BTC-USDT-SWAP + USDT spot
+  BTC/USDT. Funding cadence 8h. Dev window 2023-05-03 →
+  2025-09-22 (~29 months). Path-5 hybrid funding ingestion
+  (commit `67bc92d`) covers data_start with 1-month margin.
+- **Mechanism evidence (literature):** Schmeling, Schrimpf &
+  Todorov "Crypto Carry" (BIS WP 1087 / forthcoming
+  Management Science). Sample April 2019 – July 2024, BTC +
+  ETH on six venues. Full-sample mean funding ~8% APY with
+  annualized Sharpe 6.45; 4.06 from 2024 onward; turning
+  negative in 2025. The strategy collected 93.22% of its
+  realised PnL from funding cash (per gate-2 audit on the
+  smoke window), confirming the literature's funding-as-
+  dominant-driver claim on this dev sample.
+- **Per-block forensics:** block 1 (mid-2023) sharpe −2.17
+  in a multi-month negative-funding regime — strategy
+  repeatedly opened, hit funding-flip exit at N=4 consecutive
+  negative settlements, exited and reopened. Bleeds fees in
+  that regime; structural failure mode named in the
+  literature. Block 3 (2024 bull run) sharpe +14.72 — funding
+  paid richly and the strategy held continuously.
+- **Diagnostic chain:** three superseded prior trials before
+  the clean f2c343c3 row. (a) `8acd27ae...` stale-cache bug
+  (10 blocks at funding_settlements=0); (b) `2b9bd83b...`
+  script-level months-math bug (blocks 0-1 partial coverage);
+  (c) `e7eba18a...` harness-level months-math bug (same
+  symptom). Each fix-SHA is referenced in the row's
+  superseded_by field; the substrate-coverage assertion + per-
+  block ANOMALY D were added across the chain. See `git log
+  --oneline 6c395ab..2817c3f` for the four fix commits.
+- **Next action:** chat-side verdict-tree review. If review
+  confirms keep, proceed to holdout/final_gate via
+  `holdout.load_holdout("FundingRateHarvest_BTC", caller=...,
+  reason=...)` — that's the deploy gate, not dev_cpcv. If review
+  surfaces concerns about block 3's outsized contribution to
+  the mean (the 2024-bull-regime tail), Variation #2 (multi-
+  pair top-N selection) is queued but stub-only in
+  `research/funding-rate-literature.md`; promotion requires
+  its own hypothesis-of-record fill before record_trial.
 
 ---
 
