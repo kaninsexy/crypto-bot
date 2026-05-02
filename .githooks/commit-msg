@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Git commit-msg hook for crypto-bot.
+# Blocks empty / comments-only commit messages. Subject-only
+# commits get a soft note (allowed). Subject + body pass clean.
+# Bypass with --no-verify for legitimate empty commits.
+# Activated via: git config core.hooksPath .githooks
+
+set -uo pipefail
+
+COMMIT_MSG_FILE="$1"
+
+# Count non-comment, non-blank lines.
+# `grep -v` exits 1 when zero matches; tolerate via `|| true` so an
+# empty intermediate stage doesn't trip pipefail before we count.
+NON_COMMENT_LINES=$( { grep -v '^#' "$COMMIT_MSG_FILE" || true; } \
+    | { grep -v '^[[:space:]]*$' || true; } \
+    | wc -l \
+    | tr -d ' ')
+
+if [ "$NON_COMMENT_LINES" -lt 1 ]; then
+    echo "BLOCKED: empty commit message." >&2
+    echo "" >&2
+    echo "Commits require at minimum a subject line. Use:" >&2
+    echo "  git commit -F - <<'EOF'" >&2
+    echo "  Subject line" >&2
+    echo "" >&2
+    echo "  Body explaining the change." >&2
+    echo "  EOF" >&2
+    echo "" >&2
+    echo "Bypass for legitimate empty commits: --no-verify" >&2
+    exit 1
+fi
+
+# Soft note for subject-only commits (no body).
+BODY_LINES=$( { grep -v '^#' "$COMMIT_MSG_FILE" || true; } \
+    | tail -n +2 \
+    | { grep -v '^[[:space:]]*$' || true; } \
+    | wc -l \
+    | tr -d ' ')
+
+if [ "$BODY_LINES" -lt 1 ]; then
+    echo "NOTE: commit has subject only, no body." >&2
+    echo "OK for trivial fixes; consider adding context for" >&2
+    echo "anything substantive." >&2
+fi
+
+exit 0
