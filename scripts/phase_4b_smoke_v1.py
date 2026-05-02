@@ -115,11 +115,20 @@ logger.info(
 
 # ── 4. Funding history covering dev window ───────────────────────────────────
 
-dev_span_days = (holdout_start - data_start).days
-months = int(math.ceil(dev_span_days / 30.44)) + 1
+# Funding cache must cover from data_start back to NOW (the
+# archive's youngest boundary), not just the dev_span.  The dev
+# window ends at holdout_start (Sep 2025), but the archive fetches
+# back from "now" — so months-back is computed against
+# now − data_start, not holdout_start − data_start.  (Bug
+# diagnosed in chat 2026-05-02 after trial_id 2b9bd83b…'s blocks
+# 0–1 saw funding_settlements=0; the dev_span math missed the
+# now-vs-holdout asymmetry.)
+now_utc = pd.Timestamp.now(tz="UTC")
+months_back_days = (now_utc - data_start).days
+months = int(math.ceil(months_back_days / 30.44)) + 1
 logger.info(
     f"[phase4b-smoke-v1] requesting funding months={months} "
-    f"(dev span {dev_span_days}d)"
+    f"(now − data_start {months_back_days}d)"
 )
 funding_full = okx_funding.load_or_fetch_funding_history(
     legs["perp"], months=months,
@@ -128,6 +137,25 @@ funding_dev = funding_full[funding_full.index < holdout_start]
 logger.info(
     f"[phase4b-smoke-v1] funding rows in dev window: {len(funding_dev)} "
     f"(full fetch {len(funding_full)})"
+)
+
+# Substrate-coverage assertion (chat 2026-05-02): funding_dev must
+# start at or before data_start, otherwise early CPCV blocks land
+# with zero funding settlements and don't actually exercise the
+# strategy.  Aborts before run_perp.
+if funding_dev.index.min() > pd.Timestamp(data_start):
+    logger.error(
+        f"[phase4b-smoke-v1] SUBSTRATE COVERAGE FAILURE: "
+        f"funding_dev earliest {funding_dev.index.min()} "
+        f"is AFTER data_start {data_start}.  Funding cache does "
+        f"not cover the dev window's earliest period.  Check "
+        f"months-back math (months={months}) or extend the Path-5 "
+        f"archive.  Aborting before run_perp."
+    )
+    sys.exit(1)
+logger.info(
+    f"[phase4b-smoke-v1] substrate coverage OK: funding earliest "
+    f"{funding_dev.index.min()} <= data_start {data_start}"
 )
 
 

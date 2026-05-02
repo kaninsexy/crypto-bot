@@ -130,12 +130,48 @@ dev = holdout.load_dev(STRATEGY_ID)
 df_spot = dev["spot"]
 df_perp = dev["perp"]
 
-dev_span_days = (holdout_start - data_start).days
-months = int(math.ceil(dev_span_days / 30.44)) + 1
+# Funding cache must cover from data_start back to NOW (the
+# archive's youngest boundary), not just the dev_span.  The dev
+# window ends at holdout_start (Sep 2025), but the archive fetches
+# back from "now" — so months-back is computed against
+# now − data_start, not holdout_start − data_start.  (Bug
+# diagnosed in chat 2026-05-02 after trial_id 2b9bd83b…'s blocks
+# 0–1 saw funding_settlements=0; the dev_span math missed the
+# now-vs-holdout asymmetry.)
+now_utc = pd.Timestamp.now(tz="UTC")
+months_back_days = (now_utc - data_start).days
+months = int(math.ceil(months_back_days / 30.44)) + 1
+logger.info(
+    f"[full_cpcv-v1] requesting funding months={months} "
+    f"(now − data_start {months_back_days}d)"
+)
 funding_full = okx_funding.load_or_fetch_funding_history(
     legs["perp"], months=months,
 )
 funding_dev = funding_full[funding_full.index < holdout_start]
+
+# Substrate-coverage assertion (chat 2026-05-02, post-trial_id
+# 2b9bd83b... supersession diagnosis): funding_dev must start at or
+# before data_start, otherwise early CPCV blocks land with zero
+# funding settlements and don't actually exercise the strategy.
+# ANOMALY A's aggregate-ratio floor missed this for 2 of 10 blocks;
+# the structural check is per-block coverage, expressed at the
+# funding-history level here (assert before run_cpcv_perp invokes
+# its per-block split).
+if funding_dev.index.min() > pd.Timestamp(data_start):
+    logger.error(
+        f"[full_cpcv-v1] SUBSTRATE COVERAGE FAILURE: "
+        f"funding_dev earliest {funding_dev.index.min()} "
+        f"is AFTER data_start {data_start}. Funding cache "
+        f"does not cover the dev window's earliest blocks. "
+        f"Check months-back math (months={months}) or extend "
+        f"the Path-5 archive. Aborting before run_cpcv_perp."
+    )
+    sys.exit(1)
+logger.info(
+    f"[full_cpcv-v1] substrate coverage OK: funding earliest "
+    f"{funding_dev.index.min()} <= data_start {data_start}"
+)
 
 headline_strategy = FundingRateHarvestStrategy(
     symbol=legs["spot"], timeframe=entry["timeframe"],
@@ -484,10 +520,16 @@ post_rows = list(
         strategy_id=STRATEGY_ID, trial_type="full_cpcv",
     )
 )
-assert len(post_rows) == 1, (
-    f"expected 1 full_cpcv row after append, got {len(post_rows)}"
+# Filter out rows tagged superseded_by (Policy-(c) invalidation
+# pattern); we expect exactly one clean (unsuperseded) row after
+# this append.  Mirrors the pre-flight's supersession awareness.
+clean_post = [r for r in post_rows if not r.get("superseded_by")]
+assert len(clean_post) == 1, (
+    f"expected exactly 1 clean full_cpcv row after append, got "
+    f"{len(clean_post)} (total full_cpcv rows = {len(post_rows)}, "
+    f"of which {len(post_rows) - len(clean_post)} are superseded)"
 )
-new_row = post_rows[-1]
+new_row = clean_post[-1]
 assert "cpcv" in new_row and "sharpe_distribution" in new_row["cpcv"], (
     "cpcv block missing sharpe_distribution"
 )
