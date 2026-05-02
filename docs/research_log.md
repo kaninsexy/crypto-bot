@@ -375,8 +375,18 @@ In rough order of peer-reviewed support strength:
 
 1. **Funding-rate harvest** (delta-neutral long-spot / short-perp).
    Strongest peer-reviewed support of any retail-accessible crypto
-   strategy candidate. Multiple 2024–2025 papers; baseline funding APY
-   ~10.95% before edge selection. Promoted to Phase 4.B.
+   strategy candidate. Multiple 2024–2025 papers; primary anchor is
+   Schmeling, Schrimpf & Todorov "Crypto Carry" (BIS WP 1087 / CEPR
+   DP20719 / SSRN 4268371; forthcoming Management Science). Empirical
+   mean funding **~8% APY** over April 2019 – July 2024 sample
+   (BTC + ETH, six venues), with annualized Sharpe declining from
+   6.45 (full sample) → 4.06 (from 2024) → negative (2025). The
+   "~10.95% baseline" figure that appeared in earlier drafts of this
+   synthesis was the *theoretical exchange-design floor* (0.01% per
+   8h settlement × 1095 settlements/year), not an empirical baseline;
+   the correction is logged in § "Thai SEC venue / derivatives
+   status" below. Promoted to Phase 4.B; per-strategy hypotheses live
+   in `research/funding-rate-literature.md`.
 2. **Time-series momentum at daily/weekly multi-asset.** Moskowitz/Ooi/
    Pedersen 2012, Hurst/Ooi/Pedersen 2017, Liu/Tsyvinski/Wu 2022.
    Diversified TSMOM Sharpe ~1.3 across 67 markets vs 0.3–0.5 single-
@@ -499,14 +509,18 @@ evidence in more detail):
   utility — informs DCA structural diagnosis)
 - DeMiguel, Garlappi, Uppal 2009 + 2024 replication (1/N nearly
   impossible to beat OOS — informs Phase 3d weighting choice)
-- Funding-rate-harvest 2024–2025 papers (multiple; specific citations to
-  be re-verified before Phase 4.B harness extension scoping)
-
-The funding-rate-harvest citations should be re-verified specifically
-before Phase 4.B begins — that strategy depends most heavily on a
-specific empirical literature, and the exact paper set should be in
-`research/funding-rate-literature.md` per the no-p-hacking rule before
-the first 4.B trial appends to `trials.log`.
+- Funding-rate-harvest primary: Schmeling, Schrimpf, Todorov "Crypto
+  Carry" (BIS WP 1087 / CEPR DP20719 / SSRN 4268371; forthcoming
+  Management Science). Supporting: Christin/Routledge/Soska/Zetlin-
+  Jones "The Crypto Carry Trade" (CMU working paper); van Rij et al.
+  2025 "Exploring Risk and Return Profiles of Funding Rate Arbitrage
+  on CEX and DEX" (Blockchain: Research and Applications, ScienceDirect
+  PII S2096720925000818; lead-author surname pending verification).
+  Citation slots filled in `research/funding-rate-literature.md`
+  Variation #1 entry on 2026-05-02; the no-p-hacking gate that gated
+  Phase 4.B's first trial is now closed for Variation #1. Variations
+  beyond #1 still need their own source-cited justification per the
+  same rule.
 
 ## TradingAgents Multi-Agent Framework (logged 2026-04-29) — REFERENCE
 
@@ -626,7 +640,7 @@ DSR-quality. Smoke captures the signal without inflating multiple-
 testing accounting. The schema's three trial-types (smoke, full_cpcv,
 final_gate) cover this case cleanly without needing a fourth type.
 
-## Thai SEC venue / derivatives status (logged 2026-04-29) — Phase 4.B venue resolution
+## Thai SEC venue / derivatives status (logged 2026-04-29; empirical-baseline correction 2026-05-02) — Phase 4.B venue resolution
 
 Logged at Phase 4.B kickoff scoping to capture the venue/tax research
 behind the OKX-offshore-with-PIT decision. Locks in Branch 1 of the
@@ -669,15 +683,34 @@ Branch 3 (skip 4.B entirely) by the user.
 
 ### Implications for the edge claim
 
-The 2026-04-29 chat synthesis quoted a baseline ~10.95% annualised
-funding APY before edge selection. After Thai PIT (marginal rate
-estimated 25–35% on funding income classified as Section 40(4)(h)
-benefit per the Revenue Code) the post-tax baseline narrows to
-~7.1–8.2% before perp fees, spot fees, slippage, and long-leg vol
-drag. The edge gate is materially tighter than the pre-tax framing
-suggested. Per-strategy hypotheses in `research/funding-rate-literature.md`
-must derive their expected Sharpe / required-funding-rate threshold
-*post-tax*, not pre-tax.
+**2026-05-02 correction — empirical anchor replaces theoretical
+floor.** The 2026-04-29 chat synthesis quoted "~10.95% annualised
+funding APY before edge selection" as if it were the empirical
+baseline. That figure is in fact the *theoretical exchange-design
+ceiling* implied by the 0.01%-per-8h funding clamp (0.01% × 1095
+settlements/year ≈ 10.95%); it is the upper bound the exchange
+will pay, not the long-run realized average.
+
+The empirical anchor is Schmeling, Schrimpf & Todorov "Crypto
+Carry" (sample April 2019 – July 2024, BTC + ETH on six venues):
+**~8% APY mean pre-tax**, vol ~0.8%, Sharpe 6.45 full sample
+declining to 4.06 from 2024 onward and turning negative in 2025.
+
+After Thai PIT (marginal rate estimated 25–35% on funding income
+classified as Section 40(4)(h) benefit per the Revenue Code) the
+**post-tax empirical baseline narrows to ~5.2–6.0% APY** before
+perp fees, spot fees, slippage, and long-leg vol drag — that is
+the band per-strategy hypotheses in
+`research/funding-rate-literature.md` must derive their expected
+Sharpe / required-funding-rate threshold from. The earlier
+"~7.1–8.2% post-tax" band — which was the theoretical-design
+ceiling × (1−0.25..0.35) — is preserved here only as a ceiling
+reference, not the trading anchor.
+
+The edge gate is materially tighter than either the pre-tax
+framing or the design-ceiling framing suggested, and tighter
+again because of the 2024–2025 regime decline that Schmeling et
+al. document directly.
 
 ### Reconsideration trigger
 
