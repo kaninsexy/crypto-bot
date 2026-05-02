@@ -74,39 +74,43 @@ logger.info(
 
 # ── 2. Pre-flight ────────────────────────────────────────────────────────────
 # Permitted prior states:
-#   (a) [smoke]                                 — clean first-run.
-#   (b) [smoke, full_cpcv] AND the full_cpcv row carries
-#       superseded_by                           — re-run after a
-#                                                 prior degenerate
-#                                                 row was tagged
-#                                                 superseded per
-#                                                 trials.log Policy
-#                                                 (c).
-# Anything else aborts.
+#   (a) [smoke]                              — clean first-run.
+#   (b) [smoke, full_cpcv × N (all superseded)]
+#                                            — re-run after one or
+#                                              more prior degenerate
+#                                              rows were tagged
+#                                              superseded per
+#                                              trials.log Policy (c).
+# Anything else aborts.  The N-superseded generalisation
+# (Mandate F, chat 2026-05-02) lets the script re-run after both
+# the original degenerate row (stale-cache bug) and the partial-
+# coverage row (months-back math bug) have been superseded —
+# without further pre-flight edits per fix iteration.
 
 prior_rows = list(_trials.read_trials(strategy_id=STRATEGY_ID))
-if (
-    len(prior_rows) == 1
-    and prior_rows[0].get("trial_type") == "smoke"
-):
-    logger.info(
-        f"[full_cpcv-v1] pre-flight clean: prior rows = "
-        f"[{prior_rows[0].get('trial_type')}]"
-    )
-elif (
-    len(prior_rows) == 2
-    and prior_rows[0].get("trial_type") == "smoke"
-    and prior_rows[1].get("trial_type") == "full_cpcv"
-    and prior_rows[1].get("superseded_by")
-):
-    logger.info(
-        f"[full_cpcv-v1] prior degenerate row "
-        f"{prior_rows[1]['trial_id']} marked superseded_by "
-        f"{prior_rows[1]['superseded_by']!r}; proceeding with re-run."
-    )
+smoke_rows = [r for r in prior_rows if r.get("trial_type") == "smoke"]
+fcpcv_rows = [r for r in prior_rows if r.get("trial_type") == "full_cpcv"]
+clean_fcpcv = [r for r in fcpcv_rows if not r.get("superseded_by")]
+
+if len(smoke_rows) == 1 and len(clean_fcpcv) == 0:
+    if len(fcpcv_rows) == 0:
+        logger.info(
+            "[full_cpcv-v1] pre-flight clean: prior rows = [smoke]"
+        )
+    else:
+        logger.info(
+            f"[full_cpcv-v1] pre-flight: {len(fcpcv_rows)} prior "
+            f"full_cpcv rows all superseded; proceeding with re-run.  "
+            f"Superseded SHAs: "
+            + ", ".join(r["superseded_by"][:7] for r in fcpcv_rows)
+        )
 else:
     summary = [
-        (r.get("trial_type"), r.get("superseded_by")) for r in prior_rows
+        (
+            r.get("trial_type"),
+            (r.get("superseded_by") or "None")[:7],
+        )
+        for r in prior_rows
     ]
     logger.error(
         f"[full_cpcv-v1] pre-flight: unexpected prior-row state "
@@ -306,15 +310,18 @@ logger.info(
     f"block_exit_reasons={dict(_block_exit_reasons)}"
 )
 
-# ANOMALY A — funding events not actually processed
-# If the sum of funding rows the simulator processed across blocks
-# is less than half of what the callback expected, the funding
-# cache is almost certainly stale (or block-boundary alignment
-# leaked the dev window's funding history).
+# ANOMALY A — funding events not actually processed.
+# Tightened to 0.85 (chat 2026-05-02): the original 0.5 floor was
+# permissive enough that the partial-coverage harness bug
+# (trial_id e7eba18a..., 1981/2620 = 0.756 ratio) squeaked
+# through.  After the harness-layer fix in this commit the ratio
+# should land near ~1.0; 0.85 leaves headroom for legitimate
+# small gaps (occasional missed settlements during OKX outages)
+# without permitting harness-layer math errors.
 if (
     callback_signal_events_total > 0
     and funding_settlements_processed_total
-    < 0.5 * callback_signal_events_total
+    < 0.85 * callback_signal_events_total
 ):
     logger.error(
         f"[full_cpcv-v1] ANOMALY A: funding cache likely stale — "
@@ -367,6 +374,31 @@ if _flat_distribution:
         "trades or whether signals are silently identical across "
         "blocks."
     )
+
+# ANOMALY D — per-block funding coverage (chat 2026-05-02).
+# ANOMALY A's aggregate floor catches large absolute coverage
+# gaps; ANOMALY D catches the structural failure where some
+# blocks have ZERO funding events while others have full
+# coverage.  A single zero-coverage block means that block didn't
+# exercise the strategy's edge, regardless of what the aggregate
+# ratio says.  This is the structural check the 2b9bd83b... and
+# e7eba18a... regressions slipped past.
+zero_coverage_blocks = [
+    bid for bid, n in _funding_settlements_processed.items()
+    if n == 0
+]
+if zero_coverage_blocks:
+    logger.error(
+        f"[full_cpcv-v1] ANOMALY D: {len(zero_coverage_blocks)} "
+        f"of {len(_funding_settlements_processed)} blocks had "
+        f"funding_settlements=0 — block IDs "
+        f"{sorted(zero_coverage_blocks)}.  Strategy cannot have "
+        f"exercised its edge in those blocks.  Aborting before "
+        f"record_trial.  Likely cause: harness-layer months-back "
+        f"math undersized the funding fetch; verify "
+        f"backtest/cpcv_perp.py:_funding_months_window is fixed."
+    )
+    sys.exit(1)
 
 
 # ── 5. DSR on validation (dev) ───────────────────────────────────────────────

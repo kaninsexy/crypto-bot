@@ -311,14 +311,22 @@ def _split_legs_blocks(
 
 
 def _funding_months_window(common_idx: pd.Index) -> int:
-    """Convert the dev-window calendar span into a rounded-up month
-    count for `load_or_fetch_funding_history(months=...)`.
+    """Months-back parameter for `load_or_fetch_funding_history`,
+    sized so the archive covers from `common_idx[0]` to *now*.
 
-    The funding loader fetches a trailing window of `months` months;
-    we round up to ensure the entire dev window is covered.
+    Parity-fix with `scripts/phase_4b_*_v1.py` (chat 2026-05-02
+    Phase 4.B Variation #1 substrate-coverage fix carried into
+    the harness layer): the funding archive walks back from now,
+    not from `common_idx[-1]`, so months-back must be measured
+    against `(now - common_idx[0])`.  The previous dev-span math
+    `(common_idx[-1] - common_idx[0])` caused trial_id
+    `2b9bd83b…` and `e7eba18a…` to land with
+    `funding_settlements=0` in the earliest CPCV blocks (the
+    months-back parameter undershot when `holdout_start` was
+    significantly before `now`).
     """
     if len(common_idx) < 2:
         return 1
-    span_days = (common_idx[-1] - common_idx[0]).days
-    months = max(1, int(math.ceil(span_days / 30.44)))
-    return months
+    now_utc = pd.Timestamp.now(tz="UTC")
+    months_back_days = (now_utc - common_idx[0]).days
+    return max(1, int(math.ceil(months_back_days / 30.44)))
