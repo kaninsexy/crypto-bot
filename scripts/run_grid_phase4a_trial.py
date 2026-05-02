@@ -13,8 +13,9 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path("/Users/kanin/Documents/crypto-bot")
-sys.path.insert(0, str(ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from backtest import holdout as _holdout
 from backtest import trials as _trials
