@@ -1,9 +1,15 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
 
-Last updated: 2026-04-29
+Last updated: 2026-05-02
 
 This file is read by Claude Code and other agents when working in this repo.
 Read it before starting any task.
+
+READ FIRST at chat start: `docs/handoff_template.md` — workflow
+procedure for chat handoffs, Claude Code prompt construction, and
+project-knowledge management. CLAUDE.md holds project-wide
+behavioral mandates; the handoff template holds task-specific
+workflow that doesn't need to compete for attention in every chat.
 
 ## Project overview
 
@@ -200,6 +206,14 @@ running it.
 - `self._slots` not `self.slots` in `portfolio/manager.py`
 - Never change `total_capital` semantics
 - Server deploy uses `sudo bash -c` (NOT `sudo -u botuser`)
+- `holdout_manifest.json` is source of truth for BOTH timeframe
+  AND symbol/symbols/legs per strategy. When auditing a trial,
+  check the manifest entry, not the variation_id label.
+- `portfolio/regime_detector.py` is the regime detector module
+  (NOT `strategies/regime.py`). Public API: `RegimeDetector`
+  class with `detect(df) -> RegimeReading` and `current_regime`
+  property; module exports `REGIME_STRONG_BULL`/`BULL`/`RANGE`/
+  `VOLATILE`/`BEAR`/`CRASH` constants and `ALL_REGIMES` list.
 
 ## When to use which tool
 
@@ -238,6 +252,61 @@ Before sending: does this message contain everything the user needs to act
 on the current goal without coming back to ask? If "now do X" is
 predictable, X belongs in the current response.
 
+### Self-execute mechanically-derivable steps
+
+Anything Claude can do with available tools (`bash_tool`,
+`conversation_search`, `project_knowledge_search`, `view`,
+`str_replace`, `create_file`), Claude does — never routes through
+the user as "paste this output and I'll respond." Includes checking
+`/mnt/project/` state, comparing repo to project knowledge, reading
+file headers to verify scope, splitting hunks, staging git
+operations. Routing mechanical inspection through the user is the
+broadest version of the bundle-violation pattern.
+
+### Commit and shell-bundle rule
+
+(1) Every "stop for commit" surface bundles the runnable git
+command (scoped `git add` + `git commit` with message composed from
+the work just done) in the same response. The user should never
+need to ask for the commit code separately.
+
+(2) Independent shell commands sharing a goal go in ONE bash block,
+not N. Three commits, three test runs, three stagings = one block,
+chained via `&&` or sequential lines under one fence. Splitting an
+N-action shell sequence into N blocks violates bundle-by-default
+even when each block is technically runnable.
+
+### Don't pre-write downstream content
+
+After Claude Code reports completion, deliver verification (tests
+pass/fail, flagged items) and stop. Do not pre-write doc edits,
+commit messages, or commit-status checklists unless explicitly
+asked. Doc updates and commit content are the user's job at commit
+time. Distinct from the autonomy-sign-off rule: that one is about
+not gating on permission, this one is about not producing
+unsolicited downstream content.
+
+### Pushback re-check
+
+When the user pushes back ("is X right?", "shouldn't this be Y?"),
+do NOT immediately validate or flip the answer. First re-read
+evidence (handoff verbatim, project files, past chats via
+`conversation_search`). Then judge if pushback is right, partially
+right, or wrong. Reflexive flipping creates wrong-fix loops. If
+right, say so after verifying. If partially right, separate right
+from wrong. Better to take a turn re-checking than flip twice.
+
+### Missing-or-stale evidence
+
+When project files contradict the handoff prompt, when load-bearing
+fields are absent (manifest schema slots, commit hashes, citations),
+or when sources disagree on a locked decision: STOP. Do not fill
+the gap with judgment, do not assume the newer-looking source wins.
+Surface the discrepancy explicitly; resolve via
+`conversation_search` if past chats answer, else ask the user.
+Does NOT fire on routine search-empties or expected lag
+(bot_status updates, log appends).
+
 ### Drift prevention
 
 Seven mandates persisted from chat 2026-04-30 audit, where a
@@ -274,6 +343,16 @@ resurrection-v1"); the literature file describes what was
 actually tested. The chat 2026-04-30 audit-loop happened
 because variation names were treated as if they specified
 harness behavior; they don't.
+
+  7. Past chats are part of the evidence. Before answering
+     questions about what was decided, why a choice was made,
+     what state the harness is in, or whether a prior decision
+     still holds — call `conversation_search` and/or
+     `recent_chats`. Do not answer from `/mnt/project/` files
+     alone; scoping decisions, pre-trial gates, and rationale
+     often live in chats and don't always make it into
+     `MASTER_PLAN.md`. Single-source-from-project-files is a
+     recurring failure mode.
 
 **B. holdout_manifest.json is source of truth for substrate.**
 Per-strategy timeframe AND symbol/symbols/legs are both in
@@ -357,18 +436,9 @@ manually. This is the same boundary as mandate F: design
 decisions don't need sign-off, but the persistence of those
 decisions in the git history does.
 
-**Worked example (today's drift case).** Phase 4.B venue
-scoping (chat 2026-04-29) locked gate #8: Variation #1 of
-funding-rate harvest must be single-pair (BTC-USDT-SWAP +
-BTC/USDT). Multi-pair top-N selection is Variation #2 with
-its own hypothesis. Track C produced
-`research/funding-rate-literature.md` with Variation #1 named
-`phase4b-delta-neutral-top1-v1` (top-1-from-basket, multi-
-pair selection). Drift caught in chat 2026-04-30 audit and
-corrected: literature rewritten single-pair, gate #8
-persisted in literature + MASTER_PLAN + open_questions +
-bot_status + this CLAUDE.md section. Mandates A-G above are
-the structural prevention.
+Historical drift cases and worked examples: see
+`docs/drift_history.md` (do not load unless investigating a
+specific past failure pattern).
 
 ### Response format after Claude Code output
 
