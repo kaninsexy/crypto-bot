@@ -261,11 +261,34 @@ delta-neutrality broke down.
 
 **Sanity check the simulator must run on every trade:** at exit,
 `abs(spot_qty × spot_exit_price + perp_qty × perp_exit_price)` must
-equal the entry notional within ±1% (basis + fees). Violations
+equal the entry notional within **±5%** (basis + fees). Violations
 indicate a leg-construction bug and the trial row should be tagged
 with `superseded_by` per the existing trials.log invalidation
 policy (`backtest/trials.py` § "superseded_by" field, established at
 commit `6f3c0bf`).
+
+**Tolerance calibration history (chat 2026-05-02).** The original
+±1% tolerance was set at risk-model authoring time without dev-data
+calibration.  The Phase 4.B Variation #1 smoke trial (HEAD
+`735055c`) tripped the violation flag on 16/17 closes.  Gate-2
+audit (`scripts/phase_4b_gate2_audit.py`) on the dev-window smoke
+(BTC-USDT-SWAP, 16 funding_flip exits) found:
+
+  - max basis-at-exit: **2.67%** (single outlier at a 2025
+    regime-transition close)
+  - p95 basis-at-exit: **1.32%**
+  - p75: 0.69%, p50: 0.45%
+  - aggregate `funding_cash_share`: **93.22%** (basis_pnl_share 6.78%)
+
+The strategy is funding-cash-dominated; the original ±1% was
+miscalibrated for regime-transition closes where basis legitimately
+widens above 1% without indicating a leg-construction bug.  Widened
+to **±5%** to cover the dev-window p95 + max with headroom while
+preserving the gate's purpose: catching order-of-magnitude
+leg-construction errors (e.g. 50-50 spot-perp notional swap, sign-
+flipped quantity, missing-spot leg).  ±5% is well below the
+detection floor for those structural bugs, which would produce
+deviations in the 50%+ range.
 
 ## 6. Open implementation questions (deferred to gated work)
 

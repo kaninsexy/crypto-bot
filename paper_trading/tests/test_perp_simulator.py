@@ -311,3 +311,123 @@ def test_get_and_restore_checkpoint_round_trips_flat_state():
     sim2.restore_checkpoint(snap)
     assert sim2.position is None
     assert sim2.balance == sim.balance
+
+
+# ── Path (a) — exit_mr_ratio_threshold (chat 2026-05-02 fix) ─────────────────
+
+
+def test_exit_mr_ratio_threshold_fires_at_correct_equity():
+    """Path (a): exit_mr_ratio_threshold takes the literature value
+    verbatim (account margin ratio, not the (equity-MM)/MM
+    multiplier).  In isolated mode, an adverse perp move that drops
+    equity / notional below the threshold fires `margin_breach`."""
+    sim = PerpSimulator(
+        initial_balance=10_000.0,
+        spot_symbol="BTC/USDT",
+        perp_symbol="BTC/USDT",
+        leverage=5.0,
+        exit_mr_ratio_threshold=0.01,
+        margin_mode="isolated",
+    )
+    sim.update_spot_close(50_000.0)
+    sim.execute_signal(_buy(), current_price=50_000.0)
+    assert sim.position is not None
+
+    # In isolated mode at L=5x, MR drops below 0.01 around mark ≈ 59_400.
+    # Tick a high above that to trigger the exit.
+    sim.tick_ohlcv_candle(high=60_000.0, low=50_000.0, close=58_000.0)
+    assert sim.position is None
+    assert sim.trade_history[-1].exit_reason == "margin_breach"
+
+
+def test_exit_mr_ratio_threshold_does_not_fire_at_safe_equity():
+    """Small adverse move keeps MR well above 0.01 even in
+    isolated mode."""
+    sim = PerpSimulator(
+        initial_balance=10_000.0,
+        spot_symbol="BTC/USDT",
+        perp_symbol="BTC/USDT",
+        leverage=5.0,
+        exit_mr_ratio_threshold=0.01,
+        margin_mode="isolated",
+    )
+    sim.update_spot_close(50_000.0)
+    sim.execute_signal(_buy(), current_price=50_000.0)
+
+    sim.tick_ohlcv_candle(high=51_000.0, low=50_000.0, close=50_500.0)
+    assert sim.position is not None  # safe; no exit
+
+
+def test_both_thresholds_set_raises():
+    """cushion_threshold and exit_mr_ratio_threshold are mutually
+    exclusive — set exactly one (or neither for the default)."""
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        PerpSimulator(
+            initial_balance=10_000.0,
+            spot_symbol="BTC/USDT",
+            perp_symbol="BTC/USDT",
+            cushion_threshold=0.5,
+            exit_mr_ratio_threshold=0.01,
+        )
+
+
+def test_default_cushion_threshold_path_unchanged():
+    """Regression guard: explicit cushion_threshold=100.0 still fires
+    via the legacy cushion path in isolated mode.  (Mirrors the
+    pre-Path-(a) test
+    `test_maintenance_margin_breach_closes_position_isolated`.)"""
+    sim = PerpSimulator(
+        initial_balance=10_000.0,
+        spot_symbol="BTC/USDT",
+        perp_symbol="BTC/USDT",
+        leverage=5.0,
+        cushion_threshold=100.0,
+        margin_mode="isolated",
+    )
+    sim.update_spot_close(50_000.0)
+    sim.execute_signal(_buy(), current_price=50_000.0)
+    sim.tick_ohlcv_candle(high=55_000.0, low=50_000.0, close=52_000.0)
+    assert sim.position is None
+    assert sim.trade_history[-1].exit_reason == "margin_breach"
+
+
+def test_neither_threshold_kwarg_uses_default_cushion_path():
+    """Regression guard: omitting both kwargs falls back to
+    DEFAULT_CUSHION_THRESHOLD on the cushion path (legacy default).
+    """
+    sim = PerpSimulator(
+        initial_balance=10_000.0,
+        spot_symbol="BTC/USDT",
+        perp_symbol="BTC/USDT",
+    )
+    assert sim.cushion_threshold is not None
+    assert sim.exit_mr_ratio_threshold is None
+
+
+# ── exit_forensics ledger ────────────────────────────────────────────────────
+
+
+def test_exit_forensics_populated_on_close():
+    """Every close appends exactly one row to exit_forensics with
+    the audit-script-required schema."""
+    sim = _make_sim()
+    sim.update_spot_close(50_000.0)
+    sim.execute_signal(_buy(), current_price=50_000.0)
+    sim.update_spot_close(50_500.0)
+    sim.execute_signal(_sell(), current_price=50_500.0)
+
+    assert len(sim.exit_forensics) == 1
+    rec = sim.exit_forensics[0]
+    expected_keys = {
+        "exit_time", "exit_reason", "spot_qty", "spot_exit_price",
+        "perp_qty", "perp_exit_price", "entry_notional",
+        "spot_notional_at_exit", "perp_notional_at_exit",
+        "basis_at_exit_abs_pct", "spot_pnl", "perp_pnl",
+        "funding_cash", "total_pnl",
+    }
+    assert expected_keys.issubset(set(rec.keys()))
+    # Sign convention: perp_qty is signed (negative for short).
+    assert rec["perp_qty"] < 0
+    assert rec["spot_qty"] > 0
+    # basis_at_exit_abs_pct is non-negative (it's an absolute fraction).
+    assert rec["basis_at_exit_abs_pct"] >= 0

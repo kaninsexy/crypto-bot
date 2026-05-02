@@ -76,9 +76,14 @@ DEFAULT_FLIP_EXIT_THRESHOLD: float = 0.0
 # Maintenance-margin cushion exit threshold from § 4.2.
 DEFAULT_CUSHION_THRESHOLD: float = 0.5
 
-# Combined-position sanity tolerance at exit (§ 5).  ±1 % of entry
-# notional is the doc's tolerance for basis + fees.
-DEFAULT_COMBINED_POSITION_TOLERANCE: float = 0.01
+# Combined-position sanity tolerance at exit (§ 5).  ±5 % of entry
+# notional after the 2026-05-02 chat-side recalibration: the original
+# ±1 % over-fired on regime-transition closes where basis legitimately
+# widens, without indicating a leg-construction bug.  See
+# `research/funding-rate-risk-model.md` § 5 "Tolerance calibration
+# history (chat 2026-05-02)" for the gate-2 audit numbers
+# (max 2.67 %, p95 1.32 %, funding_cash_share 93.22 %) and rationale.
+DEFAULT_COMBINED_POSITION_TOLERANCE: float = 0.05
 
 # Per-leg taker fee.  OKX USDT-M default; mirrors the FEE_MARKET
 # value in paper_trading.simulator for behavioural parity.
@@ -171,7 +176,23 @@ class PerpSimulator:
                           flip exit.  Default 0.0.
         cushion_threshold: Maintenance-margin cushion (multiple of
                           MM) below which the position is closed
-                          voluntarily.  Default 0.5.
+                          voluntarily.  Mutually exclusive with
+                          `exit_mr_ratio_threshold`.  When neither
+                          kwarg is set, defaults to
+                          DEFAULT_CUSHION_THRESHOLD (legacy path).
+        exit_mr_ratio_threshold: Account margin ratio (equity /
+                          position_notional) below which the position
+                          is closed with reason='margin_breach'.
+                          Mutually exclusive with `cushion_threshold`.
+                          Path (a) of the cushion-threshold semantic
+                          mismatch fix (chat 2026-05-02): the
+                          literature's
+                          `exit_margin_breach_threshold` is documented
+                          as account margin ratio, NOT
+                          (equity-MM)/MM multiplier; this kwarg lets
+                          callers pass that literal value verbatim
+                          without translation.  Default None
+                          (cushion path active).
         taker_fee:        Per-leg taker fee rate.  Default 0.04 %.
         margin_mode:      "cross" (default) or "isolated".  Variation
                           #2+ may toggle to isolated; variation #1
@@ -188,7 +209,8 @@ class PerpSimulator:
         maintenance_margin_ratio: float = DEFAULT_MAINTENANCE_MARGIN_RATIO,
         flip_exit_n: int = DEFAULT_FLIP_EXIT_N,
         flip_exit_threshold: float = DEFAULT_FLIP_EXIT_THRESHOLD,
-        cushion_threshold: float = DEFAULT_CUSHION_THRESHOLD,
+        cushion_threshold: Optional[float] = None,
+        exit_mr_ratio_threshold: Optional[float] = None,
         taker_fee: float = DEFAULT_TAKER_FEE,
         margin_mode: str = "cross",
     ):
@@ -198,6 +220,20 @@ class PerpSimulator:
             )
         if leverage <= 0:
             raise ValueError(f"leverage must be positive; got {leverage}")
+        # Path (a) cushion-threshold fix: cushion_threshold and
+        # exit_mr_ratio_threshold are alternative exit-rule semantics
+        # for the same downside-event question.  Setting both creates
+        # an ambiguous resolution order and silently broadens the exit
+        # surface; force the caller to pick one.
+        if (
+            cushion_threshold is not None
+            and exit_mr_ratio_threshold is not None
+        ):
+            raise ValueError(
+                "cushion_threshold and exit_mr_ratio_threshold are "
+                "mutually exclusive; set exactly one (or neither for "
+                "the default cushion_threshold path)."
+            )
 
         self.initial_balance: float = initial_balance
         self.balance: float = initial_balance
@@ -215,7 +251,17 @@ class PerpSimulator:
         self.maintenance_margin_ratio = maintenance_margin_ratio
         self.flip_exit_n = flip_exit_n
         self.flip_exit_threshold = flip_exit_threshold
-        self.cushion_threshold = cushion_threshold
+        # Effective threshold dispatch: when either is set, store the
+        # caller's value and disable the other path; when neither is
+        # set, fall back to DEFAULT_CUSHION_THRESHOLD (preserves
+        # pre-Path-(a) behaviour for legacy callers).
+        self.exit_mr_ratio_threshold: Optional[float] = exit_mr_ratio_threshold
+        if exit_mr_ratio_threshold is not None:
+            self.cushion_threshold: Optional[float] = None
+        elif cushion_threshold is None:
+            self.cushion_threshold = DEFAULT_CUSHION_THRESHOLD
+        else:
+            self.cushion_threshold = cushion_threshold
         self.taker_fee = taker_fee
         self.margin_mode = margin_mode
 
@@ -225,6 +271,13 @@ class PerpSimulator:
         # Combined-position-sanity flag set on exit per § 5; consumed
         # by trial-row forensics if non-empty.
         self.combined_position_sanity_violations: list[dict] = []
+        # Per-exit forensic ledger (Track Gate-2, 2026-05-02): every
+        # close appends one entry covering basis-at-exit, per-leg
+        # PnL split, accrued funding, and total realised PnL.
+        # Mirrors `combined_position_sanity_violations` as a
+        # read-only inspection surface.  Non-empty even when no
+        # sanity violation fires; consumers filter by exit_reason.
+        self.exit_forensics: list[dict] = []
 
     # ── Engine integration helpers (not in BaseSimulator) ─────────────────────
 
@@ -324,10 +377,39 @@ class PerpSimulator:
         if self.position is None:
             return
 
+        # Path-(a) dispatch (chat 2026-05-02 cushion-threshold fix):
+        # when `exit_mr_ratio_threshold` is set, evaluate the account
+        # margin ratio (equity / notional) — the literature value's
+        # native unit — and short-circuit before the legacy cushion
+        # path runs.  When unset, fall back to the legacy cushion
+        # check.  __init__ enforces mutual exclusion so the two
+        # branches never both fire.
+        # Explicit `is not None` per CLAUDE.md.
+        spot_exit = (
+            self._latest_spot_close
+            if self._latest_spot_close is not None
+            else high
+        )
+        if self.exit_mr_ratio_threshold is not None:
+            mr_ratio = self._compute_account_margin_ratio(mark_price=high)
+            if mr_ratio < self.exit_mr_ratio_threshold:
+                logger.warning(
+                    f"[PERP] Account margin ratio {mr_ratio:.4f} "
+                    f"< threshold {self.exit_mr_ratio_threshold:.4f} "
+                    f"at mark {high:.4f}; closing position."
+                )
+                self._close_two_leg(
+                    perp_exit_price=high,
+                    spot_exit_price=spot_exit,
+                    reason="margin_breach",
+                )
+            return
+
         # Cushion check at the worst-case mark within the bar.
+        if self.cushion_threshold is None:
+            return
         cushion = self._compute_cushion(mark_price=high)
         if cushion < self.cushion_threshold:
-            spot_exit = self._latest_spot_close or high
             logger.warning(
                 f"[PERP] Maintenance-margin cushion {cushion:.3f} "
                 f"< threshold {self.cushion_threshold:.3f} at mark {high:.4f}; "
@@ -606,6 +688,42 @@ class PerpSimulator:
         )
         self.trade_history.append(record)
 
+        # Per-exit forensic ledger (Track Gate-2): one entry per
+        # close, regardless of whether the combined-position sanity
+        # check tripped its tolerance.  Consumers filter by
+        # `exit_reason` to scope diagnostics.  Schema below mirrors
+        # the audit script's expectations
+        # (`scripts/phase_4b_gate2_audit.py`): `perp_qty` is signed
+        # (negative for short, matching the leg direction); the
+        # absolute value is used in
+        # `perp_notional_at_exit`/`basis_at_exit_abs_pct` so the
+        # numbers stay legible.
+        spot_notional_at_exit = pos.spot_quantity * spot_exit_price
+        perp_notional_at_exit = abs(pos.perp_quantity) * perp_exit_price
+        if pos.entry_notional > 0:
+            basis_at_exit_abs_pct = (
+                abs(spot_notional_at_exit - perp_notional_at_exit)
+                / pos.entry_notional
+            )
+        else:
+            basis_at_exit_abs_pct = 0.0
+        self.exit_forensics.append({
+            "exit_time":             datetime.now(timezone.utc),
+            "exit_reason":           reason,
+            "spot_qty":              pos.spot_quantity,
+            "spot_exit_price":       spot_exit_price,
+            "perp_qty":              -pos.perp_quantity,  # signed: short → neg
+            "perp_exit_price":       perp_exit_price,
+            "entry_notional":        pos.entry_notional,
+            "spot_notional_at_exit": spot_notional_at_exit,
+            "perp_notional_at_exit": perp_notional_at_exit,
+            "basis_at_exit_abs_pct": basis_at_exit_abs_pct,
+            "spot_pnl":              spot_pnl,
+            "perp_pnl":              perp_pnl,
+            "funding_cash":          pos.accrued_funding,
+            "total_pnl":             total_pnl,
+        })
+
         logger.info(
             f"[PERP] CLOSE delta-neutral | reason={reason} | "
             f"spot pnl ${spot_pnl:+.2f} | perp pnl ${perp_pnl:+.2f} | "
@@ -618,6 +736,45 @@ class PerpSimulator:
         self._neg_funding_streak = 0
 
     # ── Internal: cushion / liquidation math ──────────────────────────────────
+
+    def _compute_account_margin_ratio(self, mark_price: float) -> float:
+        """Account margin ratio = current_equity / position_notional.
+
+        cross:    equity = perp_margin + perp_pnl + spot_pnl + accrued_funding
+        isolated: equity = perp_margin + perp_pnl + accrued_funding
+        notional = perp_qty × mark_price (the perp leg defines the
+                  position notional that the margin ratio is
+                  measured against; matches OKX's published
+                  margin-ratio definition for USDT-M perps).
+
+        Mirrors `_compute_cushion`'s `margin_mode` dispatch but
+        returns the ratio directly rather than the
+        cushion-multiple-of-MM transform.
+
+        Returns inf when no position is open or the perp leg's
+        notional is zero (degenerate state; no exit decision can be
+        derived).
+        """
+        if self.position is None:
+            return float("inf")
+        pos = self.position
+        notional = pos.perp_quantity * mark_price
+        if notional <= 0:
+            return float("inf")
+        perp_pnl = (pos.perp_entry_price - mark_price) * pos.perp_quantity
+        if self.margin_mode == "cross":
+            spot_price = (
+                self._latest_spot_close
+                if self._latest_spot_close is not None
+                else pos.spot_entry_price
+            )
+            spot_pnl = (spot_price - pos.spot_entry_price) * pos.spot_quantity
+            equity = (
+                pos.perp_margin + perp_pnl + spot_pnl + pos.accrued_funding
+            )
+        else:
+            equity = pos.perp_margin + perp_pnl + pos.accrued_funding
+        return equity / notional
 
     def _compute_cushion(self, mark_price: float) -> float:
         """Maintenance-margin cushion at a given mark, expressed as

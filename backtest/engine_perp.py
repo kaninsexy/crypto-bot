@@ -72,7 +72,8 @@ def run_perp(
     margin_mode: str = "cross",
     flip_exit_n: int = 3,
     flip_exit_threshold: float = 0.0,
-    cushion_threshold: float = 0.5,
+    cushion_threshold: Optional[float] = None,
+    exit_mr_ratio_threshold: Optional[float] = None,
 ) -> BacktestResult:
     """Replay perp+spot+funding through a PerpSimulator.
 
@@ -134,7 +135,9 @@ def run_perp(
     else:
         funding_window = funding_history
 
-    # 3. Construct simulator.
+    # 3. Construct simulator.  PerpSimulator enforces mutual
+    # exclusion of cushion_threshold / exit_mr_ratio_threshold; we
+    # forward both verbatim and let it raise on misuse.
     sim = PerpSimulator(
         initial_balance=initial_balance,
         spot_symbol=spot_symbol,
@@ -143,6 +146,7 @@ def run_perp(
         flip_exit_n=flip_exit_n,
         flip_exit_threshold=flip_exit_threshold,
         cushion_threshold=cushion_threshold,
+        exit_mr_ratio_threshold=exit_mr_ratio_threshold,
         margin_mode=margin_mode,
     )
 

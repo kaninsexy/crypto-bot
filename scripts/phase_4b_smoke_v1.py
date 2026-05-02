@@ -150,8 +150,10 @@ result = run_perp(
     perp_symbol=legs["perp"],
     flip_exit_n=4,                # literature exit_funding_flip_n_settlements
     flip_exit_threshold=0.0,
-    cushion_threshold=0.01,       # literature exit_margin_breach_threshold
-                                  # (semantic-mismatch flag below)
+    exit_mr_ratio_threshold=0.01, # literature exit_margin_breach_threshold
+                                  # (account margin ratio = equity /
+                                  # position_notional; Path (a) chat
+                                  # 2026-05-02 cushion-threshold fix)
 )
 
 

@@ -211,11 +211,14 @@ class TestFundingCacheRoundtrip:
     def test_cache_hit_skips_network(self, tmp_path, monkeypatch):
         cache_dir = tmp_path / "perp_funding"
         cache_dir.mkdir(parents=True)
-        idx = pd.date_range("2025-01-01", periods=6, freq="8h", tz="UTC")
+        # months=1 floor = 1 × 30 × 24 / 8 × 0.7 = 63 rows; write
+        # 100 rows to comfortably clear the stale-cache row-count
+        # guard added 2026-05-02.
+        idx = pd.date_range("2025-01-01", periods=100, freq="8h", tz="UTC")
         idx.name = "timestamp"
         seed = pd.DataFrame({
-            "funding_rate": np.linspace(1e-5, 6e-5, 6),
-            "mark_price":   np.full(6, 50000.0),
+            "funding_rate": np.linspace(1e-5, 100e-5, 100),
+            "mark_price":   np.full(100, 50000.0),
         }, index=idx)
         seed.to_parquet(cache_dir / "BTC-USDT-SWAP_funding_1mo.parquet")
 
@@ -228,16 +231,21 @@ class TestFundingCacheRoundtrip:
         )
         assert ex.fetch_funding_rate_history.call_count == 0
         assert ex.fetch_mark_ohlcv.call_count == 0
-        assert len(df) == 6
+        assert len(df) == 100
 
     def test_until_ts_clipping(self, tmp_path, monkeypatch):
         cache_dir = tmp_path / "perp_funding"
         cache_dir.mkdir(parents=True)
-        idx = pd.date_range("2025-01-01", periods=10, freq="8h", tz="UTC")
+        # months=1 floor = 63 rows; write 100 to clear it.  Original
+        # test asserted 3 rows survived the cutoff at Jan 2 00:00 UTC
+        # (rows at 00:00, 08:00, 16:00 of Jan 1).  That property is
+        # independent of fixture length as long as the first 3 rows
+        # match the original cadence — preserved here.
+        idx = pd.date_range("2025-01-01", periods=100, freq="8h", tz="UTC")
         idx.name = "timestamp"
         seed = pd.DataFrame({
-            "funding_rate": np.linspace(1e-5, 10e-5, 10),
-            "mark_price":   np.full(10, 50000.0),
+            "funding_rate": np.linspace(1e-5, 100e-5, 100),
+            "mark_price":   np.full(100, 50000.0),
         }, index=idx)
         seed.to_parquet(cache_dir / "BTC-USDT-SWAP_funding_1mo.parquet")
 
@@ -246,8 +254,8 @@ class TestFundingCacheRoundtrip:
             "BTC/USDT", months=1, cache_dir=cache_dir, ttl_hours=24,
             until_ts=cutoff,
         )
-        # Original index has 10 rows over 80h starting Jan 1.  Cutoff at Jan 2
-        # 00:00 keeps rows at 00:00, 08:00, 16:00 of Jan 1 only (3 rows).
+        # Cutoff at Jan 2 00:00 keeps rows at 00:00, 08:00, 16:00 of
+        # Jan 1 only (3 rows).
         assert len(df) == 3
         assert df.index.max() < cutoff
 
@@ -711,3 +719,106 @@ def test_live_archive_vs_live_v5_sign_match():
     assert float(matched["fundingRate"]) == pytest.approx(
         sample_fr, abs=1e-9,
     )
+
+
+# ── Stale-cache row-count guard (Phase 4.B fix-bundle 2026-05-02) ────────────
+
+
+class TestStaleCacheRowCountGuard:
+    """Row-count floor invalidates pre-Path-5 caches whose row count
+    is far below what the requested months window should contain.
+    Floor: months × 30 × 24 / 8 × 0.7 (8h cadence → ~3 settlements/
+    day × 30 days/mo × 0.7 partial-boundary tolerance)."""
+
+    def test_stale_cache_below_floor_invalidates(
+        self, monkeypatch, tmp_path,
+    ):
+        cache_dir = tmp_path / "perp_funding"
+        cache_dir.mkdir(parents=True)
+        # Write a 50-row "stale" parquet for a months=29 request.
+        # Floor for months=29: 29 × 30 × 24 / 8 × 0.7 = 1827 rows.
+        # 50 << 1827 ⇒ invalidate.
+        idx = pd.date_range(
+            "2026-01-01", periods=50, freq="8h", tz="UTC", name="timestamp",
+        )
+        stale = pd.DataFrame(
+            {
+                "funding_rate": np.linspace(1e-5, 50e-5, 50),
+                "mark_price": np.full(50, 50_000.0),
+            },
+            index=idx,
+        )
+        cache_path = cache_dir / "BTC-USDT-SWAP_funding_29mo.parquet"
+        stale.to_parquet(cache_path)
+        assert cache_path.exists()
+
+        # Mock the fetcher to return a known-good DataFrame (≥ floor)
+        # so the test runs offline.  The mock fires only if the cache
+        # is invalidated and a refetch is attempted — which is the
+        # behaviour we want to verify.
+        idx_full = pd.date_range(
+            "2024-01-01", periods=2000, freq="8h", tz="UTC",
+            name="timestamp",
+        )
+        good = pd.DataFrame(
+            {
+                "funding_rate": np.zeros(2000),
+                "mark_price": np.full(2000, 50_000.0),
+            },
+            index=idx_full,
+        )
+
+        called = {"n": 0}
+        def fake_fetch(instid, months=12):
+            called["n"] += 1
+            return good
+        monkeypatch.setattr(okx_funding, "fetch_funding_history", fake_fetch)
+
+        result = okx_funding.load_or_fetch_funding_history(
+            "BTC/USDT", months=29, cache_dir=cache_dir, ttl_hours=24,
+        )
+        # Refetch was triggered.
+        assert called["n"] == 1
+        # Returned df is the refetched good df (much larger than 50 rows).
+        assert len(result) == 2000
+        # Cache file was overwritten with the good payload.
+        post = pd.read_parquet(cache_path)
+        assert len(post) == 2000
+
+    def test_valid_cache_above_floor_returned_unchanged(
+        self, monkeypatch, tmp_path,
+    ):
+        cache_dir = tmp_path / "perp_funding"
+        cache_dir.mkdir(parents=True)
+        # months=1 → floor = 1 × 30 × 24 / 8 × 0.7 = 63 rows.  Write
+        # 75 rows so the cache is comfortably above floor.
+        idx = pd.date_range(
+            "2026-01-01", periods=75, freq="8h", tz="UTC",
+            name="timestamp",
+        )
+        valid = pd.DataFrame(
+            {
+                "funding_rate": np.linspace(1e-5, 75e-5, 75),
+                "mark_price": np.full(75, 50_000.0),
+            },
+            index=idx,
+        )
+        cache_path = cache_dir / "BTC-USDT-SWAP_funding_1mo.parquet"
+        valid.to_parquet(cache_path)
+
+        called = {"n": 0}
+        def fake_fetch(instid, months=12):
+            called["n"] += 1
+            return pd.DataFrame()
+        monkeypatch.setattr(okx_funding, "fetch_funding_history", fake_fetch)
+
+        result = okx_funding.load_or_fetch_funding_history(
+            "BTC/USDT", months=1, cache_dir=cache_dir, ttl_hours=24,
+        )
+        # No refetch — cache hit + above-floor.
+        assert called["n"] == 0
+        # Returned df matches the cached payload exactly (length and
+        # values).
+        assert len(result) == 75
+        # Cache file remains unchanged.
+        assert cache_path.exists()

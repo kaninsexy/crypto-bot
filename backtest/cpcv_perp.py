@@ -165,7 +165,19 @@ def run_cpcv_perp(
     funding_cadence_hours = entry.get("funding_cadence_hours", 8)
     flip_exit_n = int(params.get("flip_exit_n", 3))
     flip_exit_threshold = float(params.get("flip_exit_threshold", 0.0))
-    cushion_threshold = float(params.get("cushion_threshold", 0.5))
+    # cushion_threshold / exit_mr_ratio_threshold are mutually
+    # exclusive (PerpSimulator validates).  Pull from params verbatim
+    # — None when absent — so callers using the Path-(a) account-
+    # margin-ratio variant don't accidentally inherit the legacy
+    # cushion default.
+    _ct = params.get("cushion_threshold")
+    cushion_threshold: Optional[float] = (
+        float(_ct) if _ct is not None else None
+    )
+    _mrt = params.get("exit_mr_ratio_threshold")
+    exit_mr_ratio_threshold: Optional[float] = (
+        float(_mrt) if _mrt is not None else None
+    )
     leverage = float(params.get("leverage", 5.0))
     margin_mode = str(params.get("margin_mode", "cross"))
     initial_balance = float(
@@ -213,6 +225,7 @@ def run_cpcv_perp(
             flip_exit_n=flip_exit_n,
             flip_exit_threshold=flip_exit_threshold,
             cushion_threshold=cushion_threshold,
+            exit_mr_ratio_threshold=exit_mr_ratio_threshold,
         )
 
         n_trades = result.metrics.total_trades

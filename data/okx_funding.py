@@ -932,11 +932,35 @@ def load_or_fetch_funding_history(
             df.index = pd.to_datetime(df.index, utc=True)
         if df.index.tz is None:
             df.index = df.index.tz_localize("UTC")
-        logger.info(
-            f"[okx_funding] cache hit {cache_path.name} "
-            f"(age {age_s/3600:.1f}h, rows {len(df)})"
-        )
-    else:
+
+        # Row-count sanity guard (Phase 4.B fix-bundle 2026-05-02).
+        # 8h cadence ⇒ ~3 settlements/day ⇒ months × 30 × 3 ≈
+        # months × 90 expected rows.  A 0.7 floor allows partial
+        # months at boundaries plus the occasional missing
+        # settlement; anything below this floor signals a cache
+        # written by a pre-Path-5 code path that returned only
+        # the live API's ~3-month window for what the caller asked
+        # for as a 29-month lookback.  Invalidate and refetch.
+        expected_rows_floor = int(months * 30 * 24 / 8 * 0.7)
+        if len(df) < expected_rows_floor:
+            logger.warning(
+                f"[okx_funding] stale cache detected: "
+                f"{len(df)} rows < {expected_rows_floor} floor "
+                f"for months={months} window. Invalidating + "
+                "refetching."
+            )
+            try:
+                cache_path.unlink()
+            except FileNotFoundError:
+                pass
+            use_cache = False
+        else:
+            logger.info(
+                f"[okx_funding] cache hit {cache_path.name} "
+                f"(age {age_s/3600:.1f}h, rows {len(df)})"
+            )
+
+    if not use_cache:
         df = fetch_funding_history(instid, months=months)
         try:
             df.to_parquet(cache_path)
