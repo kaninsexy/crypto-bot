@@ -707,3 +707,55 @@ def test_superseded_by_rejected_when_non_string():
     ev["superseded_by"] = 25
     with pytest.raises(trials.TrialSchemaError, match="must be a string"):
         trials.record_trial(ev)
+
+
+# ── Track 2 — signal_event_count optional schema field ──────────────────────
+
+
+def test_signal_event_count_accepted_as_int_when_present():
+    """Track 2: full_cpcv row carrying signal_event_count: int round-trips."""
+    ev = _base_event("full_cpcv")
+    ev["signal_event_count"] = 273
+    trials.record_trial(ev)
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[-1]["signal_event_count"] == 273
+
+
+def test_signal_event_count_accepted_as_null():
+    """Track 2: explicit None is allowed (treated identically to absent)."""
+    ev = _base_event("full_cpcv")
+    ev["signal_event_count"] = None
+    trials.record_trial(ev)
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert rows[-1]["signal_event_count"] is None
+
+
+def test_signal_event_count_rejected_when_negative():
+    ev = _base_event("full_cpcv")
+    ev["signal_event_count"] = -1
+    with pytest.raises(trials.TrialSchemaError, match=">= 0"):
+        trials.record_trial(ev)
+
+
+def test_signal_event_count_rejected_when_non_int():
+    ev = _base_event("full_cpcv")
+    ev["signal_event_count"] = 3.5
+    with pytest.raises(trials.TrialSchemaError, match="must be int"):
+        trials.record_trial(ev)
+
+
+def test_signal_event_count_rejected_when_bool():
+    """bool is a subclass of int — schema must reject it explicitly."""
+    ev = _base_event("full_cpcv")
+    ev["signal_event_count"] = True
+    with pytest.raises(trials.TrialSchemaError, match="must be int"):
+        trials.record_trial(ev)
+
+
+def test_signal_event_count_absent_legacy_row_round_trips():
+    """Existing trials.log rows (no signal_event_count) parse cleanly."""
+    ev = _base_event("full_cpcv")
+    # No signal_event_count key at all — legacy shape.
+    trials.record_trial(ev)
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert "signal_event_count" not in rows[-1]

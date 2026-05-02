@@ -54,6 +54,18 @@ Optional any time:
   mintrl: float | null
   buy_and_hold_sharpe: float | null
   notes: str | null
+  signal_event_count: int | null  (Track 2 / 2026-05-02 — additive,
+                                   non-required even on full_cpcv.
+                                   When present, the verdict tree
+                                   prefers it over `n_trades` for
+                                   the precondition floor; legacy
+                                   rows without this field continue
+                                   to use `n_trades` as the floor.
+                                   Must be >= 0 when present.  See
+                                   research/funding-rate-literature.md
+                                   § Variation #1 § Verdict-tree
+                                   precondition for the funding-
+                                   harvest-specific motivation.)
 
 Optional on trial_type ∈ {smoke, full_cpcv} only:
   superseded_by: str | null   (commit sha of a tooling fix that
@@ -389,6 +401,23 @@ def _validate_event(event: dict) -> None:
     if "notes" in event and event["notes"] is not None:
         if not isinstance(event["notes"], str):
             raise TrialSchemaError("'notes' must be a string or null")
+
+    # signal_event_count — Track 2 / 2026-05-02.  Additive optional
+    # field for two-leg / continuous-hold strategies (Phase 4.B
+    # funding-rate harvest) where the structural signal cadence is
+    # decoupled from the closed-trade count.  When absent, the
+    # verdict tree falls back to `n_trades` (existing behaviour).
+    if "signal_event_count" in event and event["signal_event_count"] is not None:
+        v = event["signal_event_count"]
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise TrialSchemaError(
+                f"'signal_event_count' must be int or null; "
+                f"got {type(v).__name__}"
+            )
+        if v < 0:
+            raise TrialSchemaError(
+                f"'signal_event_count' must be >= 0; got {v}"
+            )
 
     # superseded_by — Policy (c) tooling-fix invalidation tag.
     # Optional on smoke / full_cpcv; forbidden on final_gate (a

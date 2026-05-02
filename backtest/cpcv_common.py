@@ -19,11 +19,20 @@ public/contract behavior requires the same human approval as
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
 
 import numpy as np
 import pandas as pd
+
+# Forward type-only alias for the per-block signal-event callback.
+# The callback receives `(BacktestResult, block_descriptor)` where
+# `block_descriptor` is the per-block input passed to the runner
+# (a DataFrame for single-symbol mode, a `dict[str, DataFrame]` for
+# multi-symbol/legs mode); it returns a non-negative int counting the
+# number of strategy-relevant signal events in that block.  See
+# `CPCVConfig.count_signal_events_per_block` for usage.
+CountSignalEventsCallback = Callable[[Any, Any], int]
 
 
 # ── Defaults (placeholders pending Phase 3b empirical calibration) ────────────
@@ -40,9 +49,17 @@ _ENGINE_INITIAL_BALANCE: float = 10_000.0
 _ENGINE_WARM_UP_CANDLES: int = 50
 _MIN_BLOCK_CANDLES: int = _ENGINE_WARM_UP_CANDLES + 10  # = 60
 
-# A block must produce at least this many trades to contribute a
-# valid Sharpe; below this the block's Sharpe is NaN.
-_MIN_TRADES_PER_BLOCK: int = 5
+# A block must produce at least this many *events* to contribute a
+# valid Sharpe; below this the block's Sharpe is NaN.  An "event" is
+# the closed-trade count by default, but two-leg / continuous-hold
+# strategies (Phase 4.B funding-rate harvest) override this with a
+# per-block signal-event count via `CPCVConfig.count_signal_events_
+# per_block` so a strategy that opens/closes once per block but
+# collects N>>5 funding payments is not spuriously NaN'd.  See
+# `CPCVConfig.count_signal_events_per_block` for the contract.
+# (Renamed from the pre-Track-2 trade-count constant 2026-05-02 —
+# value (5) unchanged; rename is internal and contract-preserving.)
+_MIN_EVENTS_PER_BLOCK: int = 5
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -87,6 +104,23 @@ class CPCVConfig:
     purge_periods: int = _DEFAULT_PURGE_PERIODS
     embargo_periods: int = _DEFAULT_EMBARGO_PERIODS
 
+    # Optional per-block signal-event counter.  When None (default),
+    # the runner uses the engine's per-block closed-trade count for
+    # the >50% NaN guard — exactly the pre-Track-2 behaviour, so
+    # every existing call site is unchanged.  When provided, the
+    # callback is invoked once per block as
+    # `count(result, block_descriptor) -> int`, and its return value
+    # SUBSTITUTES for the trade count in the validity check.
+    # The callback is for two-leg / continuous-hold strategies
+    # (e.g. Phase 4.B funding-rate harvest, where funding-payment
+    # events are the structural signal cadence rather than open/close
+    # trade events) per the no-p-hacking-rule motivation in
+    # `research/funding-rate-literature.md` § Variation #1
+    # § Verdict-tree precondition.
+    count_signal_events_per_block: Optional[CountSignalEventsCallback] = field(
+        default=None, compare=False, repr=False,
+    )
+
     def validate(self) -> None:
         """Raise ValueError if any field is out of its admissible range."""
         if self.n_blocks < 4:
@@ -127,7 +161,7 @@ class CPCVResult:
                               Sharpes.
         per_path_sharpes:     Per-block Sharpe values, in block order.
                               NaN where the block's trade count fell
-                              below `_MIN_TRADES_PER_BLOCK`.  Use the
+                              below `_MIN_EVENTS_PER_BLOCK`.  Use the
                               `per_block_sharpes` property as a more
                               accurate alias.
         trades_per_path:      Per-block trade counts, same length and
@@ -152,6 +186,13 @@ class CPCVResult:
     per_path_sharpes: list[float]
     trades_per_path: list[int]
     per_block_returns: list[np.ndarray]
+    # Per-block signal-event counts when
+    # `CPCVConfig.count_signal_events_per_block` is provided; None
+    # otherwise.  Length equals `n_blocks` when populated.  Existing
+    # consumers ignoring this field see no behaviour change because
+    # the default is None and the validity check falls back to
+    # `trades_per_path` when no callback is configured.
+    signal_events_per_block: Optional[list[int]] = None
 
     @property
     def per_block_sharpes(self) -> list[float]:

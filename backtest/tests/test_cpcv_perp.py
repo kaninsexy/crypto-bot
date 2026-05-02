@@ -115,7 +115,7 @@ def _populate_legs_fixture(paths: dict) -> None:
 
 class _PeriodicTwoLegStrategy(BaseStrategy):
     """Issues BUY periodically and SELL after `hold_candles` to
-    produce many trades per block — well above _MIN_TRADES_PER_BLOCK
+    produce many trades per block — well above _MIN_EVENTS_PER_BLOCK
     so blocks aren't NaN."""
     def __init__(
         self,

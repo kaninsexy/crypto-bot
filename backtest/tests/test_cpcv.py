@@ -627,7 +627,7 @@ def test_per_block_returns_length_invariant(patch_holdout_for_cpcv):
 
 
 def test_per_block_returns_empty_for_nan_blocks(patch_holdout_for_cpcv):
-    """Blocks below `_MIN_TRADES_PER_BLOCK` produce both a NaN Sharpe
+    """Blocks below `_MIN_EVENTS_PER_BLOCK` produce both a NaN Sharpe
     AND an empty (`size == 0`) returns array.  This is the contract
     DSR relies on to skip insufficient blocks via
     `arr.size > 0` filtering."""
@@ -721,3 +721,85 @@ def test_per_block_returns_matches_pct_change_shape(patch_holdout_for_cpcv):
             f"block {i}: per_block_returns size {block_arr.size} != "
             f"equity_curve len - 1 ({len(engine_r.equity_curve) - 1})"
         )
+
+
+# ── Track 2 — count_signal_events_per_block callback ──────────────────────
+
+
+def test_count_signal_events_per_block_default_none_preserves_legacy_behavior(
+    patch_holdout_for_cpcv,
+):
+    """Default config (callback=None) drives the >50% NaN guard from
+    per-block trade count, exactly like pre-Track-2.  The result's
+    signal_events_per_block field is None."""
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    config = CPCVConfig(n_blocks=4, k_held_out=2)  # no callback
+    factory = lambda: _PeriodicStrategy(
+        symbol="BTC/USDT", trade_period=30, hold_candles=5,
+    )
+    result = run_cpcv("TestStrat", {}, config, factory)
+
+    assert result.signal_events_per_block is None
+    # trades_per_path is still populated as before.
+    assert len(result.trades_per_path) == config.n_blocks
+
+
+def test_count_signal_events_per_block_callback_drives_validity(
+    patch_holdout_for_cpcv,
+):
+    """Provided callback substitutes for trade count in the >50% NaN
+    guard.  When the callback returns event counts comfortably above
+    `_MIN_EVENTS_PER_BLOCK` the block stays valid even if the engine's
+    trade count is below the floor."""
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    # Strategy that fires few trades per block so trade-count alone
+    # would NaN most blocks.  Callback claims many signal events
+    # per block so the block remains valid.
+    factory = lambda: _PeriodicStrategy(
+        symbol="BTC/USDT", trade_period=200, hold_candles=20,
+    )
+
+    def count_events(result, block_input) -> int:
+        # Lie that every block has 100 events — well above the floor.
+        return 100
+
+    config = CPCVConfig(
+        n_blocks=4, k_held_out=2,
+        count_signal_events_per_block=count_events,
+    )
+    result = run_cpcv("TestStrat", {}, config, factory)
+
+    # signal_events_per_block populated; equals callback returns.
+    assert result.signal_events_per_block == [100, 100, 100, 100]
+    # All blocks valid because callback >= floor.
+    for s in result.per_path_sharpes:
+        assert not math.isnan(s)
+
+
+def test_count_signal_events_per_block_zero_returns_nan_block(
+    patch_holdout_for_cpcv,
+):
+    """Callback returning 0 forces the block to NaN even if trade
+    count is high — callback semantically substitutes for trades."""
+    dev_df = _make_ohlcv(1000)
+    patch_holdout_for_cpcv(_single_symbol_manifest(dev_df), dev_df)
+
+    factory = lambda: _PeriodicStrategy(
+        symbol="BTC/USDT", trade_period=30, hold_candles=5,
+    )
+
+    def count_events(result, block_input) -> int:
+        return 0  # always below the _MIN_EVENTS_PER_BLOCK floor
+
+    config = CPCVConfig(
+        n_blocks=4, k_held_out=2,
+        count_signal_events_per_block=count_events,
+    )
+    # Every block is NaN → > 50% NaN → CPCVError (mirrors the
+    # trade-count path's failure mode).
+    with pytest.raises(CPCVError, match="signal events"):
+        run_cpcv("TestStrat", {}, config, factory)

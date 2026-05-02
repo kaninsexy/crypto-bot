@@ -1,35 +1,57 @@
 # Funding-Rate Harvest — Phase 4.B hypothesis-of-record
 
-**Date:** 2026-04-29
-**Phase:** 4.B kickoff — data layer ready, harness extension still gated
-**Status:** Starting hypothesis (pre-trial). Variations #2+ are stubs
-with named source slots, not filled hypotheses.
+**Date:** 2026-04-29 (Variation #1 citation gap closed 2026-05-02;
+empirical-baseline correction 2026-05-02; parameter-drift revert
+2026-05-02 morning; Tracks 1-bundle continuation citation-anchored
+fill 2026-05-02 afternoon)
+**Phase:** 4.B kickoff — data layer locked (Path 5 hybrid ingestion);
+Variation #1 citation gap closed; Variation #1 parameters fully set
+(5 of 5 with named-source backing).
+**Status:** Variation #1 citation gap CLOSED 2026-05-02; all five
+parameter slots filled with citation-anchored values. Variation #1
+cleared on the no-p-hacking gate; remaining gates before queue are
+the harness-extension verifications (Tracks E-I + Track 2
+signal_event_count plumbing). Variations #2+ remain stubs.
 
-## Pre-trial citation gate (READ FIRST)
+## Pre-trial citation gate — CLOSED 2026-05-02
 
-Per `docs/research_log.md` § "AI/algo trading viability and strategy-
-archetype evidence (consolidated 2026-04-29)" closing note: *"The
-funding-rate-harvest citations should be re-verified specifically
-before Phase 4.B begins — that strategy depends most heavily on a
-specific empirical literature, and the exact paper set should be in
-`research/funding-rate-literature.md` per the no-p-hacking rule before
-the first 4.B trial appends to `trials.log`."*
+**Citation slot — CLOSED.** Variation #1's primary peer-reviewed
+citation is Schmeling, Schrimpf & Todorov "Crypto Carry" (BIS WP
+1087 / CEPR DP20719 / SSRN 4268371; forthcoming Management Science)
+— sample April 2019 – July 2024 across BTC + ETH on six venues,
+exactly the delta-neutral long-spot / short-perp construction in
+Variation #1. See § "Variation #1 → Source citations" below for the
+full citation set including supporting papers (Christin/Routledge/
+Soska/Zetlin-Jones working paper; recent CEX/DEX comparison work)
+and the empirical calibration probe behind
+`exit_funding_flip_n_settlements`.
 
-**This stub establishes the hypothesis structure, the post-tax economic
-baseline, and the variation-#1 design. The primary-source verification
-(authors / journals / years for the 2024–2025 funding-rate-harvest
-papers referenced in the synthesis) is the explicit pre-trial gate
-that must clear before any `record_trial(trial_type="full_cpcv")` call
-for funding-rate-harvest. Variation #1 cannot run until the citation
-slot below is filled with a specific peer-reviewed reference.**
+**Parameter slots — CLOSED.** All five Variation #1 parameter
+values now carry named-source backing (paper, risk-model section,
+exchange-spec, or empirical probe with chat-side review of which
+statistic anchors the structural hypothesis). The 2026-05-02
+morning first-pass filled three slots by judgment and was reverted
+after chat-side audit; the afternoon Tracks 1-bundle continuation
+re-filled all three with citation-derived values, and the audit
+caveat is preserved in the corresponding rows so the drift trail
+is auditable.
 
-This is the same discipline `research/supertrend-literature.md` and
-`research/dualmomentum-literature.md` followed — primary citations
-are specific (Barroso & Santa-Clara 2015 JFE; Liu/Tsyvinski/Wu 2022
-JF) and named at the time the literature stub is committed, not after
-trial results land. Funding-rate-harvest is the one Phase-4 entry
-where the synthesis acknowledged the citation slot as not-yet-locked;
-locking it is a pre-trial deliverable.
+**Net status of the no-p-hacking gate.** CLOSED for Variation #1.
+Variation #1 may queue `record_trial(trial_type="full_cpcv")`
+once the harness extensions land (Tracks E-I + Track 2
+`signal_event_count` plumbing). Future variations still need
+their own source-cited justification per the same rule.
+
+The empirical anchor from Schmeling et al. — full-sample mean
+funding ~8% APY with annualized Sharpe 6.45, declining to 4.06 from
+2024 onward and turning negative in 2025 — replaces the earlier
+"~10.95% baseline" framing that appeared in chat 2026-04-29 drafts.
+The 10.95% figure was a theoretical/design floor (0.01% per 8h
+settlement × 1095 settlements/year), not an empirical observation;
+mixing the two led to drift across earlier docs. The corrected
+post-tax economic baseline is in § "Post-tax economic baseline"
+below; the historical drift correction is logged in
+`docs/research_log.md` § "Thai SEC venue / derivatives status".
 
 ## Pre-trial gates (locked)
 
@@ -46,15 +68,20 @@ rationale, not silent deviation in a Variation row.
    pre-trial gates list.
 2. **Gate (no-p-hacking)**: Each variation requires a primary
    peer-reviewed source citation before record_trial(trial_
-   type='full_cpcv'). Variation #1 currently has a citation
-   gap (placeholder <author / paper / year / venue>) — must be
-   filled before queue. Source: CLAUDE.md no-p-hacking rule.
+   type='full_cpcv'). Variation #1 citation gap CLOSED
+   2026-05-02 (Schmeling/Schrimpf/Todorov "Crypto Carry");
+   future variations still need their own source-cited
+   justification before queue. Source: CLAUDE.md no-p-hacking
+   rule.
 3. **Gate (post-tax economics)**: Per-strategy expected Sharpe
    / required-funding-rate threshold derives from the post-tax
-   baseline (~7.1-8.2% APY after Thai PIT 25-35% per Section
-   40(4)(h) classification), not the pre-tax ~10.95% baseline.
-   Source: docs/research_log.md § "Thai SEC venue / derivatives
-   status (logged 2026-04-29)".
+   *empirical* baseline (~5.2–6.0% APY after Thai PIT 25-35%
+   on Section 40(4)(h) classification, anchored on the
+   Schmeling et al. 2019–2024 ~8% empirical mean), not the
+   theoretical ~10.95% design-floor figure that appeared in
+   chat 2026-04-29 drafts. Source: docs/research_log.md
+   § "Thai SEC venue / derivatives status (logged 2026-04-29;
+   empirical-baseline correction 2026-05-02)".
 
 ## Phase 3c context
 
@@ -81,8 +108,24 @@ the perp leg; the spot leg contributes only a small basis P&L
 from spot↔perp price drift, bounded by the funding cadence ×
 volatility within a settlement period.
 
-Pre-tax baseline funding APY ~10.95% per the 2026-04-29 chat
-synthesis (`docs/research_log.md` § "AI/algo trading viability").
+**Empirical baseline (anchor for hypothesis testing).** Schmeling,
+Schrimpf & Todorov "Crypto Carry" (2019-04 → 2024-07 sample;
+BTC + ETH on six venues): full-sample mean funding ~8% APY with
+vol ~0.8%, annualized Sharpe 6.45 over the full sample, 4.06
+from 2024 onward, turning negative in 2025. The 2024-onward
+decline is a regime feature; Variation #1's expected-Sharpe
+direction is framed conservatively as a result.
+
+**Theoretical/design baseline (reference only).** The exchange-
+design floor for funding is 0.01% per 8h settlement × 1095
+settlements/year ≈ 10.95% APY. Earlier drafts (chat 2026-04-29)
+treated this as the empirical anchor; that was incorrect — the
+0.01% × 1095 figure is the design ceiling implied by exchange
+funding-rate clamps and is not what BTC/ETH have realized on
+average. Hypothesis testing uses the empirical anchor (~8%
+pre-tax) above; the theoretical floor is recorded here only so
+the prior drift across docs is auditable.
+
 The pair-selection layer (single-pair vs multi-pair top-N) is
 NOT part of the strategy archetype — see "Pre-trial gates
 (locked)" above and the per-Variation entries below for the
@@ -90,7 +133,10 @@ locked design choice per variation.
 
 ## Post-tax economic baseline
 
-**Pre-tax pool APY:** ~10.95% (synthesis anchor).
+**Pre-tax empirical APY:** ~8% (Schmeling/Schrimpf/Todorov full-
+sample mean, BTC + ETH, April 2019 – July 2024). 2024-onward
+realized has been lower with the 2025 sub-window negative; the
+~8% number is the long-run anchor, not a forward forecast.
 
 **Thai PIT classification:** funding income is realised as a financial
 benefit on a non-licensed venue and falls under Section 40(4)(h) of
@@ -99,15 +145,24 @@ the Revenue Code (per `docs/research_log.md` § "Thai SEC venue"). The
 because OKX is not on the Thai-SEC-licensed digital-asset operator
 list as of 2026-04-29.
 
-**Post-tax APY:** at marginal Thai PIT 25–35% on Section 40(4)(h)
-benefit, pool APY post-tax = ~10.95% × (1 − 0.25..0.35) ≈ **7.1–8.2%
-APY**.
+**Post-tax empirical APY:** at marginal Thai PIT 25–35% on Section
+40(4)(h) benefit, pool APY post-tax = ~8% × (1 − 0.25..0.35) ≈
+**5.2–6.0% APY**.
+
+**Theoretical-baseline reference (not the trading anchor).** The
+0.01%-per-settlement × 1095-settlement design ceiling implies a
+10.95% pre-tax / 7.1–8.2% post-tax band. That band has appeared in
+earlier drafts of this file and `docs/research_log.md` as if it were
+the empirical baseline; it is not. It remains here only as the
+exchange-design ceiling reference, against which the empirical
+~8% / 5.2–6.0% figure can be cross-checked.
 
 **Implication for hypothesis testing:** every variation in this file
 must derive its expected Sharpe / required-funding-rate threshold from
-the post-tax APY baseline, not the pre-tax number. The 7.1–8.2%
-post-tax baseline is the gross-of-execution-and-financing-costs
-ceiling; net-of-fees net-of-borrow Sharpe is bounded below this.
+the **post-tax empirical** baseline (~5.2–6.0% APY), not from the
+pre-tax number and not from the theoretical-design ceiling. That
+band is the gross-of-execution-and-financing-costs ceiling; net-of-
+fees net-of-borrow Sharpe is bounded below this.
 
 ## Variation #1 — `phase4b-delta-neutral-singlepair-btc-v1`
 
@@ -130,37 +185,188 @@ layer: data/okx_perp.py + data/okx_funding.py with separate
 cache namespaces.
 
 **Source citations.**
-- <author / paper / year / venue> — primary funding-rate-
-  harvest empirical paper, baseline ~10.95% pre-tax annualised
-  APY before edge selection. CITATION GAP: must be filled
-  before the first trial appends a full_cpcv row to trials.log
-  per CLAUDE.md no-p-hacking rule.
-- docs/research_log.md § "Thai SEC venue / derivatives status
-  (logged 2026-04-29)" — post-tax baseline ~7.1-8.2% after
-  Thai PIT 25-35% on Section 40(4)(h) classification.
-- docs/MASTER_PLAN.md § "Phase 4.B" — Branch 1 venue resolution.
 
-**Parameters.** [TBD before trial-queue per Variation #1
-parameter design; below are placeholder slots, fill before
-record_trial(trial_type='full_cpcv'):]
-- timeframe: <TBD per timeframe-per-strategy principle; OHLCV
-  resolution affects liquidation monitoring + slippage
-  modeling, not the funding signal itself which fires at 8h>
-- target_vol_annual: <TBD>
-- notional_capital_per_leg: <TBD; must be equal across legs
-  for delta-neutrality at entry>
-- exit_funding_flip_n_settlements: <TBD; consecutive negative
-  funding settlements that trigger close>
-- exit_margin_breach_threshold: <TBD; cushion above
-  maintenance margin that triggers de-risk>
+PRIMARY:
+- Schmeling, M., Schrimpf, A., & Todorov, K. (2023/2025).
+  "Crypto Carry." BIS Working Papers No. 1087; CEPR DP20719;
+  SSRN 4268371; forthcoming Management Science. Sample
+  April 2019 – July 2024 covering BTC + ETH across six venues.
+  Key findings load-bearing for Variation #1:
+  - Carry strategy = short perp + long spot (matches
+    Variation #1 construction exactly).
+  - Funding rate is the dominant return driver: full-sample
+    mean ~8% APY with vol ~0.8%.
+  - Annualized Sharpe 6.45 full-sample, 4.06 from 2024
+    onward, turning negative in 2025. The regime decline is
+    the load-bearing reason Variation #1's expected-Sharpe
+    direction is framed conservatively (rather than relying
+    on the full-sample headline number).
+  - Liquidation risk: a 10% increase in standardised carry
+    predicts a ~22% increase in sell liquidations relative
+    to total open interest over the following month —
+    directly motivates the `exit_margin_breach_threshold`
+    parameter setting below.
+
+SUPPORTING (FOUNDATIONAL):
+- Christin, N., Routledge, B. R., Soska, K., & Zetlin-Jones,
+  A. (~2022, working paper). "The Crypto Carry Trade."
+  Carnegie Mellon University. Foundational decomposition of
+  crypto carry returns into funding-rate spread vs basis
+  components; Schmeling et al. extends the empirical work
+  with a longer/multi-venue sample.
+
+SUPPORTING (RECENT VENUE COMPARISON):
+- van Rij, S. N. C. *et al.* (2025). "Exploring Risk and
+  Return Profiles of Funding Rate Arbitrage on CEX and DEX."
+  *Blockchain: Research and Applications*, ScienceDirect
+  article PII S2096720925000818. Sample August 2023 –
+  February 2024 across Binance, BitMEX, ApolloX, Drift on
+  BTC/ETH/XRP/SOL/BNB. Useful as a recent venue-comparison
+  reference; the 6-month sample is short, so do NOT anchor
+  baseline expectations on this paper alone — it
+  complements rather than replaces the Schmeling et al.
+  long-run anchor. (Lead-author surname pending verification
+  against the published author list; the SSRN/journal
+  metadata listed `S. N. C. van Rij` at retrieval time.)
+
+SUPPORTING (EMPIRICAL CALIBRATION, INTERNAL):
+- Negative-funding regime duration distribution probe
+  (computed 2026-05-02, persisted as
+  `scripts/phase_4b_funding_regime_probe.py` for
+  reproducibility — DO NOT execute as part of CI; it is a
+  one-time calibration probe whose output is committed into
+  the `exit_funding_flip_n_settlements` row above). The
+  probe's p95 statistic (= 4 settlements = 32 h) is the
+  citation-aligned anchor for `exit_funding_flip_n_settlements`;
+  the probe's `recommended_N` field (= round(p50) = 1) is
+  superseded chat-side because the median measures intra-day
+  noise, not the structural regime Schmeling et al. describe.
+
+CROSS-REFERENCES:
+- docs/research_log.md § "Thai SEC venue / derivatives status
+  (logged 2026-04-29; empirical-baseline correction
+  2026-05-02)" — post-tax baseline ~5.2-6.0% after Thai PIT
+  25-35% on Section 40(4)(h) classification.
+- docs/MASTER_PLAN.md § "Phase 4.B" — Branch 1 venue resolution.
+- research/funding-rate-risk-model.md — per-leg margin,
+  liquidation, funding payment math, exit triggers.
+
+**Parameters.** All five slots filled as of 2026-05-02 (Tracks
+1-bundle continuation prompt) with named-source backing per the
+no-p-hacking rule. Each value below cites the gate, paper, or
+empirical probe that justifies it. Five slots: `signal_cadence`,
+`timeframe`, `target_vol_annual`, `notional_capital_per_leg`,
+`exit_funding_flip_n_settlements`. Audit-trail note: the earlier
+first-pass (2026-05-02 morning) filled three of these by judgment
+and was reverted to placeholders after chat-side audit; this fill
+is the post-audit citation-anchored version.
+
+- `signal_cadence: "8h"` — funding-payment cadence on OKX
+  USDT-M majors. The strategy's edge is collected at this
+  cadence regardless of which OHLCV grid the manifest uses;
+  it is the unit at which carry returns are measured in the
+  empirical literature.
+  Citation: Schmeling, Schrimpf & Todorov (2023, BIS WP 1087,
+  forthcoming Management Science) — carry strategy returns
+  reported at funding-payment cadence (annualized aggregate
+  over the sample). OKX BTC-USDT-SWAP cadence verified live
+  2026-04-29 by `scripts/phase_4b_halt_consult_check.py`
+  (median/min/max all 8.00h over 90 settlements).
+
+- `timeframe: "1h"` — OHLCV resolution for liquidation-cushion
+  monitoring + intra-settlement basis-spike modeling. NOT
+  derived from infrastructure convenience (the audit on
+  2026-05-02 explicitly rejected the "1h is what the rest of
+  the manifest uses" rationale).
+  Citation: `research/funding-rate-risk-model.md` § 2.2
+  (liquidation-cushion checks between settlements require
+  sub-settlement OHLCV) + § 3.3 (basis tracking error
+  computed at every 1h tick). Risk-model-derived structural
+  requirement: a coarser grid would miss adverse mark-price
+  spikes between 8h settlements; a finer grid would inflate
+  the per-block bar count without commensurate signal gain
+  given that funding fires at 8h.
+
+- `target_vol_annual: 0.05` (5%) —
+  Citation: Schmeling, Schrimpf & Todorov (2023). Derivation
+  chain (each step traceable):
+    forward Sharpe target = 1.0  (conservative discount of
+      Schmeling et al.'s 2024-onward Sharpe 4.06 for the
+      documented 2025 regime decline, Thai PIT post-tax
+      shrinkage from ~8% pre-tax APY to ~5.2-6.0% post-tax,
+      and execution costs per `funding-rate-risk-model.md`
+      § 6.1-§ 6.2 open questions).
+    target vol  = post-tax edge / target Sharpe
+                ≈ 0.055 / 1.0
+                = 0.055,  rounded down to 0.05.
+  Floor: Schmeling et al. realized full-sample carry vol
+    0.8% — target vol must exceed this or the budget bites
+    on normal-regime variance.
+  Ceiling: absorbs liquidation-tail premium (Schmeling et al.
+    document a ~22%-of-OI sell-liquidation pulse following
+    high standardised carry) + basis-decoupling stress per
+    `funding-rate-risk-model.md` § 3.3.
+
+- `notional_capital_per_leg: 10000` (USDT, trial-normalized)
+  — equal-notional locked per gate #8. Sharpe is scale-
+  invariant, so the absolute level is a trial constant rather
+  than a signal-affecting parameter. Backing: gate #8 single-
+  pair-first + scale-invariance of the Sharpe statistic; no
+  per-paper citation required because the value does not
+  affect the verdict.
+
+- `exit_funding_flip_n_settlements: 4` — close the position
+  after 4 consecutive negative 8h settlements (= 32h of
+  sustained negative funding).
+  Citation: Schmeling, Schrimpf & Todorov (2023) frame
+  negative-funding regimes as sustained multi-event phenomena,
+  not single-settlement noise. Numerical N calibrated to the
+  95th percentile of negative-funding-rate run durations on
+  BTC-USDT-SWAP across the dev window 2023-05-03 →
+  2025-09-22 (probe output
+  `/tmp/funding_negative_regime_distribution.json` →
+  `scripts/phase_4b_funding_regime_probe.py`: p95 = 4
+  settlements = 32 h). Alternatives rejected:
+    p50 = 1   — noise-anchored (single-settlement blip,
+                fires on intra-day funding noise);
+    max = 8   — extremum-anchored (one observation, no
+                statistical content);
+    risk-model § 4.1 default N = 3 — engineering convenience
+                that lands at dev-window ~p85, below the
+                citation-aligned p95 cutoff.
+  Probe-design caveat: the probe's `recommended_N` field
+  (= round(p50)) is *superseded* by this row. The structural
+  analog of Schmeling et al.'s "regime" is the upper-tail of
+  the run-length distribution, not the median; future
+  variations relying on the probe's `recommended_N` field
+  require chat-side review of which statistic anchors the
+  structural hypothesis.
+
+- `exit_margin_breach_threshold: 0.01` (1.0% account margin
+  ratio) — 2× cushion above the lowest-tier maintenance margin
+  (mr = 0.005) per `research/funding-rate-risk-model.md` § 2.1.
+  Backing: OKX exchange-spec lowest-tier maintenance-margin
+  ratio + 2× buffer for execution-lag absorption at
+  settlement-time price spikes (consistent with the Schmeling
+  et al. 22%-of-OI sell-liquidation pulse following high
+  standardised carry). The exchange-spec component is hard;
+  the 2× buffer is the variation's risk-tolerance choice and
+  may be revisited if dev_cpcv shows the cushion is the
+  binding exit driver.
 
 **Expected Sharpe direction.** Positive but materially below
-the pre-tax-APY-implied bound. Post-tax baseline ~7.1-8.2%
-before perp fees, spot fees, slippage, and long-leg vol drag
-(the long-spot leg's price-PnL is hedged by the short-perp
-leg, but tracking error from price moves is bounded by funding
-cadence × volatility — see research/funding-rate-risk-model.md
-§ "Combined-position sanity").
+the empirical-APY-implied ceiling. Post-tax empirical baseline
+~5.2–6.0% before perp fees, spot fees, slippage, and long-leg
+vol drag. The Schmeling et al. 2024-onward decline (annualized
+Sharpe 6.45 full sample → 4.06 from 2024 → negative in 2025)
+is the load-bearing reason this direction statement is
+conservative — *not* the post-tax framing alone, which only
+re-scales the level rather than raising regime risk. The
+long-spot leg's price-PnL is hedged by the short-perp leg,
+but tracking error from price moves is bounded by funding
+cadence × volatility (see
+`research/funding-rate-risk-model.md` § "Combined-position
+sanity").
 
 **Verdict-tree precondition.** trade-count floor: continuous
 hold means n_trades may be ~1 per dev block (one open + one

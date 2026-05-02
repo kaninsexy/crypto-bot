@@ -42,7 +42,7 @@ from backtest.cpcv_common import (
     CPCVError,
     CPCVResult,
     _MIN_BLOCK_CANDLES,
-    _MIN_TRADES_PER_BLOCK,
+    _MIN_EVENTS_PER_BLOCK,
     _apply_purge_embargo,
     _infer_candle_hours,
     _sharpe_from_returns,
@@ -84,7 +84,7 @@ def run_cpcv_perp(
 
     Returns:
         CPCVResult with per-block Sharpes (length n_blocks; NaN for
-        blocks below `_MIN_TRADES_PER_BLOCK`), per-block trade counts,
+        blocks below `_MIN_EVENTS_PER_BLOCK`), per-block trade counts,
         and a summary distribution.
 
     Raises:
@@ -179,9 +179,18 @@ def run_cpcv_perp(
 
     # 4. Run engine_perp once per block with a fresh strategy_factory
     #    instance.  Capture per-block return arrays for Sharpe.
+    # Track 2 (2026-05-02): when CPCVConfig.count_signal_events_per_
+    # block is set, the callback's per-block return value SUBSTITUTES
+    # for the trade count in the validity check.  This is the
+    # primary motivation for the field — funding-rate-harvest
+    # variations can pass a callback that returns the funding-payment
+    # event count per block, which is the structural signal cadence
+    # rather than the open/close trade count.
+    use_signal_events = config.count_signal_events_per_block is not None
     block_sharpes: list[float] = []
     trade_counts: list[int] = []
     block_returns: list[np.ndarray] = []
+    signal_event_counts: list[int] = []
 
     for i, (sb, pb) in enumerate(zip(spot_blocks, perp_blocks)):
         strategy = strategy_factory()
@@ -208,7 +217,19 @@ def run_cpcv_perp(
 
         n_trades = result.metrics.total_trades
         trade_counts.append(n_trades)
-        if n_trades < _MIN_TRADES_PER_BLOCK:
+
+        if use_signal_events:
+            n_events = int(
+                config.count_signal_events_per_block(
+                    result, {"spot": sb, "perp": pb},
+                )
+            )
+            signal_event_counts.append(n_events)
+            event_count = n_events
+        else:
+            event_count = n_trades
+
+        if event_count < _MIN_EVENTS_PER_BLOCK:
             block_sharpes.append(float("nan"))
             block_returns.append(np.array([], dtype=float))
             continue
@@ -230,8 +251,9 @@ def run_cpcv_perp(
     total = len(block_sharpes)
     if valid * 2 < total:
         raise CPCVError(
-            f"more than 50% of blocks have insufficient trades; "
-            f"CPCV unreliable (valid {valid}/{total} blocks)"
+            f"more than 50% of blocks have insufficient "
+            + ("signal events" if use_signal_events else "trades")
+            + f"; CPCV unreliable (valid {valid}/{total} blocks)"
         )
 
     valid_sharpes = [s for s in block_sharpes if not math.isnan(s)]
@@ -243,6 +265,7 @@ def run_cpcv_perp(
         per_path_sharpes=block_sharpes,
         trades_per_path=trade_counts,
         per_block_returns=block_returns,
+        signal_events_per_block=(signal_event_counts if use_signal_events else None),
     )
 
 

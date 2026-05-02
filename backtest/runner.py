@@ -941,8 +941,8 @@ def _concat_per_block_returns(cpcv_result: CPCVResult) -> np.ndarray:
 
     Mirrors the contract documented on `deflated_sharpe`'s `returns`
     arg: "For dsr_validation: concatenate CPCVResult.per_block_returns,
-    skipping empty arrays."  Empty arrays are blocks whose trade
-    count fell below `_MIN_TRADES_PER_BLOCK`; skipping them lines up
+    skipping empty arrays."  Empty arrays are blocks whose event
+    count fell below `_MIN_EVENTS_PER_BLOCK`; skipping them lines up
     with how `dsr_from_cpcv_result` and `mintrl_from_cpcv_result`
     handle the same input.
 

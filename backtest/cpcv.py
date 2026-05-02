@@ -54,7 +54,7 @@ to resolve them.
 
 Skip / NaN policy
 ─────────────────
-A block must clear `_MIN_TRADES_PER_BLOCK = 5` trades to contribute.
+A block must clear `_MIN_EVENTS_PER_BLOCK = 5` trades to contribute.
 A block below that threshold produces NaN.  If more than 50 % of
 blocks are NaN, `run_cpcv` raises `CPCVError`; the result is
 statistically unreliable.
@@ -84,7 +84,7 @@ from backtest.cpcv_common import (
     _ENGINE_INITIAL_BALANCE,
     _ENGINE_WARM_UP_CANDLES,
     _MIN_BLOCK_CANDLES,
-    _MIN_TRADES_PER_BLOCK,
+    _MIN_EVENTS_PER_BLOCK,
     _apply_purge_embargo,
     _infer_candle_hours,
     _sharpe_from_returns,
@@ -204,7 +204,7 @@ def run_cpcv(
       6. For each block:
          a. Extract per-bar returns from the BacktestResult.
          b. Apply purge / embargo trim per `config`.
-         c. If trade count < `_MIN_TRADES_PER_BLOCK`, the block's
+         c. If trade count < `_MIN_EVENTS_PER_BLOCK`, the block's
             Sharpe is NaN; otherwise compute Sharpe via
             `_sharpe_from_returns`.
       7. If more than 50 % of blocks are NaN, raise `CPCVError`.
@@ -296,15 +296,31 @@ def run_cpcv(
         )
 
     # 2. Per-block Sharpe, trade count, and post-trim returns.
+    # Track 2 (2026-05-02): when CPCVConfig.count_signal_events_per_
+    # block is set, the callback's per-block return value SUBSTITUTES
+    # for the trade count in the validity check.  Per-block returns
+    # array is still cleared on insufficient events so DSR's
+    # `per_block_returns` consumer behaves identically across both
+    # paths.
+    use_signal_events = config.count_signal_events_per_block is not None
+    blocks_for_callback = blocks_multi if is_multi_symbol else blocks_single
     block_sharpes: list[float] = []
     trade_counts: list[int] = []
     block_returns: list[np.ndarray] = []
+    signal_event_counts: list[int] = [] if use_signal_events else []
 
-    for r in engine_results:
+    for r, block_input in zip(engine_results, blocks_for_callback):
         n_trades = r.metrics.total_trades
         trade_counts.append(n_trades)
 
-        if n_trades < _MIN_TRADES_PER_BLOCK:
+        if use_signal_events:
+            n_events = int(config.count_signal_events_per_block(r, block_input))
+            signal_event_counts.append(n_events)
+            event_count = n_events
+        else:
+            event_count = n_trades
+
+        if event_count < _MIN_EVENTS_PER_BLOCK:
             block_sharpes.append(float("nan"))
             block_returns.append(np.array([], dtype=float))
             continue
@@ -323,8 +339,9 @@ def run_cpcv(
     total = len(block_sharpes)
     if valid * 2 < total:
         raise CPCVError(
-            f"more than 50% of blocks have insufficient trades; "
-            f"CPCV unreliable (valid {valid}/{total} blocks)"
+            f"more than 50% of blocks have insufficient "
+            + ("signal events" if use_signal_events else "trades")
+            + f"; CPCV unreliable (valid {valid}/{total} blocks)"
         )
 
     # 4. Summarise valid Sharpes.  The > 50 % check guarantees at
@@ -337,5 +354,6 @@ def run_cpcv(
         sharpe_distribution=distribution,
         per_path_sharpes=block_sharpes,
         trades_per_path=trade_counts,
+        signal_events_per_block=(signal_event_counts if use_signal_events else None),
         per_block_returns=block_returns,
     )

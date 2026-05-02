@@ -72,7 +72,15 @@ class VerdictResult:
 
     Attributes:
       verdict:                  Literal["keep", "retire", "under_tested"].
-      trade_count_pass:         total_trades >= min_trade_count.
+      trade_count_pass:         total_trades >= min_trade_count.  Always
+                                computed (preserved for forensics) even
+                                when signal_event_count is the active
+                                precondition.
+      signal_event_count_pass:  signal_event_count >= min_signal_event_count.
+                                None when no signal_event_count was
+                                supplied (legacy / single-leg path —
+                                trade_count_pass governs the
+                                precondition).
       mintrl_pass:              MinTRL.under_tested == False (or
                                 False if min_track_record_length
                                 raised, e.g. on sr ≈ 0).
@@ -90,6 +98,8 @@ class VerdictResult:
       baseline_sharpe_at_eval:  Buy-and-hold Sharpe over the same
                                 window.
       total_trades:             Trade count from the BacktestResult.
+      signal_event_count:       Per-strategy signal-event count when
+                                supplied; None when not (legacy path).
       t_observed:               len(returns) — number of per-bar
                                 returns fed to DSR/MinTRL.
       sr_margin_vs_mt_mean:     sr_observed − sr_zero_expected_at_eval;
@@ -115,6 +125,13 @@ class VerdictResult:
     sr_margin_vs_baseline: Optional[float]
     dsr: float
     n_trials: int
+    # Track 2 (2026-05-02) — additive optional fields.  Legacy callers
+    # that don't pass `signal_event_count` see `signal_event_count`
+    # default to None and `signal_event_count_pass` default to None;
+    # the precondition gate falls back to `trade_count_pass`, so the
+    # legacy verdict is preserved bit-for-bit.
+    signal_event_count: Optional[int] = None
+    signal_event_count_pass: Optional[bool] = None
 
 
 def compute_verdict(
@@ -127,6 +144,8 @@ def compute_verdict(
     n_trials: int,
     min_trade_count: int = 30,
     confidence: float = 0.95,
+    signal_event_count: Optional[int] = None,
+    min_signal_event_count: int = 30,
 ) -> VerdictResult:
     """Compose dsr / baseline / mintrl into a single keep/retire verdict.
 
@@ -151,7 +170,25 @@ def compute_verdict(
       min_trade_count:  Heuristic floor pairing with MinTRL — caught
                         low-trade strategies (DCA, MeanReversion) that
                         bar-level MinTRL does not flag.  Default 30.
+                        Used as the precondition floor when
+                        `signal_event_count` is None (legacy path);
+                        otherwise preserved for forensics on
+                        VerdictResult.trade_count_pass.
       confidence:       Forwarded to min_track_record_length.
+      signal_event_count:    Optional per-strategy signal-event count
+                        (Track 2 / 2026-05-02 additive).  When supplied
+                        (Phase 4.B funding-rate harvest and any future
+                        two-leg / continuous-hold variation), this is
+                        the precondition floor that gates `under_tested`
+                        instead of the trade count.  When None
+                        (legacy / single-leg path), `total_trades` is
+                        the precondition floor and the verdict is
+                        identical to the pre-Track-2 behaviour
+                        bit-for-bit.
+      min_signal_event_count: Floor for `signal_event_count`.  Defaults
+                        to 30 (matches `min_trade_count` default) so
+                        two-leg strategies see the same baseline
+                        statistical floor as single-leg strategies.
 
     Returns:
       VerdictResult.  All numeric fields are populated with the actual
@@ -190,9 +227,23 @@ def compute_verdict(
 
     trade_count_pass = total_trades >= min_trade_count
 
+    # Track 2 precondition: when signal_event_count is provided, it
+    # SUBSTITUTES for the trade count in the precondition gate.
+    # `trade_count_pass` is preserved on the result for forensics
+    # either way.
+    signal_event_count_pass: Optional[bool]
+    if signal_event_count is None:
+        signal_event_count_pass = None
+        precondition_count_pass = trade_count_pass
+    else:
+        signal_event_count_pass = bool(
+            signal_event_count >= min_signal_event_count
+        )
+        precondition_count_pass = signal_event_count_pass
+
     # Precondition gate: either failure → under_tested, no quality
     # computation.
-    if not (trade_count_pass and mintrl_pass):
+    if not (precondition_count_pass and mintrl_pass):
         return VerdictResult(
             verdict="under_tested",
             trade_count_pass=trade_count_pass,
@@ -209,6 +260,10 @@ def compute_verdict(
             sr_margin_vs_baseline=None,
             dsr=float("nan"),
             n_trials=int(n_trials),
+            signal_event_count=(
+                int(signal_event_count) if signal_event_count is not None else None
+            ),
+            signal_event_count_pass=signal_event_count_pass,
         )
 
     # Quality gates.
@@ -239,6 +294,10 @@ def compute_verdict(
         sr_margin_vs_baseline=float(sr_candidate - baseline_sharpe),
         dsr=float(dsr_result.dsr),
         n_trials=int(n_trials),
+        signal_event_count=(
+            int(signal_event_count) if signal_event_count is not None else None
+        ),
+        signal_event_count_pass=signal_event_count_pass,
     )
 
 

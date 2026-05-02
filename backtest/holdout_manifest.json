@@ -86,7 +86,8 @@
     ]
   },
   "FundingRateHarvest_BTC": {
-    "timeframe": "<TBD>",
+    "timeframe": "1h",
+    "signal_cadence": "8h",
     "data_start": "2023-05-03T01:00:00+00:00",
     "data_end": "2026-04-29T10:00:00+00:00",
     "dev_end": "2025-09-22T22:36:00+00:00",
