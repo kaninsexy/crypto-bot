@@ -371,3 +371,18 @@ gate cannot be lost in a future chat handoff.
 
 See research/funding-rate-literature.md for the persistent
 gate statement and Variation #1/#2 hypothesis structure.
+### [OPEN, 2026-04-30] Multi-agent orchestration upgrade — Ruflo evaluation
+
+ruflo (https://github.com/ruvnet/ruflo) is a 32.9k-star multi-agent
+swarm orchestration platform for Claude. Considered 2026-04-30,
+deferred. Trigger points to re-evaluate:
+- After Phase 4.B FundingRateHarvest produces dev_cpcv verdict
+- After OpenClaw crypto research skill + summarize/session-logs/
+  GOG skills are landed
+- If prediction-market bot enters scoping (Phase 5+)
+
+Deferred because: (1) OpenClaw orchestration layer already in place
+and underused; (2) drift-prevention mandates A-G in CLAUDE.md
+assume bounded agent count for review-against-scoping to remain
+tractable; (3) Phase 4.B Tracks E-I have sequential dependencies
+that don't benefit from agent parallelism.
