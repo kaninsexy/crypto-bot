@@ -84,5 +84,17 @@
       "SOL/USDT",
       "XRP/USDT"
     ]
+  },
+  "FundingRateHarvest_BTC": {
+    "timeframe": "<TBD>",
+    "data_start": "2023-05-03T01:00:00+00:00",
+    "data_end": "2026-04-29T10:00:00+00:00",
+    "dev_end": "2025-09-22T22:36:00+00:00",
+    "holdout_start": "2025-09-22T22:36:00+00:00",
+    "legs": {
+      "spot": "BTC/USDT",
+      "perp": "BTC/USDT"
+    },
+    "funding_cadence_hours": 8
   }
 }

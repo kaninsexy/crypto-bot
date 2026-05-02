@@ -65,6 +65,7 @@ from pathlib import Path
 import pandas as pd
 from loguru import logger
 
+from paper_trading.base_simulator import BaseSimulator
 from paper_trading.simulator import PaperTrading
 from strategies.base import BaseStrategy
 from strategies.dca import DCAStrategy
@@ -113,7 +114,7 @@ class StrategySlot:
     """
     name:       str                   # e.g. "DCA", "Supertrend"
     strategy:   BaseStrategy
-    simulator:  PaperTrading
+    simulator:  BaseSimulator         # PaperTrading or PerpSimulator (Phase 4.B)
     bucket_key: str                   # Deposit manager bucket name (lowercase)
     capital:    float                 # Running capital (includes compounded profit)
     active:     bool = True           # False = suspended by regime or circuit breaker

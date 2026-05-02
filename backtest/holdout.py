@@ -84,6 +84,7 @@ from backtest.logs import append_jsonl, iter_jsonl_filtered
 _MANIFEST_PATH: Path = Path("backtest/holdout_manifest.json")
 _ACCESS_LOG_PATH: Path = Path("backtest/holdout_access.log")
 _CACHE_DIR: Path = Path("backtest/cache/ohlcv")
+_PERP_CACHE_DIR: Path = Path("backtest/cache/perp")
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -120,14 +121,46 @@ _MANIFEST_REQUIRED_FIELDS: frozenset[str] = frozenset({
     "timeframe", "data_start", "data_end", "dev_end", "holdout_start",
 })
 
+# A manifest entry must carry exactly one of these substrate
+# specifiers.  `symbol` and `symbols` are the historical single- and
+# multi-symbol shapes; `legs` is the Phase 4.B two-leg shape (perp +
+# spot) introduced for FundingRateHarvest_BTC.
+_MANIFEST_SUBSTRATE_FIELDS: tuple[str, ...] = ("symbol", "symbols", "legs")
+
+
+def _validate_legs(sid: str, legs: object) -> None:
+    """Validate the shape of a `legs` field on a manifest entry.
+
+    Schema rule: `legs` is a dict with exactly the keys 'spot' and
+    'perp', each a non-empty manifest-format symbol string
+    (BASE/QUOTE).  Variation #2's multi-pair basket schema is NOT in
+    scope for this validator — that's a separate (future) extension.
+    """
+    if not isinstance(legs, dict):
+        raise ManifestSchemaError(
+            f"Manifest entry for '{sid}' has 'legs' that is not a dict."
+        )
+    expected = {"spot", "perp"}
+    if set(legs.keys()) != expected:
+        raise ManifestSchemaError(
+            f"Manifest entry for '{sid}' 'legs' must have exactly the "
+            f"keys {sorted(expected)}; got {sorted(legs.keys())}."
+        )
+    for leg_name, sym in legs.items():
+        if not isinstance(sym, str) or "/" not in sym:
+            raise ManifestSchemaError(
+                f"Manifest entry for '{sid}' 'legs.{leg_name}' must be "
+                f"a 'BASE/QUOTE' string; got {sym!r}."
+            )
+
 
 @functools.lru_cache(maxsize=1)
 def load_manifest() -> dict:
     """Return the holdout manifest dict.  Cached after first load.
 
     Raises ManifestNotFound if the file is absent.
-    Raises ManifestSchemaError if JSON is malformed or entries are
-    missing required fields.
+    Raises ManifestSchemaError if JSON is malformed, entries are
+    missing required fields, or substrate specifiers are malformed.
     """
     path = _MANIFEST_PATH
     if not path.exists():
@@ -143,10 +176,29 @@ def load_manifest() -> dict:
             raise ManifestSchemaError(
                 f"Manifest entry for '{sid}' must be a dict."
             )
-        if "symbol" not in entry and "symbols" not in entry:
+        present = [f for f in _MANIFEST_SUBSTRATE_FIELDS if f in entry]
+        if len(present) == 0:
             raise ManifestSchemaError(
-                f"Manifest entry for '{sid}' must have 'symbol' or 'symbols'."
+                f"Manifest entry for '{sid}' must have one of "
+                f"{list(_MANIFEST_SUBSTRATE_FIELDS)}."
             )
+        if len(present) > 1:
+            raise ManifestSchemaError(
+                f"Manifest entry for '{sid}' has more than one of "
+                f"{list(_MANIFEST_SUBSTRATE_FIELDS)}; got {present}. "
+                "Exactly one substrate specifier is allowed."
+            )
+        if "legs" in entry:
+            _validate_legs(sid, entry["legs"])
+        if "funding_cadence_hours" in entry:
+            cadence = entry["funding_cadence_hours"]
+            # Reject bools because bool is a subclass of int and
+            # `isinstance(True, int)` is True; we want strict integers.
+            if isinstance(cadence, bool) or not isinstance(cadence, int):
+                raise ManifestSchemaError(
+                    f"Manifest entry for '{sid}' 'funding_cadence_hours' "
+                    f"must be an int; got {type(cadence).__name__}."
+                )
         missing = _MANIFEST_REQUIRED_FIELDS - entry.keys()
         if missing:
             raise ManifestSchemaError(
@@ -166,6 +218,17 @@ def _get_symbols(entry: dict) -> list[str]:
     if "symbols" in entry:
         return list(entry["symbols"])
     return [entry["symbol"]]
+
+
+def _get_legs(entry: dict) -> dict | None:
+    """Return the entry's `legs` dict (e.g. {'spot': 'BTC/USDT',
+    'perp': 'BTC/USDT'}) or None when the entry is single- or
+    multi-symbol.
+
+    Callers can branch on `_get_legs(entry) is not None` to dispatch
+    between the spot OHLCV path and the perp+spot two-leg path.
+    """
+    return entry.get("legs")
 
 
 _MONTHS_RE = re.compile(r"_(\d+)mo\.parquet$")
@@ -204,6 +267,32 @@ def _load_symbol_df(symbol: str, timeframe: str) -> pd.DataFrame:
     return pd.read_parquet(best)
 
 
+def _load_perp_df(symbol_manifest: str, timeframe: str) -> pd.DataFrame:
+    """Load perp OHLCV from `_PERP_CACHE_DIR`.
+
+    The perp cache uses the OKX `instId` form ("BTC-USDT-SWAP") as
+    the filename prefix per `data.okx_perp.PERP_CACHE_DIR` convention.
+    Translation goes through `data.okx_perp.manifest_to_okx_instid`
+    so the manifest-→-OKX boundary lives in the data layer (per
+    Phase 4.B G3a).  Mirrors `_load_symbol_df` for byte-level
+    discoverability.
+    """
+    # Local import: the data layer is the canonical translator (G3a).
+    # Importing here avoids a top-level dependency on the data
+    # package from sacred-harness code.
+    from data.okx_perp import manifest_to_okx_instid
+
+    prefix = manifest_to_okx_instid(symbol_manifest)
+    candidates = list(_PERP_CACHE_DIR.glob(f"{prefix}_{timeframe}_*.parquet"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No perp cache file for {symbol_manifest} {timeframe} in "
+            f"{_PERP_CACHE_DIR}"
+        )
+    best = max(candidates, key=_parse_months)
+    return pd.read_parquet(best)
+
+
 def _build_df(symbols: list[str], timeframe: str, after_ts: pd.Timestamp | None,
               before_ts: pd.Timestamp | None) -> pd.DataFrame:
     """Load and filter OHLCV for one or more symbols.
@@ -230,15 +319,46 @@ def _build_df(symbols: list[str], timeframe: str, after_ts: pd.Timestamp | None,
     return combined
 
 
+def _build_legs_dict(
+    legs: dict,
+    timeframe: str,
+    after_ts: pd.Timestamp | None,
+    before_ts: pd.Timestamp | None,
+) -> dict[str, pd.DataFrame]:
+    """Load and filter OHLCV for a `legs` entry.
+
+    Returns a dict `{"spot": DataFrame, "perp": DataFrame}` with each
+    frame indexed by UTC timestamp and OHLCV columns.  No 'symbol'
+    column is added: the dict keys carry the leg identity, and downstream
+    cpcv_perp / engine_perp consume the two frames separately.
+    """
+    spot_part = _load_symbol_df(legs["spot"], timeframe)
+    perp_part = _load_perp_df(legs["perp"], timeframe)
+    if after_ts is not None:
+        spot_part = spot_part[spot_part.index >= after_ts]
+        perp_part = perp_part[perp_part.index >= after_ts]
+    if before_ts is not None:
+        spot_part = spot_part[spot_part.index < before_ts]
+        perp_part = perp_part[perp_part.index < before_ts]
+    return {"spot": spot_part.copy(), "perp": perp_part.copy()}
+
+
 # ── Public accessors ──────────────────────────────────────────────────────────
 
-def load_dev(strategy_id: str) -> pd.DataFrame:
+def load_dev(strategy_id: str) -> pd.DataFrame | dict[str, pd.DataFrame]:
     """Return OHLCV rows in [data_start, holdout_start) for strategy_id.
 
     Not audited — may be called freely during iteration.
 
-    Returns a DataFrame with columns open/high/low/close/volume/symbol.
-    Single-symbol and multi-symbol strategies return the same shape.
+    Return shape depends on the manifest entry's substrate:
+      - `symbol`  → DataFrame with a constant 'symbol' column.
+      - `symbols` → DataFrame with rows concatenated across symbols
+                    and a 'symbol' column distinguishing them.
+      - `legs`    → dict `{"spot": DataFrame, "perp": DataFrame}`,
+                    each frame's columns are open/high/low/close/volume.
+                    No 'symbol' column is added; the dict keys carry
+                    the leg identity.  Consumed by `backtest.cpcv_perp`
+                    and `backtest.engine_perp`.
 
     Raises StrategyNotInManifest if strategy_id is absent from the manifest.
     """
@@ -247,6 +367,16 @@ def load_dev(strategy_id: str) -> pd.DataFrame:
         raise StrategyNotInManifest(f"'{strategy_id}' not found in holdout manifest.")
     entry = manifest[strategy_id]
     holdout_start = pd.Timestamp(entry["holdout_start"])
+
+    legs = _get_legs(entry)
+    if legs is not None:
+        return _build_legs_dict(
+            legs,
+            entry["timeframe"],
+            after_ts=None,
+            before_ts=holdout_start,
+        )
+
     return _build_df(
         _get_symbols(entry),
         entry["timeframe"],
@@ -289,10 +419,13 @@ def load_holdout(
     *,
     caller: str,
     reason: str,
-) -> pd.DataFrame:
+) -> pd.DataFrame | dict[str, pd.DataFrame]:
     """Return OHLCV rows in [holdout_start, data_end) for strategy_id.
 
     Appends exactly one event to backtest/holdout_access.log on success.
+
+    Return shape mirrors `load_dev`: a DataFrame for `symbol` /
+    `symbols` entries, a `{"spot", "perp"}` dict for `legs` entries.
 
     Raises:
         InvalidCallerFormat    — caller string does not match convention
@@ -325,14 +458,25 @@ def load_holdout(
     #    authorised path for accessing holdout rows.
     entry = manifest[strategy_id]
     holdout_start = pd.Timestamp(entry["holdout_start"])
+    legs = _get_legs(entry)
     token = _holdout_bypass_ctx.set(True)
     try:
-        result = _build_df(
-            _get_symbols(entry),
-            entry["timeframe"],
-            after_ts=holdout_start,
-            before_ts=None,
-        )
+        if legs is not None:
+            result = _build_legs_dict(
+                legs,
+                entry["timeframe"],
+                after_ts=holdout_start,
+                before_ts=None,
+            )
+            n_rows = sum(len(df) for df in result.values())
+        else:
+            result = _build_df(
+                _get_symbols(entry),
+                entry["timeframe"],
+                after_ts=holdout_start,
+                before_ts=None,
+            )
+            n_rows = len(result)
     finally:
         _holdout_bypass_ctx.reset(token)
 
@@ -343,7 +487,7 @@ def load_holdout(
         "caller": caller,
         "reason": reason,
         "git_commit": _get_git_commit(),
-        "n_rows": len(result),
+        "n_rows": n_rows,
         "regenerated": False,
     }
     append_jsonl(_ACCESS_LOG_PATH, event)

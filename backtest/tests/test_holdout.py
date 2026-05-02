@@ -439,6 +439,227 @@ def test_iter_jsonl_filtered(tmp_path):
 
 # ── Additional: _load_symbol_df picks highest month count when multiple files ──
 
+# ── Phase 4.B Track I: legs schema validation + dispatch ──────────────────────
+
+def _make_legs_manifest(extra_funding_cadence: bool = True) -> dict:
+    """Build a legs-typed manifest entry for Phase 4.B testing."""
+    entry = {
+        "timeframe": "1h",
+        "data_start": DATA_START.isoformat(),
+        "data_end": DATA_END.isoformat(),
+        "dev_end": HOLDOUT_START.isoformat(),
+        "holdout_start": HOLDOUT_START.isoformat(),
+        "legs": {"spot": "BTC/USDT", "perp": "BTC/USDT"},
+    }
+    if extra_funding_cadence:
+        entry["funding_cadence_hours"] = 8
+    return {"FundingRateHarvest_BTC": entry}
+
+
+def test_manifest_accepts_legs_entry(monkeypatch, tmp_path):
+    """Track I: manifest validator accepts a `legs: {spot, perp}` entry."""
+    bad = tmp_path / "legs.json"
+    bad.write_text(json.dumps(_make_legs_manifest()), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    m = holdout.load_manifest()
+    assert "FundingRateHarvest_BTC" in m
+    assert m["FundingRateHarvest_BTC"]["legs"] == {
+        "spot": "BTC/USDT", "perp": "BTC/USDT",
+    }
+    assert m["FundingRateHarvest_BTC"]["funding_cadence_hours"] == 8
+
+
+def test_manifest_rejects_symbol_and_legs_both_present(monkeypatch, tmp_path):
+    """Track I: exactly one of {symbol, symbols, legs} is allowed."""
+    bad = tmp_path / "conflict.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["symbol"] = "BTC/USDT"
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_symbols_and_legs_both_present(monkeypatch, tmp_path):
+    """Track I: symbols + legs both present is rejected."""
+    bad = tmp_path / "conflict2.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["symbols"] = ["BTC/USDT", "ETH/USDT"]
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_legs_with_extra_keys(monkeypatch, tmp_path):
+    """Track I: legs must have exactly {spot, perp} — no extra keys."""
+    bad = tmp_path / "extra_leg.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["legs"] = {"spot": "BTC/USDT", "perp": "BTC/USDT", "future": "BTC/USDT"}
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_legs_missing_perp(monkeypatch, tmp_path):
+    """Track I: legs without 'perp' key is rejected."""
+    bad = tmp_path / "missing_perp.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["legs"] = {"spot": "BTC/USDT"}
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_legs_with_non_string_symbol(monkeypatch, tmp_path):
+    """Track I: leg values must be 'BASE/QUOTE' strings."""
+    bad = tmp_path / "bad_leg.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["legs"] = {"spot": 123, "perp": "BTC/USDT"}
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_funding_cadence_non_int(monkeypatch, tmp_path):
+    """Track I: funding_cadence_hours must be an int (not float, not bool)."""
+    bad = tmp_path / "bad_cadence.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["funding_cadence_hours"] = 8.5
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_rejects_funding_cadence_bool(monkeypatch, tmp_path):
+    """Track I: funding_cadence_hours rejects bool (subclass of int trap)."""
+    bad = tmp_path / "bad_cadence_bool.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["funding_cadence_hours"] = True
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    with pytest.raises(holdout.ManifestSchemaError):
+        holdout.load_manifest()
+
+
+def test_manifest_accepts_legs_without_funding_cadence(monkeypatch, tmp_path):
+    """Track I: funding_cadence_hours is optional."""
+    bad = tmp_path / "no_cadence.json"
+    bad.write_text(
+        json.dumps(_make_legs_manifest(extra_funding_cadence=False)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    m = holdout.load_manifest()
+    assert "FundingRateHarvest_BTC" in m
+    assert "funding_cadence_hours" not in m["FundingRateHarvest_BTC"]
+
+
+def test_manifest_accepts_tbd_timeframe_for_legs_entry(monkeypatch, tmp_path):
+    """Track I: <TBD> placeholder timeframe is accepted at schema level
+    (the trial-time data load fails on the placeholder; gate fires at
+    trial run, not at schema add)."""
+    bad = tmp_path / "tbd.json"
+    entry = _make_legs_manifest()["FundingRateHarvest_BTC"]
+    entry["timeframe"] = "<TBD>"
+    bad.write_text(json.dumps({"FundingRateHarvest_BTC": entry}), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", bad)
+    holdout.load_manifest.cache_clear()
+
+    m = holdout.load_manifest()
+    assert m["FundingRateHarvest_BTC"]["timeframe"] == "<TBD>"
+
+
+def test_load_dev_returns_legs_dict_for_legs_entry(monkeypatch, tmp_path):
+    """Track I: load_dev on a legs entry returns
+    {'spot': DataFrame, 'perp': DataFrame}."""
+    cache_dir = tmp_path / "cache" / "ohlcv"
+    perp_cache_dir = tmp_path / "cache" / "perp"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    perp_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    spot_df = make_ohlcv(DATA_START, DATA_END)
+    perp_df = make_ohlcv(DATA_START, DATA_END)
+    spot_df.to_parquet(cache_dir / "BTC-USDT_1h_36mo.parquet")
+    perp_df.to_parquet(perp_cache_dir / "BTC-USDT-SWAP_1h_36mo.parquet")
+
+    manifest_path = tmp_path / "legs_manifest.json"
+    manifest_path.write_text(
+        json.dumps(_make_legs_manifest()), encoding="utf-8",
+    )
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(holdout, "_CACHE_DIR", cache_dir)
+    monkeypatch.setattr(holdout, "_PERP_CACHE_DIR", perp_cache_dir)
+    holdout.load_manifest.cache_clear()
+
+    dev = holdout.load_dev("FundingRateHarvest_BTC")
+    assert isinstance(dev, dict)
+    assert set(dev.keys()) == {"spot", "perp"}
+    assert (dev["spot"].index < HOLDOUT_START).all()
+    assert (dev["perp"].index < HOLDOUT_START).all()
+
+
+def test_load_holdout_returns_legs_dict_for_legs_entry(monkeypatch, tmp_path):
+    """Track I: load_holdout on a legs entry returns
+    {'spot': DataFrame, 'perp': DataFrame}."""
+    cache_dir = tmp_path / "cache" / "ohlcv"
+    perp_cache_dir = tmp_path / "cache" / "perp"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    perp_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    spot_df = make_ohlcv(DATA_START, DATA_END)
+    perp_df = make_ohlcv(DATA_START, DATA_END)
+    spot_df.to_parquet(cache_dir / "BTC-USDT_1h_36mo.parquet")
+    perp_df.to_parquet(perp_cache_dir / "BTC-USDT-SWAP_1h_36mo.parquet")
+
+    manifest_path = tmp_path / "legs_manifest.json"
+    manifest_path.write_text(
+        json.dumps(_make_legs_manifest()), encoding="utf-8",
+    )
+    access_log = tmp_path / "holdout_access.log"
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(holdout, "_CACHE_DIR", cache_dir)
+    monkeypatch.setattr(holdout, "_PERP_CACHE_DIR", perp_cache_dir)
+    monkeypatch.setattr(holdout, "_ACCESS_LOG_PATH", access_log)
+    holdout.load_manifest.cache_clear()
+
+    hot = holdout.load_holdout(
+        "FundingRateHarvest_BTC",
+        caller="phase4.FundingRateHarvest_BTC.regression_check",
+        reason="legs dispatch test",
+    )
+    assert isinstance(hot, dict)
+    assert set(hot.keys()) == {"spot", "perp"}
+    assert (hot["spot"].index >= HOLDOUT_START).all()
+    assert (hot["perp"].index >= HOLDOUT_START).all()
+    # Access event was appended.
+    events = list(logs.read_jsonl(access_log))
+    assert len(events) == 1
+    assert events[0]["strategy_id"] == "FundingRateHarvest_BTC"
+
+
 def test_load_symbol_df_picks_highest_month_count(tmp_path, monkeypatch):
     """Additional: when two parquet files exist for the same symbol/timeframe,
     _load_symbol_df selects the one with the higher {N}mo suffix, not the larger
