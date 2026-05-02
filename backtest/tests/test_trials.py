@@ -376,6 +376,43 @@ def test_no_drift_warning_when_params_identical(capsys):
     assert "variation drift" not in captured.err
 
 
+def test_warn_on_variation_drift_ignores_superseded_rows(capsys):
+    """A superseded prior row with mismatched params_hash must not
+    trigger a drift warning when a later row of the same
+    (strategy_id, variation_id) is written.  Mirrors the
+    count_trials_for_dsr filter: rows whose simulator/parameter
+    context has been retroactively invalidated by a tooling fix are
+    no longer authoritative comparators."""
+    trials.record_trial(_base_event(
+        "smoke", variation_id="var-S", params={"lookback": 20},
+        superseded_by="abc1234",
+    ))
+    trials.record_trial(_base_event(
+        "full_cpcv", variation_id="var-S", params={"lookback": 30}
+    ))
+    captured = capsys.readouterr()
+    assert "variation drift" not in captured.err
+
+    rows = list(logs.read_jsonl(trials._TRIALS_LOG_PATH))
+    assert len(rows) == 2
+
+
+def test_warn_on_variation_drift_fires_when_smoke_not_superseded(capsys):
+    """Counter-case to test_warn_on_variation_drift_ignores_superseded_rows:
+    same setup with the supersession tag removed → warning DOES fire.
+    Confirms the filter is what suppresses the drift warning, not some
+    other condition (trial_type, ordering, etc.)."""
+    trials.record_trial(_base_event(
+        "smoke", variation_id="var-T", params={"lookback": 20}
+    ))
+    trials.record_trial(_base_event(
+        "full_cpcv", variation_id="var-T", params={"lookback": 30}
+    ))
+    captured = capsys.readouterr()
+    assert "variation drift" in captured.err
+    assert "var-T" in captured.err
+
+
 # ── count_trials_for_dsr ─────────────────────────────────────────────────────
 
 def test_count_trials_for_dsr_excludes_smoke():

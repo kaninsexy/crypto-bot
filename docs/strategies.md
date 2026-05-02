@@ -368,11 +368,22 @@ baseline +1.6337.
 
 ### FundingRateHarvest — BTC/USDT (delta-neutral spot+perp)
 
-- **Phase 4.B verdict (2026-05-02):** DEV_CPCV PASS. observed_sharpe
-  +4.3395, cpcv mean +5.1669, std 4.8062, n_trades 36 (26
-  funding_flip + 10 backtest_end), signal_event_count 2620
-  funding settlements, dsr_validation 0.99999548. All four
-  verdict-tree bools True. Holdout/final_gate pending.
+- **Phase 4.B verdict (2026-05-02):** FINAL_GATE RETIRE.
+  Holdout sharpe +0.3527 vs sr_zero_expected +0.5198,
+  dsr_holdout 0.005407 (vs dsr_validation 0.99999 on dev),
+  n_trades 11 (10 funding_flip + 1 backtest_end),
+  signal_event_count 663. Mechanism worked (656 funding
+  settlements processed at 0.989 ratio, 10 funding_flip
+  exits — strategy rotated through its edge as designed);
+  economics did not clear the multiple-testing null on the
+  holdout window. Dev_cpcv pass historical context:
+  observed_sharpe +4.3395, cpcv mean +5.1669, dsr_validation
+  0.99999548, all four verdict-tree bools True. Dev↔holdout
+  sharpe gap (5.17 → 0.35) is the structural-failure-mode
+  signal per the literature's pre-commit, now extended to
+  cover the V1-passes-dev-fails-holdout case (see
+  `research/funding-rate-literature.md` provenance section).
+  trial_id 199abc0a (final_gate, clean, single row).
 - **Substrate:** OKX USDT-M perp BTC-USDT-SWAP + USDT spot
   BTC/USDT. Funding cadence 8h. Dev window 2023-05-03 →
   2025-09-22 (~29 months). Path-5 hybrid funding ingestion
@@ -402,15 +413,16 @@ baseline +1.6337.
   superseded_by field; the substrate-coverage assertion + per-
   block ANOMALY D were added across the chain. See `git log
   --oneline 6c395ab..2817c3f` for the four fix commits.
-- **Next action:** chat-side verdict-tree review. If review
-  confirms keep, proceed to holdout/final_gate via
-  `holdout.load_holdout("FundingRateHarvest_BTC", caller=...,
-  reason=...)` — that's the deploy gate, not dev_cpcv. If review
-  surfaces concerns about block 3's outsized contribution to
-  the mean (the 2024-bull-regime tail), Variation #2 (multi-
-  pair top-N selection) is queued but stub-only in
-  `research/funding-rate-literature.md`; promotion requires
-  its own hypothesis-of-record fill before record_trial.
+- **V2 status:** RETIRE on V1 triggers the literature's
+  structural-redesign gate (extended ternary per
+  `research/funding-rate-literature.md` provenance section).
+  V2 must be a structural redesign sourced from a specific
+  paper — different leg construction, different instrument
+  family, or different rebalancing rule — not a parameter
+  perturbation of V1. The dev↔holdout gap on V1 is the
+  failure-mode signal V2's redesign must address. Deferred
+  to a future chat for hypothesis-of-record + source citation
+  fill before queue.
 
 ---
 

@@ -734,3 +734,57 @@ the PIT exemption. Watch item: SEC consultation final rules date
 - Global Legal Insights "Blockchain & Cryptocurrency Laws 2026 |
   Thailand" — Revenue Code Section 40(4)(h)(i) tax classification of
   crypto-derived income
+
+## Phase 4.B Variation #1 final_gate + harness lessons (2026-05-02)
+
+### Dev↔holdout sharpe gap diagnosis
+
+Variation #1 (`phase4b-delta-neutral-singlepair-btc-v1`) passed
+dev_cpcv cleanly: observed_sharpe +4.3395 headline, cpcv mean
++5.1669, dsr_validation 0.99999548, all four verdict-tree bools
+True. The holdout window's economics did not replay: sharpe
++0.3527, dsr_holdout 0.005407, mt_mean_pass=False (sr_observed
++0.3527 < sr_zero_expected +0.5198). Mechanism evidence on the
+holdout window contradicts a "broken plumbing" reading: 656
+funding settlements processed at 0.989 ratio of the expected 663,
+and 10 of 11 closes were funding_flip exits — the strategy
+rotated through its edge as designed. The dev↔holdout gap is not
+a bug; it is a structural failure mode the holdout surfaced that
+dev did not. Implications for V2 captured in
+`research/funding-rate-literature.md` § "Note on the strategy's
+provenance" (extended ternary: V2 standard now applies whether V1
+fails dev_cpcv *or* fails final_gate post-pass).
+
+### Substrate-check hardening lesson
+
+The dev-side strict `funding.index.min() <= data_start` rule (in
+`scripts/phase_4b_full_cpcv_v1.py`) does not transfer to the
+holdout boundary: `data_start` is grid-aligned by manifest
+construction (sits on the 8h funding cadence), but
+`holdout_start` is mid-cadence (2025-09-22 22:36 UTC vs the 8h
+grid 00/08/16). A sub-cadence gap at the holdout boundary is a
+calendar artifact, not a coverage failure. Fix: structural floor
+at the holdout boundary is one cadence period of slack, not
+strict equality. Second compounding lesson: the substrate check
+must run **before** `load_holdout`, not after — `load_holdout`
+consumes the single-access budget on call, so a post-load check
+that aborts the run wastes the budget and forces a sacred-harness
+regen append to retry. Both lessons baked into
+`scripts/phase_4b_holdout_v1.py` (commit `8632e79`).
+
+### trials.py drift-warning lesson
+
+The pre-fix `_warn_on_variation_drift` filter did not exclude
+`superseded_by` rows. When the post-gate-1+2 final_gate row
+landed (hash 1dadcfb0), it drift-warned against the pre-gate-1+2
+smoke row (hash 025c4e67) — a false positive, since the smoke ran
+on a parameter set that gate-1+2 (commit `6c395ab`:
+`exit_mr_ratio_threshold=0.01`, §5 tolerance widening)
+intentionally changed. Fix: filter `superseded_by` rows from the
+comparison set, mirroring `count_trials_for_dsr`'s existing
+convention. Contract preserved — warning still fires on
+legitimate variation_id reuse with different params (counter-test
+confirms). Now in commit `64aae9c` (the trials.py drift-filter
+commit). Smoke row 014bc0d9 also tagged
+`superseded_by=6c395ab` in trials.log (local-only audit; the
+trials.log file is gitignored runtime audit state).

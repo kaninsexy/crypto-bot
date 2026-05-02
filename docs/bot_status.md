@@ -1,6 +1,6 @@
 # Bot Status
 
-Last updated: 2026-05-02 (post Phase 4.B Variation #1 dev_cpcv pass)
+Last updated: 2026-05-02 (post Phase 4.B Variation #1 final_gate retire)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
 
 ## Current state
@@ -130,14 +130,14 @@ Variation #2). Sign-offs not yet committed.
 
 | Strategy | Variation | Trial date | Result | Status |
 |---|---|---|---|---|
-| FundingRateHarvest | `phase4b-delta-neutral-singlepair-btc-v1` | 2026-05-02 | DEV_CPCV PASS (full_cpcv, all 10 blocks valid, full substrate coverage). observed_sharpe +4.3395 vs sr_zero_expected +0.0000 (margin +4.3395) and BTC B&H baseline +1.6337 (margin +2.71); dsr_validation 0.99999548; n_trades 36 (26 funding_flip + 10 backtest_end); cpcv mean +5.1669 / std 4.8062 (p05 −0.4364 / p25 +1.9003 / p50 +4.1250 / p75 +7.8062 / p95 +13.2255); mt_mean_pass=True, baseline_pass=True, trade_count_pass=True, mintrl_pass=True. signal_event_count 2620 funding settlements. | Holdout/final_gate pending; DEPLOY APPROVAL not yet earned |
+| FundingRateHarvest | `phase4b-delta-neutral-singlepair-btc-v1` | 2026-05-02 | FINAL_GATE RETIRE. Holdout sharpe +0.3527 vs sr_zero_expected +0.5198 (margin -0.1671), dsr_holdout 0.005407, n_trades 11 (10 funding_flip + 1 backtest_end), signal_event_count 663. Mechanism worked (656 settlements processed at 0.989 ratio), economics did not clear MT null. Dev_cpcv historical context (passed 2026-05-02): observed_sharpe +4.3395, cpcv mean +5.1669, dsr_validation 0.999995, n_trades 36. Dev↔holdout sharpe gap (5.17 → 0.35) = structural-failure-mode signal. trial_id 199abc0a (final_gate) inheriting cpcv block + dsr_validation from f2c343c3 (full_cpcv). | RETIRE — V2 structural redesign required |
 
 `count_distinct_variations("FundingRateHarvest")` = 1 / 20
-(slot consumed by Variation #1 cleared; 19 remain pending
-Variation #N hypothesis-of-record fills).
-`count_trials_for_dsr("FundingRateHarvest")` = 1 (full_cpcv row;
-smoke row excluded — DSR multiple-testing inflation reflects
-the single trial).
+(slot consumed by Variation #1, retired post-holdout; 19
+remain for V2+ structural-redesign hypotheses).
+`count_trials_for_dsr("FundingRateHarvest")` = 2 (full_cpcv
+f2c343c3 + final_gate 199abc0a; smoke 014bc0d9 superseded
+by 6c395ab and excluded).
 
 Source: `research/funding-rate-literature.md` § "Variation #1 —
 phase4b-delta-neutral-singlepair-btc-v1" for the hypothesis-of-

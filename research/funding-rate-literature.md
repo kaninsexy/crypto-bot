@@ -7,11 +7,15 @@ fill 2026-05-02 afternoon)
 **Phase:** 4.B kickoff — data layer locked (Path 5 hybrid ingestion);
 Variation #1 citation gap closed; Variation #1 parameters fully set
 (5 of 5 with named-source backing).
-**Status:** Variation #1 citation gap CLOSED 2026-05-02; all five
-parameter slots filled with citation-anchored values. Variation #1
-cleared on the no-p-hacking gate; remaining gates before queue are
-the harness-extension verifications (Tracks E-I + Track 2
-signal_event_count plumbing). Variations #2+ remain stubs.
+**Status:** Variation #1 RETIRED post-holdout 2026-05-02.
+dev_cpcv passed (dsr_validation 0.99999548); final_gate
+retired (dsr_holdout 0.005407, sharpe +0.3527 vs
+sr_zero_expected +0.5198). The dev↔holdout sharpe gap is
+the structural-failure-mode signal per the extended
+provenance pre-commit (see § "Note on the strategy's
+provenance" below). Variations #2+ remain stubs;
+structural-redesign hypothesis-of-record + paper-derived
+citation required before queue.
 
 ## Pre-trial citation gate — CLOSED 2026-05-02
 
@@ -165,6 +169,12 @@ band is the gross-of-execution-and-financing-costs ceiling; net-of-
 fees net-of-borrow Sharpe is bounded below this.
 
 ## Variation #1 — `phase4b-delta-neutral-singlepair-btc-v1`
+
+**Status (2026-05-02):** RETIRED post-holdout.
+final_gate trial_id 199abc0a; dsr_holdout 0.005407;
+holdout sharpe +0.3527 vs sr_zero_expected +0.5198. See
+"Note on the strategy's provenance" below for the V2
+entry gate.
 
 **Pre-trial gate #8 (locked, persisted from Phase 4.B venue
 scoping 2026-04-29):** Variation #1 must be single-pair. The
@@ -441,6 +451,21 @@ borderline band (±0.05 of the multiple-testing threshold), the
 hypothesis-of-record is satisfied and the strategy proceeds to
 holdout / final-gate per the verdict tree. The 20-variation cap
 becomes irrelevant in that path.
+
+If variation #1 *passes* dev_cpcv but *fails* final_gate on the
+holdout window (the actual 2026-05-02 outcome — dev sharpe +5.17,
+dsr_validation 0.99999; holdout sharpe +0.35, dsr_holdout 0.0054),
+the dev↔holdout sharpe gap is the structural-failure-mode signal
+— the strategy's mechanism worked (funding settlements processed
+cleanly, funding_flip exits fired as designed) but its economics
+did not clear the multiple-testing null on out-of-sample data.
+This is the same V2 standard as the V1-fails-dev-cpcv branch: V2
+must be a structural redesign (different leg construction,
+different instrument family, different rebalancing rule sourced
+from a specific paper), not a parameter perturbation of V1. The
+dev↔holdout gap itself is V2's design constraint — V2's
+hypothesis must articulate why its construction would have
+replayed on the holdout window where V1's did not.
 
 ## Cross-document references
 

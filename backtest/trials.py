@@ -508,11 +508,20 @@ def _has_prior_final_gate(strategy_id: str) -> bool:
 # ── Variation drift warning ───────────────────────────────────────────────────
 
 def _warn_on_variation_drift(event: dict) -> None:
-    """Emit a stderr warning if any prior row with the same
-    (strategy_id, variation_id) has a different params_hash.  Does not
-    raise — the write succeeds either way.  The warning surfaces caller
-    misuse (reusing a variation label for a different parameter set)
-    without aborting an otherwise valid record."""
+    """Emit a stderr warning if any non-superseded prior row with the
+    same (strategy_id, variation_id) has a different params_hash.
+    Does not raise — the write succeeds either way.  The warning
+    surfaces caller misuse (reusing a variation label for a different
+    parameter set) without aborting an otherwise valid record.
+
+    Rows tagged `superseded_by` are excluded from the comparison —
+    Policy (c) for trials.log invalidation: a row whose underlying
+    simulator/parameter context has been corrected is no longer an
+    authoritative draw.  Mirrors `count_trials_for_dsr`'s convention
+    so an intentional pre-fix vs post-fix parameter change does not
+    false-positive against a smoke or full_cpcv row that the gate fix
+    itself superseded.
+    """
     sid = event["strategy_id"]
     vid = event["variation_id"]
     new_hash = event["params_hash"]
@@ -521,6 +530,7 @@ def _warn_on_variation_drift(event: dict) -> None:
         lambda e: (
             e.get("strategy_id") == sid
             and e.get("variation_id") == vid
+            and not e.get("superseded_by")
         ),
     ):
         prior_hash = prior.get("params_hash")
