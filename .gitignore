@@ -56,3 +56,6 @@ logs/
 
 # T0 working memory: ephemeral per-agent scratch
 .memory/T0_working/
+.memory/T1_episodic/_state/session_start.txt
+.memory/T1_episodic/_state/notifier.log
+.memory/T2_semantic/decisions_log.jsonl
