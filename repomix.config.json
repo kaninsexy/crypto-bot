@@ -16,7 +16,8 @@
     "strategies/breakout.py",
     "strategies/dual_momentum.py",
     "CLAUDE.md",
-    ".memory/T3_procedural/**/*.md"
+    ".memory/T3_procedural/**/*.md",
+    ".claude/agents/**/*.md"
   ],
   "ignore": {
     "useGitignore": true,
