@@ -15,7 +15,8 @@
     "strategies/trend_following.py",
     "strategies/breakout.py",
     "strategies/dual_momentum.py",
-    "CLAUDE.md"
+    "CLAUDE.md",
+    ".memory/T3_procedural/**/*.md"
   ],
   "ignore": {
     "useGitignore": true,
@@ -31,7 +32,13 @@
       "docs/strategy_failure_analysis_2026-04-19.md",
       "docs/strategies.md",
       "backtest/holdout_manifest.json",
-      "backtest/generate_holdout_manifest.py"
+      "backtest/generate_holdout_manifest.py",
+      ".memory/T0_working/**",
+      ".memory/T1_episodic/**",
+      ".memory/T2_semantic/**",
+      ".memory/_proposals/**",
+      "backtest/trials.log",
+      "backtest/holdout_access.log"
     ]
   }
 }
