@@ -399,3 +399,67 @@ architecture.md C.1 to spell out the divergence, or add a
 footnote explaining the operational reason. Either is fine;
 pick at next architecture.md edit.
 Settled in chat 2026-05-03; reference: D8 commit 6733131.
+
+## Day 9 fleet-replay outcome — body-prompt findings + failcount override
+
+**Date:** 2026-05-03 (Day 9 fleet shakedown)
+**Run:** `phase4b-v1-fleet-replay` via fresh phase4b-coordinator (agent ID a99a7d01a853d0a26)
+**Outcome:** VERDICT=FAIL via citation-verifier REJECT at D.2 step 3
+**Verdict semantics:** FAIL is the correct outcome — the strategy verdict is moot (V1 was retired pre-replay), the FAIL signals two real fleet-architecture gaps surfaced by the shakedown.
+
+### Finding 1 — citation-verifier protocol insufficient for multi-source parameter derivation
+
+The verifier (Gemini 2.5 Pro) rejected V1's hypothesis on three objections:
+
+1. `target_vol_annual=0.05` not directly supported by Schmeling/Schrimpf/Todorov "Crypto Carry" — it's a position-sizing target reverse-engineered from the post-tax economics gate (Branch 1 of 2026-04-29 venue scoping), not a paper-derived realized vol.
+2. The 22%-liquidation finding in the paper is a macro return predictor, not an intra-position risk signal.
+3. `exit_mr_ratio_threshold=0.01` derives from OKX maintenance-margin spec, not the paper.
+
+Objections 2 and 3 are academically valid. The current proposer body prompt provides a single `citation_key:` field with a 3-sentence `citation_excerpt:` cap; this cannot carry the multi-source derivation chain that V1's parameters actually rely on (paper for the carry signal, exchange spec for liquidation guard, post-tax model for vol target). Chat-side review on 2026-05-02 accepted the heterogeneous derivation; the strict cross-model verifier rejected it on a single citation_key.
+
+**Generalizes beyond V1.** Any strategy whose risk-guard parameters are exchange-derived rather than paper-derived hits the same gap (V2 multi-pair selection layer, Phase 4.A re-attempts if any, future Phase 5 variations).
+
+**Fix shape (chat scope, body-prompt edits):**
+
+- `proposer.md`: replace single `citation_key:` field with a `citation_set:` block enumerating parameter -> source mapping. Each entry types its source (peer-reviewed / exchange-spec / chat-decision-with-rationale / post-tax-model).
+- `citation-verifier.md`: per-parameter source evaluation. Each parameter must have a typed source. Verifier accepts non-paper sources for risk-guard parameters when the source-type is exchange-spec or chat-decision-with-explicit-rationale.
+
+Architecture.md D.2 step 3 (citation-verifier protocol) may need a parallel update to reflect the multi-source contract. Architecture is sacred-harness — flag for chat-side decision before edit.
+
+### Finding 2 — Notifier log path divergence
+
+The Day 9 prompt specified `.memory/T1_episodic/_state/notifier.log` for the degraded log-only mode. The notifier.md body default writes to `.memory/T1_episodic/episodes/<date>/notifier/<run-id>.jsonl`. Two writers, two paths.
+
+**Origin of the divergence:** the chat-side path was specified in the Day 9 prompt without verifying notifier.md's body default. Coordinator-spawned-degraded-mode wrote the chat-side path; standalone-spawned notifier writes the body-default path. Both writers are correct under their own contracts; the contracts disagree.
+
+**Fix shape (chat scope, body-prompt edit):**
+
+- `notifier.md`: mode-split paths. Degraded log-only mode writes `.memory/T1_episodic/_state/notifier.log` (rolling, append-only, single line per invocation). Real-email mode writes `.memory/T1_episodic/episodes/<date>/notifier/<run-id>.jsonl` (per-episode, structured). Both contracts documented inline in the body prompt.
+
+### Failcount override
+
+`phase4b_failure_count.txt` was incremented 0 -> 1 by the PostToolUse `failcount-update.sh` hook on the VERDICT=FAIL marker. Hook behavior is correct.
+
+**Override decision (chat-side, 2026-05-03 D9):** failcount reset to 0 by user via direct file write.
+
+**Rationale:** the 3-fail counter exists semantically to stop coordinators grinding on bad hypotheses ("strategy isn't working, stop trying"). Day 9's FAIL wasn't that — the strategy hypothesis (V1) was a known-RETIRE replay, and the FAIL surfaced a body-prompt design gap (Finding 1) rather than a strategy-mechanism failure. Leaving failcount at 1 would penalize the next variation (V2 or successor) for reasons unrelated to that variation's merit. Override is documented here for audit; protocol-side, this is an explicit human exception, not a precedent for routine resets.
+
+**Override is a one-time exception.** Future VERDICT=FAIL outcomes increment failcount per protocol unless similarly documented as fleet-architecture diagnostics rather than hypothesis failures. The bar for "fleet-architecture diagnostic" is: the FAIL surfaced a gap in agent body prompts or hook scripts, AND the gap is being actively fixed in chat scope, AND the next variation can't run cleanly until the fix lands.
+
+### Day 10 prerequisite list (carry-forward)
+
+Before any subsequent fleet exercise:
+
+1. Body-prompt fixes for Findings 1 and 2 land in chat scope (proposer.md, citation-verifier.md, notifier.md).
+2. If architecture.md D.2 update is needed for the multi-source citation contract, that's separate sacred-harness work.
+3. Resend setup + RESEND_API_KEY provisioning (open record from Day 9 chat handoff; required before any run that needs real email validation).
+4. `session_start.txt` elapsed-time check added to the chat-side pre-flight protocol per `handoff_template.md` § "Pre-action checklist" (Day 9 caught the gap when the budget hook fired before any worker spawned; pre-flight didn't include this check).
+
+### State delta (this run)
+
+- `M .memory/T1_episodic/_state/phase4b_failure_count.txt` (0 -> 1 via hook, then 1 -> 0 via chat-side override)
+- `M .memory/T1_episodic/_state/session_start.txt` (chat-side reset pre-run)
+- `M .memory/T2_semantic/decisions_log.jsonl` (0 -> 1 line, coordinator-written)
+- `?? .memory/T1_episodic/_state/notifier.log` (new file, coordinator-written, degraded log-only)
+
+No commits landed. No trials.log row appended. No code touched. No sacred-harness path touched.
