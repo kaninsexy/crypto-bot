@@ -1,0 +1,1 @@
+Run hourly T1->T2 candidate promotion per your operating procedure. Stop after queueing candidates.

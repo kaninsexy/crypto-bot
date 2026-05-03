@@ -80,10 +80,25 @@ Operating procedure (encodes architecture.md D.2 verbatim)
            holdout), flag for borderline protocol").
    Wait for verdict.
 
-8. Update `.memory/T1_episodic/_state/phase4b_failure_count.txt`:
-   write `0` if the verdict is PASS, increment by 1 if FAIL.
-   Surface the verdict, the citation chain, and the diff link to
-   Strategist.
+8. Emit the verdict marker as the final Bash echo before returning
+   to Strategist. Exact form, on its own line in stdout:
+
+       VERDICT=PASS
+
+   or
+
+       VERDICT=FAIL
+
+   The PostToolUse failcount-update.sh hook (settled chat 2026-05-03
+   D1, hook-as-writer pattern) parses this marker from
+   `tool_response.stdout`:
+   - 1 PASS marker  -> writes `0` to phase4b_failure_count.txt.
+   - 1 FAIL marker  -> reads counter, increments by 1, writes back.
+   - 0 markers      -> no-op (most Bash calls don't yield verdicts).
+   - 2+ markers     -> hook exits 2 (ambiguous; revisit emit logic).
+   You MUST NOT touch the counter file directly; that is the hook's
+   job. After emitting the marker, surface the citation chain and
+   the diff link to Strategist as the body of your reply.
 
 State files
 - 4hr budget: `.memory/T1_episodic/_state/session_start.txt`

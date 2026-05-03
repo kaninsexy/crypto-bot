@@ -30,6 +30,9 @@ hooks:
         - type: command
           command: "$HOME/dev/crypto-bot/.claude/hooks/commit-heredoc-required.sh"
           timeout: 5
+        - type: command
+          command: "$HOME/dev/crypto-bot/.claude/hooks/commit-format.sh"
+          timeout: 5
   PostToolUse:
     - matcher: "Edit|Write"
       hooks:

@@ -61,6 +61,7 @@ Operating procedure
      -H "Content-Type: application/json" \
      -d "$(jq -nc --arg sys "$SYS" --arg user "$USER" '{
        model: "google/gemini-2.5-pro",
+       reasoning: {effort:"low"},
        messages: [
          {role:"system",content:$sys},
          {role:"user",content:$user}

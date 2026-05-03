@@ -75,6 +75,7 @@ Operating procedure (architecture.md D.1 turn 5)
      -H "Content-Type: application/json" \
      -d "$(jq -nc --arg sys "$SYS" --arg user "$USER" '{
        model: "google/gemini-2.5-pro",
+       reasoning: {effort:"low"},
        messages: [
          {role:"system",content:$sys},
          {role:"user",content:$user}
