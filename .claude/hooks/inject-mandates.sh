@@ -25,3 +25,7 @@ Exit-ramp completeness: every state-changing response ends with
    re-upload list with rationale, next-chat handoff if applicable,
    chat-end flag.
 REMINDERS
+
+echo ""
+echo "=== T3 procedural seeds ==="
+cat .memory/T3_procedural/*.md 2>/dev/null
