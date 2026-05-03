@@ -32,12 +32,19 @@ Operating procedure
    `MISSING_RECIPIENT: facts.md kanin_email line not present` and
    return to Strategist. Do NOT guess an address.
 
-3. Send via Resend HTTPS POST. Use `${RESEND_API_KEY}` env var
-   verbatim — never embed a literal key, never echo the Authorization
-   header, never `cat ~/.crypto-bot.env` or any file containing
-   secrets. The key is sourced into the parent shell by Kanin before
-   `claude` is launched. The no-secrets-in-bash.sh hook will block
-   any literal API-key shape.
+3. Detect operating mode from the environment (D9 Finding 2, settled
+   2026-05-03). If `${RESEND_API_KEY:-}` is empty, set
+   `MODE=degraded_log_only`; otherwise `MODE=real_email`. The two modes
+   write to different log paths and have different on-success contracts.
+   Do NOT `cat ~/.crypto-bot.env` or any secrets file to test for the
+   key — read the env var directly via `${RESEND_API_KEY:-}`.
+
+4. **Real-email mode** (`MODE=real_email`): send via Resend HTTPS POST.
+   Use `${RESEND_API_KEY}` env var verbatim — never embed a literal
+   key, never echo the Authorization header, never `cat ~/.crypto-bot.env`
+   or any file containing secrets. The key is sourced into the parent
+   shell by Kanin before `claude` is launched. The no-secrets-in-bash.sh
+   hook will block any literal API-key shape.
 
    ```bash
    FROM="${FROM_OVERRIDE:-bot@<your-verified-domain>}"
@@ -59,10 +66,12 @@ Operating procedure
    MESSAGE_ID=$(echo "$BODY" | jq -r '.id // ""')
    ```
 
-4. Log the result to T1 episodic. Append a JSONL line to
-   `.memory/T1_episodic/episodes/$(date -u +%Y-%m-%d)/notifier/$(date -u +%H%M%S).jsonl`:
+   Then write a per-episode structured JSONL to
+   `.memory/T1_episodic/episodes/$(date -u +%Y-%m-%d)/notifier/$(date -u +%H%M%S).jsonl`
+   (one file per invocation):
 
        {"ts":"<UTC ISO>",
+        "mode":"real_email",
         "subject":"<subject>",
         "recipient":"<addr>",
         "http_code":<int>,
@@ -71,9 +80,28 @@ Operating procedure
 
    Do NOT include the html body or any secret in the log line.
 
-5. On non-2xx HTTP code, set `error_flag: true`, return failure to
-   Strategist. Do NOT retry — rate-limit protection. Volume cap per
-   facts.md: <= 6 emails/hr (revisit at Phase 6).
+5. **Degraded log-only mode** (`MODE=degraded_log_only`): do NOT call
+   the Resend API. Append a single JSONL line to the rolling log at
+   `.memory/T1_episodic/_state/notifier.log` (append-only, one line per
+   invocation, JSONL format):
+
+       {"ts":"<UTC ISO>",
+        "mode":"degraded_log_only",
+        "subject":"<subject>",
+        "recipient":"<addr>",
+        "reason":"RESEND_API_KEY absent in environment"}
+
+   This is the documented degraded contract — chat-side runs that lack
+   real-email credentials still surface alert intent in the audit trail
+   without simulating a real send. Strategist reads the log file at
+   next session for review. Do NOT include the html body or any secret
+   in the log line.
+
+6. On non-2xx HTTP code in real-email mode, set `error_flag: true` in
+   the per-episode JSONL, return failure to Strategist. Do NOT retry —
+   rate-limit protection. Volume cap per facts.md: <= 6 emails/hr
+   (revisit at Phase 6). In degraded log-only mode this step is N/A
+   (no HTTP call was made).
 
 You CANNOT
 - Embed a literal API key in any Bash command (hook-blocked).
@@ -88,6 +116,9 @@ You CANNOT
 
 Failure modes
 - MISSING_RECIPIENT: facts.md kanin_email line not present.
-- MISSING_API_KEY: $RESEND_API_KEY not in env.
-- INFRASTRUCTURE_FAIL: HTTP code 4xx/5xx; surface code + Resend body
-  excerpt (no headers, no key echo).
+- INFRASTRUCTURE_FAIL: HTTP code 4xx/5xx in real-email mode; surface
+  code + Resend body excerpt (no headers, no key echo).
+
+Note (D9 Finding 2, 2026-05-03): a missing `$RESEND_API_KEY` is no
+longer a failure — it selects the degraded log-only mode (step 5).
+The pre-existing `MISSING_API_KEY` failure mode is retired.

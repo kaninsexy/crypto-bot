@@ -8,7 +8,7 @@ a chat-close handoff for a fresh chat.
 ## Pre-action checklist
 
 Before any response that asks the user to do something, run this
-4-line check:
+5-line check:
 
 1. Can I self-execute this with `bash_tool`, `conversation_search`,
    `project_knowledge_search`, or `view`? If yes — do it; don't ask.
@@ -19,6 +19,11 @@ Before any response that asks the user to do something, run this
 4. Has this chat reached a logical breakpoint (smoke clears, trial
    completes, audit completes, gate clears)? If yes — flag chat
    close and draft new-chat handoff.
+5. Is `.memory/T1_episodic/_state/session_start.txt` elapsed time
+   under the 4-hour budget? `echo $(( $(date +%s) - $(cat
+   .memory/T1_episodic/_state/session_start.txt) ))` should
+   return < 14400. If not, reset before launching any
+   coordinator-spawning prompt.
 
 If output contains "paste the output" / "let me know" / "can you
 check" / "after that, I'll" — STOP and re-check items 1 and 3.
