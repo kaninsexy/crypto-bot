@@ -294,7 +294,9 @@ phase4b-coordinator. Process:
    )"
    Never separate the message from the commit. The commit-heredoc-required
    hook enforces this.
-6. Push to main.
+6. Surface git log -1 for human review. Push remains human-only
+   per architecture deliberation 2026-05-03; same boundary as
+   deploy. Do not push.
 7. End by writing the exit-ramp summary to T1 (see exit-ramp skill).
 
 You CANNOT deploy. doctl, kubectl, ssh, docker push are blocked at the
@@ -598,7 +600,7 @@ Today: you have Claude Code main session on Sonnet 4.6, the existing `.githooks/
 
 ```bash
 cd ~/dev/crypto-bot
-mkdir -p .memory/T0_working/.gitkeep
+mkdir -p .memory/T0_working
 mkdir -p .memory/T1_episodic/episodes .memory/T1_episodic/_state .memory/T1_episodic/_archive
 mkdir -p .memory/T2_semantic/citations .memory/T2_semantic/_pending_review .memory/T2_semantic/_rejected .memory/T2_semantic/retired_strategies
 mkdir -p .memory/T3_procedural .memory/_proposals
