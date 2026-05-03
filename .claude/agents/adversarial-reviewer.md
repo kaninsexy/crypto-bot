@@ -1,5 +1,6 @@
 ---
 name: adversarial-reviewer
+parent: [phase4b-coordinator, phase5-coordinator]
 description: |
   Cross-model critic of any proposal or test result. Argues from first
   principles that the proposal should fail and tries to produce a

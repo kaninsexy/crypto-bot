@@ -1,5 +1,6 @@
 ---
 name: implementer
+parent: [phase4b-coordinator, phase5-coordinator]
 description: |
   Implements a single approved variation. Edits code, runs the validation
   harness, and commits via heredoc-embedded message. Use ONLY after

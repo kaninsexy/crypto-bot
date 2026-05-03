@@ -1,5 +1,6 @@
 ---
 name: citation-verifier
+parent: [phase4b-coordinator, phase5-coordinator]
 description: |
   Verifies the proposer's citation_key actually supports the parameter
   choice. Cross-model adversarial pressure is the design choice (C.2):

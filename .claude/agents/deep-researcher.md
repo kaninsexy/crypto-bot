@@ -1,5 +1,6 @@
 ---
 name: deep-researcher
+parent: [phase4b-coordinator, phase5-coordinator]
 description: |
   Long-form literature search using a paperqa2-style flow. Surfaces
   candidate methods, contradicting findings, and citation chains for a

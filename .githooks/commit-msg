@@ -44,4 +44,17 @@ if [ "$BODY_LINES" -lt 1 ]; then
     echo "anything substantive." >&2
 fi
 
+# Layer 3 [mandate-H] enforcement (architecture E.3).
+# Agent detection mirrors .claude/hooks/commit-format.sh (e13f022):
+# Co-authored-by: Claude trailer is the sole signal. Defense-in-depth
+# on top of Layer 2 (commit-heredoc-required.sh + commit-format.sh)
+# in case the Layer 2 hook was bypassed (e.g., subagent-hooks gap or
+# direct git commit outside Claude Code).
+if grep -qE '^Co-authored-by: Claude' "$COMMIT_MSG_FILE"; then
+    if ! grep -qF '[mandate-H]' "$COMMIT_MSG_FILE"; then
+        echo "ERROR: agent commit missing [mandate-H] token (Layer 3, architecture E.3)" >&2
+        exit 1
+    fi
+fi
+
 exit 0

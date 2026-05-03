@@ -1,5 +1,6 @@
 ---
 name: analyst
+parent: [phase4b-coordinator, phase5-coordinator]
 description: |
   Interprets a completed test run; classifies per the verdict tree;
   flags borderline cases (DSR within +/- 0.05 of threshold on holdout)
