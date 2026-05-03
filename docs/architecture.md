@@ -393,12 +393,21 @@ Strategist → Task(phase4b-coordinator, "Run variation N of 17 remaining")
 phase4b-coord:
   Step 1: PreToolUse hook checks failure_count < 3 and elapsed < 4hr.
   Step 2: Read .memory/T2_semantic/facts.md for prior variations' outcomes.
-  Step 3: Task(proposer) — generate proposal-N with theoretical justification.
-          PreToolUse citation-required hook on proposer's WebFetch ensures
-          a citation key is present before any web search begins.
-  Step 4: Task(citation-verifier) — confirm cited paper supports the choice.
-          If not: increment local revision counter; if >2 revisions, return
-          failure; if ≤2, loop back to Step 3 with reviewer feedback.
+  Step 3: Task(proposer) — generate proposal-N with theoretical justification
+          and a multi-source citation_set per proposer.md. PreToolUse
+          citation-required hook on proposer's WebFetch ensures a primary
+          peer-reviewed citation_key declaration is present before any web
+          search begins (the slug must also appear as the source_ref of the
+          peer_reviewed entry in citation_set).
+  Step 4: Task(citation-verifier) — per-parameter evaluation of citation_set
+          against per-type acceptance rules (peer_reviewed / exchange_spec /
+          post_tax_model / chat_decision_with_rationale; full schema in
+          citation-verifier.md). Output is one of ALL_VERIFIED /
+          PARTIAL_REJECT / FULL_REJECT. ALL_VERIFIED advances; PARTIAL_REJECT
+          and FULL_REJECT both increment phase4b_failure_count and abort the
+          cycle (see body prompt for the loop-back vs abort divergence with
+          the original D.2 text — body prompts are authoritative on
+          coordinator behavior; this step description is the contract shape).
   Step 5: Task(adversarial-reviewer) — Gemini attacks the proposal.
           Output: APPROVE / REVISE / BLOCK + structured rationale.
   Step 6: If APPROVED: phase4b-coord writes a single decisions_log.jsonl
