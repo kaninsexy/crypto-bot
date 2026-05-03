@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Layer-4 pre-commit hook for crypto-bot.
+# Spec: docs/architecture.md section E.4. Four checks:
+#   1. Sacred-harness diff block (defense-in-depth vs sacred-block.sh)
+#   2. Magic-number gate on strategies/*.py
+#   3. pytest -m fast with 60s ceiling
+#   4. validation_framework/ modification block (redundant with #1)
+# Activated via: git config core.hooksPath .githooks
+# Bypass: --no-verify (per CLAUDE.md "Git Safety Protocol")
+
+set -uo pipefail
+
+ROOT=$(git rev-parse --show-toplevel)
+FAIL=0
+
+# ---------- CHECK 1+4: sacred-harness diff block ----------
+# Runtime artifacts + meta-docs: human-only by mandate S.
+# Default deny; humans bypass per-commit via CLAUDE_HUMAN_OVERRIDE=1.
+# This conservative default is appropriate because the new commit-
+# autonomy boundary means most commits are agent commits; sacred
+# edits are rare and need positive human consent.
+SACRED_REGEX='^(backtest/trials\.py$|backtest/holdout\.py$|validation_framework/|docs/validation_framework\.md$|^CLAUDE\.md$|docs/MASTER_PLAN\.md$)'
+SACRED_HITS=$(git diff --cached --name-only | grep -E "$SACRED_REGEX" || true)
+if [ -n "$SACRED_HITS" ]; then
+  if [ "${CLAUDE_HUMAN_OVERRIDE:-0}" != "1" ]; then
+    echo "BLOCKED: sacred-harness paths in staged diff:" >&2
+    echo "$SACRED_HITS" | sed 's/^/  /' >&2
+    echo "" >&2
+    echo "Per architecture.md section E.4 + .memory/T3_procedural/sacred_harness.md:" >&2
+    echo "  - trials.py, holdout.py, validation_framework/ are runtime audit artifacts" >&2
+    echo "  - CLAUDE.md, MASTER_PLAN.md, validation_framework.md are meta-docs" >&2
+    echo "  Both classes are human-only; agents must propose, not commit." >&2
+    echo "" >&2
+    echo "If this is a legitimate human commit, set CLAUDE_HUMAN_OVERRIDE=1:" >&2
+    echo "  CLAUDE_HUMAN_OVERRIDE=1 git commit -F - <<'EOF' ... EOF" >&2
+    FAIL=1
+  else
+    echo "NOTE: CLAUDE_HUMAN_OVERRIDE=1 set; allowing sacred-harness diff." >&2
+  fi
+fi
+
+# ---------- CHECK 2: magic-number gate on strategies/*.py ----------
+STRATEGY_FILES=$(git diff --cached --name-only --diff-filter=AM -- 'strategies/*.py' 2>/dev/null || true)
+if [ -n "$STRATEGY_FILES" ]; then
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    if ! python3 "$ROOT/.githooks/check-magic-numbers.py" "$f"; then
+      FAIL=1
+    fi
+  done <<< "$STRATEGY_FILES"
+fi
+
+# ---------- CHECK 3: pytest -m fast (60s ceiling) ----------
+if command -v pytest >/dev/null 2>&1; then
+  python3 "$ROOT/.githooks/pytest-with-timeout.py"
+  PYTEST_RC=$?
+  # 0 = pass, 5 = no tests collected (acceptable), other = block
+  if [ "$PYTEST_RC" -ne 0 ] && [ "$PYTEST_RC" -ne 5 ]; then
+    echo "BLOCKED: pytest -m fast failed or timed out (exit=$PYTEST_RC)." >&2
+    FAIL=1
+  fi
+fi
+
+exit $FAIL
