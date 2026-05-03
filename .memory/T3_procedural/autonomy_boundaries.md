@@ -33,7 +33,7 @@ no "pick one and confirm" loops back to the human.
 - Any permanent deletion of code, strategies, or data.
 
 ### Human only (agents must not perform)
-- git commit, git push, force operations.
+- git push, force operations.
 - Paper deploy to server, live deploy to production.
 - Capital or risk parameter changes.
 - Edits to CLAUDE.md, MASTER_PLAN.md, validation_framework.md
@@ -46,7 +46,7 @@ and execute. If truly torn, list the two and pick one anyway with the
 deciding factor named. Do not fragment a decided plan into N approval
 rounds.
 
-Sign-off is reserved exclusively for: git commit, git push, deploy, and
+Sign-off is reserved exclusively for: git push, deploy, and
 sacred-harness Tier 1 schema changes. Design choices (abstraction layer,
 dispatch pattern, manifest field shape, module location, naming) are
 agent calls when the evidence answers them.
@@ -60,12 +60,13 @@ answering questions about settled decisions, harness state, or prior
 rationale.
 
 ## Trial intentionality
-Commits are the deliberate human act marking a trial as "this is what I
-tested, this is the variation I am claiming." The boundary fires at
-git commit, not at trial run. Agents may run trials, append rows to
-trials.log via record_trial, edit literature files, and update
-bot_status.md autonomously — but stop short of git add / git commit /
-git push. The user reviews the diff and commits manually.
+Trial intentionality is preserved by mandatory heredoc-embedded commit
+messages enforced at the hook layer. The boundary fires at git push,
+not at git commit. Agents may run trials, append rows to trials.log
+via record_trial, edit literature files, update bot_status.md, and
+commit autonomously with heredoc messages — but stop short of git
+push. The user reviews commit history and pushes manually if/when
+ready.
 
 See also: CLAUDE.md "Agent autonomy rules", "Drift prevention"
 mandates A and F; architecture.md §E.1 mandates A and F.

@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 This file is read by Claude Code and other agents when working in this repo.
 Read it before starting any task.
@@ -51,7 +51,8 @@ and `docs/bot_status.md` for current state.
 Agents decide autonomously when data clearly answers the question.
 Agents consult with the human when the decision changes what's being tested
 or affects money/deployment.
-Agents never commit, push, or deploy autonomously.
+Agents commit autonomously with heredoc-embedded messages per mandate H.
+Agents never push or deploy autonomously.
 
 ### Agent decides (no approval needed)
 
@@ -81,7 +82,6 @@ Agents never commit, push, or deploy autonomously.
 
 ### Human only (agents must not perform)
 
-- Commits to git
 - Pushes to any remote
 - Force operations (force-push, hard reset on main, etc.)
 - Paper deploy to server
@@ -134,10 +134,12 @@ would be friction that protects nothing.
   "Consecutive failure escalation" below).
 - **Tests outside the enumerated batch.** Adding a strategy or test
   not in MASTER_PLAN.md still requires the consult-the-human rule.
-- **Commits.** Trial intentionality is enforced by the human-commits-
-  only rule. Running tests autonomously does not extend to committing
-  the results autonomously. The agent surfaces the diff + verdict and
-  the user commits manually.
+- **Push and deploy.** Trial intentionality is preserved by mandatory
+  heredoc-embedded commit messages enforced at the hook layer
+  (commit-heredoc-required.sh, sacred-block.sh, pre-commit). Agents
+  commit autonomously per mandate G; agents stop short of git push
+  and any deploy command. The deliberate human act is the push,
+  where remote state changes and audit exposure begin.
 
 The 20-variation cap, 3-failure escalation rule, and no-p-hacking rule
 all remain in force during pre-justified batch execution. The batch
@@ -217,11 +219,9 @@ running it.
 
 ## When to use which tool
 
-- **Claude Code (default).** All multi-file work, iterative implementation,
-  backtests, doc edits across multiple files, anything requiring cross-file
-  context. This is the default — when in doubt, route here.
-- **Cowork.** Small, contained, well-specified single-file fixes only.
-  Not multi-file doc updates; those go to Claude Code.
+- **Claude Code.** All implementation work, in chunks. Multi-file or
+  single-file, simple or complex — CC is the route. Cowork retired
+  2026-05-03; one tool eliminates the routing decision.
 - **Chat with human.** Decisions, design reviews, retire/keep calls,
   scope choices. Plan together; execute via Claude Code.
 
@@ -411,9 +411,9 @@ not against the literature file's actual content vs. gate #8.
 When the data answers the question (project files + past
 chats + handoff prompt), the agent decides and executes — no
 option-A/B/C menus, no "pick one and confirm" loops back to
-the human. Sign-off is reserved exclusively for: git commit,
-git push, deploy, and sacred-harness file schema changes per
-CLAUDE.md "Human only" list. Design choices like which
+the human. Sign-off is reserved exclusively for: git push, deploy,
+and sacred-harness file schema changes per CLAUDE.md "Human only"
+list. Design choices like which
 abstraction layer, dispatch pattern, manifest field shape,
 module location, naming convention are agent calls when the
 evidence answers them. Bit-by-bit sign-off cycles waste time
@@ -423,18 +423,20 @@ rounds. The user has stated this preference repeatedly; the
 mandate persists it in the repo so it doesn't depend on
 chat-side memory.
 
-**G. Trial intentionality boundary at commit, not at run.**
-Per the existing "Trial intentionality" core principle:
-commits are the deliberate human act marking a trial as "this
-is what I tested, this is the variation I am claiming." The
-boundary fires at git commit, not at trial run. Agents may
-run trials, append rows to trials.log via record_trial, edit
-literature files, and update bot_status.md autonomously per
-the autonomy rules — but stop short of git add / git commit /
-git push every time. The user reviews the diff and commits
-manually. This is the same boundary as mandate F: design
-decisions don't need sign-off, but the persistence of those
-decisions in the git history does.
+**G. Trial intentionality boundary at push, not at commit.**
+Trial intentionality is preserved by mandatory heredoc-embedded
+commit messages with full context, enforced at the hook layer
+(commit-heredoc-required.sh, sacred-block.sh, commit-msg,
+pre-commit). The boundary moved at architecture.md commit
+831be25 (chat 2026-05-03 deliberation): mandatory message
+embedding via hooks is safer than manual commit typing, which
+twice produced empty commits when humans skipped the editor.
+Agents commit autonomously — git add, git commit with heredoc
+message — and stop short of git push. The deliberate human
+act is the push, where remote state changes and audit exposure
+begin. This is the same boundary as mandate F: design decisions
+do not need sign-off, but the irreversible step (push, deploy)
+does.
 
 Historical drift cases and worked examples: see
 `docs/drift_history.md` (do not load unless investigating a
@@ -460,11 +462,10 @@ always — user not being physically present is not a special case):
   end-to-end (see "Pre-justified test batch execution" above)
 
 Claude Code MUST NOT proceed without explicit approval on:
-- git commit, regardless of message quality
 - git push, regardless of branch
 - Any deployment command (DigitalOcean, Binance API, production env edits)
 - Edits to sacred-harness files (see Core principles for the canonical two-tier list; the runtime artifacts + holdout schema are the never-edit tier)
 - Edits to .env or any secrets file
 - Schema changes to validation framework artifacts
 
-When verification passes, surface the diff plus test output and stop. The user reviews and commits manually.
+When verification passes, commit autonomously with a heredoc-embedded message per mandate H, surface git log -1 plus test output, and stop. The user reviews the commit and pushes manually if/when ready.
