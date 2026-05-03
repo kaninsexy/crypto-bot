@@ -1,6 +1,6 @@
 # Open Questions
 
-Last updated: 2026-04-26
+Last updated: 2026-05-03
 
 Running list of items that are unresolved, blocked, or carried from earlier
 work. Entries are grouped by theme, not priority. When an item is resolved,
@@ -386,3 +386,16 @@ and underused; (2) drift-prevention mandates A-G in CLAUDE.md
 assume bounded agent count for review-against-scoping to remain
 tractable; (3) Phase 4.B Tracks E-I have sequential dependencies
 that don't benefit from agent parallelism.
+
+### [OPEN, 2026-05-03] architecture.md C.1 phase5-coordinator hooks row
+
+[OPEN, 2026-05-03] architecture.md C.1 phase5-coordinator
+hooks row reads "Same as phase4b-coord", which would include
+PostToolUse failcount-update. D8 implementation
+(commit 6733131) deliberately drops failcount-update because
+Phase 5 sessions are atomic (fan-out, not sequential
+variation loop). Reconciliation owed: either edit
+architecture.md C.1 to spell out the divergence, or add a
+footnote explaining the operational reason. Either is fine;
+pick at next architecture.md edit.
+Settled in chat 2026-05-03; reference: D8 commit 6733131.
