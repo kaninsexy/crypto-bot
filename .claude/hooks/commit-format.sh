@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 # PreToolUse hook on Bash (Implementer subagent).
 # Companion to commit-heredoc-required.sh: heredoc enforces SHAPE,
-# this hook enforces CONTENT. Settled chat 2026-05-03 D2.
+# this hook enforces CONTENT. Settled chat 2026-05-03 D2;
+# agent-detection rewritten 2026-05-03 fix-forward on a3accde
+# to align with architecture.md E.3 (Layer 3 commit-msg parallel).
 #
 # Validates:
 #  1. Subject line matches conventional-commits prefix.
 #     ^(feat|fix|chore|docs|test|refactor|perf|build|ci)
 #       (\([a-z0-9-]+\))?: .{1,72}$
 #  2. If agent-authored, body contains [mandate-H] token.
-#     Detection precedence:
-#       a. Env CLAUDE_AGENT set -> agent.
-#       b. facts.md kanin_email present AND git user.email mismatches
-#          -> agent.
-#       c. Otherwise -> non-agent (no [mandate-H] required).
-#     The (c) default is permissive so manual Kanin commits don't
-#     block when facts.md hasn't been seeded yet.
+#     Agent detection: SOLE signal is a body line matching
+#     ^Co-authored-by: Claude. Claude Code adds this trailer to
+#     subagent commits, so it is the reliable indicator. The
+#     previous CLAUDE_AGENT env + email-mismatch detection was
+#     unenforceable in practice (env never set; kanin_email line
+#     absent from facts.md), making [mandate-H] enforcement opt-in.
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
 
@@ -48,19 +49,14 @@ if ! echo "$SUBJECT" | grep -qE "$SUBJECT_REGEX"; then
 fi
 
 IS_AGENT=0
-if [ -n "${CLAUDE_AGENT:-}" ]; then
+if printf '%s\n' "$MSG" | grep -qE '^Co-authored-by: Claude'; then
   IS_AGENT=1
-else
-  HUMAN_EMAIL=$(grep -E '^kanin_email:' .memory/T2_semantic/facts.md 2>/dev/null | sed -E 's/^kanin_email:[[:space:]]*//')
-  GIT_EMAIL=$(git config user.email 2>/dev/null)
-  if [ -n "$HUMAN_EMAIL" ] && [ -n "$GIT_EMAIL" ] && [ "$HUMAN_EMAIL" != "$GIT_EMAIL" ]; then
-    IS_AGENT=1
-  fi
 fi
 
 if [ "$IS_AGENT" -eq 1 ]; then
   if ! printf '%s\n' "$MSG" | grep -qF '[mandate-H]'; then
     echo "BLOCKED: agent-authored commit must contain [mandate-H] token in body." >&2
+    echo "Detected via Co-authored-by: Claude trailer." >&2
     echo "Add a line containing [mandate-H] anywhere in the commit body." >&2
     exit 2
   fi

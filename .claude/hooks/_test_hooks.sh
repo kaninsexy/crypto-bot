@@ -70,34 +70,41 @@ if [ "$RC" -eq 2 ]; then ok "blocks T2 sibling (citations/)"; else no "block cit
 # ---- commit-format.sh ----
 note "commit-format.sh"
 
-unset CLAUDE_AGENT
 echo '{"tool_input":{"command":"git commit -F - <<EOF\nadd thing\nEOF"}}' \
   | .claude/hooks/commit-format.sh >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ]; then ok "blocks bad subject (no conventional prefix)"; else no "block bad subject (rc=$RC)"; fi
 
-unset CLAUDE_AGENT
 echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(curator): add hourly cron agent\nEOF"}}' \
   | .claude/hooks/commit-format.sh
 RC=$?
-if [ "$RC" -eq 0 ]; then ok "accepts good non-agent commit"; else no "accept good non-agent (rc=$RC)"; fi
+if [ "$RC" -eq 0 ]; then ok "accepts good non-agent commit (no trailer, no token)"; else no "accept good non-agent (rc=$RC)"; fi
 
-CLAUDE_AGENT=1 \
-  .claude/hooks/commit-format.sh < <(echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(curator): add agent\nEOF"}}') >/dev/null 2>&1
-RC=$?
-if [ "$RC" -eq 2 ]; then ok "blocks agent commit missing [mandate-H]"; else no "agent w/o mandate-H (rc=$RC)"; fi
-
-CLAUDE_AGENT=1 \
-  .claude/hooks/commit-format.sh < <(echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(curator): add agent\n\n[mandate-H]\n\nbody\nEOF"}}')
-RC=$?
-if [ "$RC" -eq 0 ]; then ok "accepts agent commit with [mandate-H]"; else no "agent w/ mandate-H (rc=$RC)"; fi
-unset CLAUDE_AGENT
-
-unset CLAUDE_AGENT
 echo '{"tool_input":{"command":"git commit -m \"feat(scope): inline\""}}' \
   | .claude/hooks/commit-format.sh >/dev/null 2>&1
 RC=$?
 if [ "$RC" -eq 2 ]; then ok "blocks commit without heredoc body"; else no "no-heredoc (rc=$RC)"; fi
+
+# Trailer-based agent detection (architecture.md E.3)
+echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(scope): description\n\n[mandate-H]\n\nCo-authored-by: Claude <noreply@anthropic.com>\nEOF"}}' \
+  | .claude/hooks/commit-format.sh
+RC=$?
+if [ "$RC" -eq 0 ]; then ok "accepts agent commit (Co-authored-by + [mandate-H])"; else no "agent w/ trailer + token (rc=$RC)"; fi
+
+echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(scope): description\n\nCo-authored-by: Claude <noreply@anthropic.com>\nEOF"}}' \
+  | .claude/hooks/commit-format.sh >/dev/null 2>&1
+RC=$?
+if [ "$RC" -eq 2 ]; then ok "blocks agent commit (Co-authored-by, no token)"; else no "agent w/ trailer no token (rc=$RC)"; fi
+
+echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(scope): description\n\nbody only\nEOF"}}' \
+  | .claude/hooks/commit-format.sh
+RC=$?
+if [ "$RC" -eq 0 ]; then ok "accepts human commit (no trailer, no token)"; else no "human no trailer no token (rc=$RC)"; fi
+
+echo '{"tool_input":{"command":"git commit -F - <<EOF\nfeat(scope): description\n\n[mandate-H]\n\nbody\nEOF"}}' \
+  | .claude/hooks/commit-format.sh
+RC=$?
+if [ "$RC" -eq 0 ]; then ok "accepts human commit (no trailer, voluntary token)"; else no "human no trailer voluntary token (rc=$RC)"; fi
 
 # ---- flush-T1.sh ----
 note "flush-T1.sh"
