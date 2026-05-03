@@ -53,3 +53,6 @@ backtest/holdout_access.log
 # Runtime artifacts
 dashboard/data/
 logs/
+
+# T0 working memory: ephemeral per-agent scratch
+.memory/T0_working/
