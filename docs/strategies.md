@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-05-02 (post Phase 4.B Variation #1 dev_cpcv pass)
+Last updated: 2026-05-04
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -496,3 +496,17 @@ Status legend (historical):
 
 Detailed per-strategy failure write-up for the four broken strategies:
 `docs/strategy_failure_analysis_2026-04-19.md`.
+
+### IntradaySeasonalityEffects
+
+**Phase 4.C sq-003 — RETIRE**
+
+Variation: intraday-hourly-long-21-23utc
+Trial: d6d0e252a9494982bed3fad470dc5dba
+
+Pure time-of-day filter: long BTC/USDT at 21:00 UTC, exit at 23:00 UTC.
+No indicators. Result: sr=-1.17, baseline=1.69, DSR=5.2e-72.
+7/10 CPCV blocks negative. Consistent with Baur et al. (2019) negative
+prior. No edge in this window.
+
+---

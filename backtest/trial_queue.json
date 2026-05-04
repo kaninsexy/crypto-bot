@@ -78,7 +78,7 @@
     },
     {
       "id": "sq-003",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "IntradaySeasonalityEffects",
       "variation_id": "intraday-hourly-long-21-23utc",
       "script_path": "scripts/run_intraday_seasonality_effects_trial.py",
@@ -119,10 +119,10 @@
       "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \u2014 pure time-of-day filter. Test on 1H candles.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
-      "started_at": null,
-      "finished_at": null,
-      "verdict": null,
-      "trial_id": null,
+      "started_at": "2026-05-04T18:05:50.281605+00:00",
+      "finished_at": "2026-05-04T18:05:50.286251+00:00",
+      "verdict": "retire",
+      "trial_id": "d6d0e252a9494982bed3fad470dc5dba",
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
