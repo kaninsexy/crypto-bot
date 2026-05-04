@@ -29,18 +29,24 @@ Module surface
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import pandas as pd
 
 from strategies.base import BaseStrategy, Signal
 
 
+# 8h funding settlements per year; an 8h rate × this constant is
+# the annualised rate used by the V2 entry/exit gate.  See
+# research/funding-rate-literature.md § "Theoretical/design baseline".
+_FUNDING_ANNUALISATION = 1095  # CITATION: funding-rate-literature
+
+
 class FundingRateHarvestStrategy(BaseStrategy):
     """Open-side strategy for the Phase 4.B delta-neutral funding
     harvest variation.
 
-    Contract: emit BUY on every call to `generate_signal`.  Two-leg
+    V1 contract: emit BUY on every call to `generate_signal`.  Two-leg
     construction (open both legs at equal notional) lives inside
     `paper_trading.perp_simulator.PerpSimulator.execute_signal`;
     this class does not track per-leg state.
@@ -52,6 +58,15 @@ class FundingRateHarvestStrategy(BaseStrategy):
     the position once the simulator is flat.  No internal "have I
     opened yet" state needed.
 
+    V2 extension: the optional `min_funding_rate_entry` and
+    `exit_funding_rate_threshold` parameters add a regime-aware
+    threshold gate.  When either is non-zero, the strategy looks up
+    the most recent funding rate against an internally-held funding
+    history (set via `set_funding_history`) and either suppresses
+    the BUY (rate below entry threshold) or emits a SELL (rate
+    below exit threshold while a position is open).  Both default
+    to 0.0 so V1 behaviour is preserved bit-for-bit.
+
     The engine's warm-up window (`engine_perp.run_perp` skips the
     first `warm_up_candles` bars before invoking the strategy)
     handles "skip until enough data" upstream; the strategy itself
@@ -62,15 +77,110 @@ class FundingRateHarvestStrategy(BaseStrategy):
         self,
         symbol: str = "BTC/USDT",
         timeframe: str = "1h",
+        min_funding_rate_entry: float = 0.0,
+        exit_funding_rate_threshold: float = 0.0,
     ):
         super().__init__(
             name="FundingRateHarvest",
             symbol=symbol,
             timeframe=timeframe,
         )
+        self._min_funding_rate_entry = float(min_funding_rate_entry)
+        self._exit_funding_rate_threshold = float(exit_funding_rate_threshold)
+        self._funding_history: Optional[pd.DataFrame] = None
+
+    def set_funding_history(self, funding_history: pd.DataFrame) -> None:
+        """Provide the strategy with the funding-rate series it should
+        consult when applying V2 threshold gates.
+
+        Required only when `min_funding_rate_entry` or
+        `exit_funding_rate_threshold` is non-zero; in V1 mode (both
+        zero) the lookup is skipped and the funding history is
+        irrelevant.
+
+        Expected schema: DatetimeIndex (UTC), at least one column
+        named `funding_rate` carrying the per-8h rate (NOT
+        annualised).  Mirrors the format produced by
+        `data.okx_funding.load_or_fetch_funding_history`.
+        """
+        self._funding_history = funding_history
+
+    def _latest_funding_rate_per_8h(
+        self, ts: pd.Timestamp,
+    ) -> Optional[float]:
+        """Return the most recent 8h funding rate at-or-before `ts`,
+        or None when no settlement has yet been observed.
+        """
+        if self._funding_history is None or self._funding_history.empty:
+            return None
+        idx = self._funding_history.index.searchsorted(ts, side="right") - 1
+        if idx < 0:
+            return None
+        return float(self._funding_history.iloc[idx]["funding_rate"])
 
     def generate_signal(self, df: pd.DataFrame) -> Signal:
         price = float(df["close"].iloc[-1])
+
+        v2_mode = (
+            self._min_funding_rate_entry > 0.0
+            or self._exit_funding_rate_threshold > 0.0
+        )
+        if not v2_mode:
+            return Signal(
+                action="BUY",
+                strategy=self.name,
+                price=price,
+                reason="funding_harvest_open",
+                order_type="market",
+                quantity_pct=1.0,
+            )
+
+        ts = df.index[-1]
+        rate_per_8h = self._latest_funding_rate_per_8h(ts)
+        rate_annual = (
+            rate_per_8h * _FUNDING_ANNUALISATION
+            if rate_per_8h is not None else None
+        )
+
+        # Pre-first-settlement: V2 holds rather than opening blind.
+        if rate_annual is None:
+            return Signal(
+                action="HOLD",
+                strategy=self.name,
+                price=price,
+                reason="v2_no_funding_observed_yet",
+            )
+
+        # Hysteresis exit: rate fell below exit threshold.
+        # Strategy emits SELL unconditionally; PerpSimulator silently
+        # ignores SELL when flat (mirrors the BUY-already-open pattern).
+        if (
+            self._exit_funding_rate_threshold > 0.0
+            and rate_annual < self._exit_funding_rate_threshold
+        ):
+            return Signal(
+                action="SELL",
+                strategy=self.name,
+                price=price,
+                reason="rate_below_exit_threshold",
+                order_type="market",
+                quantity_pct=1.0,
+            )
+
+        # Entry gate: rate below entry threshold blocks new positions
+        # but does not force-close an open one (the dead band between
+        # exit and entry thresholds is the hysteresis hold zone).
+        if (
+            self._min_funding_rate_entry > 0.0
+            and rate_annual < self._min_funding_rate_entry
+        ):
+            return Signal(
+                action="HOLD",
+                strategy=self.name,
+                price=price,
+                reason="rate_below_entry_threshold",
+            )
+
         return Signal(
             action="BUY",
             strategy=self.name,

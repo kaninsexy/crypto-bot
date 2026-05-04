@@ -387,6 +387,66 @@ trade count. Surface this as an open question before queuing
 CPCV — may require harness adaptation or a different signal
 boundary definition.
 
+## Variation #2 -- `phase4b-threshold-entry-singlepair-btc-v2`
+
+**Date:** 2026-05-04
+**Status:** Hypothesis-of-record. Not yet queued.
+
+**Structural failure mode addressed.** Variation #1 passed
+dev_cpcv (dsr_validation 0.99999) but failed final_gate on
+holdout (dsr_holdout 0.0054, sharpe +0.35 vs sr_zero_expected
++0.52). The holdout window coincides with the period Schmeling
+et al. document as declining-carry (Sharpe 4.06 from 2024
+onward, negative in 2025). V1 always-on logic entered and held
+regardless of current carry level -- bleeding fees and negative
+settlements in low-carry regimes. V2 structural redesign is a
+minimum funding-rate entry gate that keeps the strategy flat
+when carry is insufficient to cover costs.
+
+**Hypothesis.** Delta-neutral BTC single-pair (same legs as V1:
+spot BTC/USDT + perp BTC-USDT-SWAP on OKX). Entry gate added:
+only open or reopen the position when the current 8h annualised
+funding rate exceeds `min_funding_rate_entry`. Hold until either
+a funding-flip exit fires (same N=4 rule as V1) or the current
+rate falls below `exit_funding_rate_threshold` (hysteresis
+exit). Stay flat otherwise.
+
+**Threshold calibration rule (pre-specified, probe-executed
+before first trial).** `min_funding_rate_entry` = 33rd
+percentile of all positive-funding sessions in the dev window
+(annualised rate, where annualised = rate_per_8h x 1095).
+`exit_funding_rate_threshold` = 50% of `min_funding_rate_entry`.
+Calibration probe runs on dev window funding history only;
+holdout data is never accessed during calibration.
+
+**All other parameters unchanged from V1:** leverage 5.0x
+cross-margin, equal notional legs, flip_exit_n=4,
+exit_mr_ratio_threshold=0.01.
+
+**Source citations.**
+- Schmeling, Schrimpf & Todorov "Crypto Carry" (BIS WP 1087 /
+  forthcoming Management Science) -- regime-conditional
+  performance observation (Sharpe 6.45 full-sample, 4.06 from
+  2024, negative in 2025) is the direct empirical grounding for
+  the threshold filter. The threshold operationalises "only
+  harvest carry when carry is present."
+- V1 per-block forensics (trials.log trial_id f2c343c3): Block
+  1 Sharpe -2.17 in negative-funding regime, Block 3 Sharpe
+  +14.72 in positive-funding regime -- within-dev evidence
+  confirming the regime-conditional hypothesis.
+
+**Harness changes required.** None to sacred-harness files.
+`FundingRateHarvestStrategy` gains two optional parameters:
+`min_funding_rate_entry: float = 0.0` (default preserves V1
+behaviour exactly) and `exit_funding_rate_threshold: float =
+0.0`. Calibration probe is
+`scripts/phase_4b_v2_threshold_probe.py`. The full_cpcv script
+reads the probe output file to set the parameters.
+
+**Variation slot.** `count_distinct_variations
+("FundingRateHarvest")` will increment from 1 to 2 when the
+first trial row is appended.
+
 ## Variation #2 — `phase4b-delta-neutral-top-N-funding-v1` (STUB, NOT QUEUED)
 
 Multi-pair selection layer: rank OKX USDT-M perps by current
