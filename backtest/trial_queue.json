@@ -35,7 +35,17 @@
       "hypothesis_one_line": "Aggregated social sentiment momentum (LunarCrush Galaxy Score or similar) produces positive risk-adjusted returns on BTC/ETH perpetual futures as a directional signal.",
       "source_citation": "proposal-agent dry-run 2026-05-05 (quality 3.0)",
       "literature_doc": "research/social-sentiment-momentum-literature.md",
-      "citations": [],
+      "citations": [
+        {
+          "title": "On technical trading and social media indicators for cryptocurrency price classification through deep learning",
+          "authors": "Ortu, M., Uras, N., Conversano, C., Bartolucci, S., Destefanis, G.",
+          "year": 2022,
+          "source": "Expert Systems With Applications 198 (2022) 116804",
+          "key_finding": "Adding social media sentiment indicators to technical features improves BTC/ETH daily price direction classification accuracy from 51-55% to 67-84% across four deep learning architectures (2017-2020 data).",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
       "overall_quality": 3.0,
       "implementation_notes": "LunarCrush data already available in project. Use 24h or 7d rolling sentiment score. Long when score crosses upward threshold, flat/short below lower threshold.",
       "added_by": "manual",
