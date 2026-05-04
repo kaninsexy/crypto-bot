@@ -35,7 +35,7 @@ never hardcoded). Long-only on spot substrate.
 symbols list at runtime. Current list (12 instruments, all
 OKX USDT spot with 3+ years history): BTC/USDT, ETH/USDT,
 SOL/USDT, BNB/USDT, XRP/USDT, ADA/USDT, AVAX/USDT, DOT/USDT,
-LINK/USDT, MATIC/USDT, LTC/USDT, UNI/USDT. Future variations
+LINK/USDT, POL/USDT, LTC/USDT, UNI/USDT. Future variations
 may use a different basket by updating the manifest symbols
 list with documented rationale -- code reads manifest, never
 hardcodes symbols.

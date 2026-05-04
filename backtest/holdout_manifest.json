@@ -107,7 +107,7 @@
     "symbols": [
       "BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT",
       "XRP/USDT", "ADA/USDT", "AVAX/USDT", "DOT/USDT",
-      "LINK/USDT", "MATIC/USDT", "LTC/USDT", "UNI/USDT"
+      "LINK/USDT", "POL/USDT", "LTC/USDT", "UNI/USDT"
     ],
     "strategy_warmup_candles": 126,
     "min_tradeable_candles_per_block": 30

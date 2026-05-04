@@ -16,7 +16,7 @@ load_or_fetch` uses a `years: float` argument and does NOT match the
 This script reads the symbols list from the manifest entry at runtime so
 the basket can grow or shrink without touching code.  It does not append
 to `trials.log`, edit any sacred-harness file, or call the holdout
-window — every cache write is gated by `until_ts=holdout_start` so the
+window — every cache write is gated by `until_ts=get_symbol_dev_cutoff(symbol)` so the
 `HoldoutBypass` enforcement in `backtest.cache._apply_until_and_enforce`
 catches any accidental holdout-window leak.
 """
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backtest.cache import load_or_download_ohlcv
+from backtest.cache import get_symbol_dev_cutoff, load_or_download_ohlcv
 from backtest.holdout import load_manifest
 from backtest.runner import download_history
 
@@ -73,6 +73,16 @@ def main() -> int:
     failures: list[str] = []
     for sym in symbols:
         print(f"[prefetch] {sym} …")
+        # Per-symbol dev cutoff: returns the EARLIEST holdout_start
+        # across every manifest entry that uses `sym`, not just this
+        # strategy's holdout_start.  Required because shared symbols
+        # (e.g. BTC/USDT is used by TrendFollowing_multi AND DCA at
+        # different holdout_starts) must clip to the earliest cutoff
+        # to avoid HoldoutBypass when later cache reads target the
+        # earlier-cutoff strategy.  None ⇒ symbol is not in any
+        # manifest entry, in which case load_or_download_ohlcv
+        # applies no clipping (acceptable: no holdout to enforce).
+        until_ts = get_symbol_dev_cutoff(sym)
         try:
             df = load_or_download_ohlcv(
                 symbol=sym,
@@ -80,7 +90,7 @@ def main() -> int:
                 months=months_needed,
                 download_fn=download_history,
                 cache_dir=CACHE_DIR,
-                until_ts=holdout_start,
+                until_ts=until_ts,
             )
         except Exception as exc:
             failures.append(f"{sym}: {exc.__class__.__name__}: {exc}")
