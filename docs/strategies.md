@@ -251,6 +251,41 @@ N=20 against `sr_zero_expected = +1.9007`.
   vol-targeted, ≥10 instruments). Branch B drops TrendFollowing.
   Branch C drops the strategy.
 
+#### Phase 4.A outcome (2026-05-04) — daily TSMOM basket RETIRED
+
+- **Variation tested:** `phase4a-hop-daily-multi-v1`. 11-symbol
+  daily basket [BTC, ETH, SOL, BNB, XRP, ADA, AVAX, DOT, LINK,
+  LTC, UNI]. 126-day TSMOM signal (Hurst/Ooi/Pedersen 2017).
+  Vol-targeting per instrument (Barroso & Santa-Clara 2015).
+  Basket read from manifest at runtime; MATIC/USDT excluded
+  (renamed POL, insufficient history).
+- **Harness result:** full_cpcv clean -- all 5 effective blocks
+  valid (warmup-aware downshift: floor(931/156)=5). Per-block
+  trades [20, 18, 19, 19, 12]; per-block Sharpes mean +0.392
+  (std 1.989). Harness produced a valid block-Sharpe distribution.
+- **Verdict tree:** RETIRE. baseline_pass=False (sr_observed +0.889
+  vs BTC B&H +1.922, margin -1.033). mt_mean_pass=True but
+  trivially so at N=1 (sr_zero_expected=0.0). DSR 1.0.
+  trial_id 746544526ea54348b949b2b0f71b1584.
+- **Headline run:** +53.61% return over 931-day dev window,
+  +0.889 Sharpe, 18.38% max DD, 163 trades. Real return is
+  strong; the strategy simply cannot clear the BTC buy-and-hold
+  bar on a risk-adjusted basis.
+- **Failure mode:** intra-class correlation. All 11 crypto assets
+  are highly correlated to BTC; cross-asset TSMOM diversification
+  benefit (the mechanism in Hurst+ 2017) does not materialise in
+  a single-class basket. BTC B&H captures the same crypto beta
+  more efficiently.
+- **Why no variation #2:** academic-foundation-exhausted.
+  No peer-reviewed citation addresses TSMOM on a same-class
+  correlated basket outperforming the dominant asset's B&H
+  on Sharpe without shorts or leverage.
+  count_distinct_variations("TrendFollowing_multi") is 1/20,
+  cap effectively closed.
+- **Branch implication:** Branch C strengthens for this strategy.
+- **Forensic:** `research/trendfollowing-literature.md`
+  § "Trial #1 outcome (2026-05-04)".
+
 ---
 
 ### Breakout — AVAX/USDT
