@@ -1,7 +1,9 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-04-29 (Phase 4 scope: Branch C selected 2026-04-26;
-Resurrection-and-Extension exploration approved 2026-04-29)
+Last updated: 2026-05-04 (Phase 4.B Variation #1 retired 2026-05-02;
+analyst overlay v3 Phase A approved 2026-05-04 per architecture D.4;
+Phase 4.C "0 pass" branch reframed as continuation via autonomous
+research loop)
 Supersedes the 2026-04-25 plan. The primary changes since: Phase 3c
 verdict landed (9/10 RETIRE + 1/10 UNDER_TESTED), Branch C was
 selected on the empirical anchor, and a structured pre-commitment
@@ -327,6 +329,8 @@ gates list (gate #8). See research/funding-rate-literature.md
 § "Pre-trial gates (locked)" for the persistent
 statement of this constraint.
 
+**Variation #1 status — RETIRED 2026-05-02.** First full holdout/final_gate run on Variation #1 (single-pair BTC delta-neutral, locked params per `research/funding-rate-literature.md`) failed the verdict tree on regime-decay holdout (dev_cpcv +5.17 mean → holdout decay reflecting Schmeling et al. 2025 negative-funding regime). Variation #2 design constraint: structural redesign sourced from a specific paper (different leg construction, different instrument family, or different rebalancing rule) — NOT a parameter perturbation of V1. V2 hypothesis-of-record entry pending in research/funding-rate-literature.md. Per CLAUDE.md no-p-hacking rule, V2 cannot enter trials.log without peer-reviewed source citation.
+
 #### Phase 4.C — Branch decision (revisited)
 
 After 4.A and 4.B verdicts are in, the Branch A vs Branch C question is
@@ -342,10 +346,21 @@ re-decided **with data**, not before:
   diversification, single-point-of-failure). User decides whether to
   deploy the single strategy, defer for more candidates, or commit to
   Branch C anyway. Tracked as an open question to revisit at that point.
-- **0 strategies pass**: Branch C confirmed by data. Wind down the
-  crypto bot project; preserve the validation harness as substrate-
-  agnostic infrastructure for whatever comes next (prediction market
-  bot or alternative — out of scope for this MASTER_PLAN).
+- **0 strategies pass**: Branch C is NOT immediately confirmed; the autonomous research loop (architecture.md § D.4 closing paragraphs) continues. The loop driver is Strategist's scope extension with the `next-variation-selector` skill, reading research_queue.md (T2). When V1 retires, the loop selects the next citation lead for testing; retired strategies remain on cooldown queues (initial 30d, 60d after re-test, capped at 180d) per architecture D.4. **Wind-down decision is deferred to a separate gate**: triggers when the loop produces N additional consecutive failures (N to be specified at gate-decision time) AND the analyst-overlay Phase B gate has resolved. Until then, the project is in continuous-research mode, not wind-down. Preserves the validation harness as substrate-agnostic infrastructure regardless of outcome.
+
+#### Phase 4.D — Analyst Overlay (Phase A shadow mode)
+
+**Scope.** Add 5 LLM agents (market-analyst, social-analyst, news-analyst, fundamentals-analyst, research-manager) to the existing fleet (15 → 20 agents). Research-manager synthesizes the 4 analyst reports into binary strategy enable/disable flags + binary risk flags. Cross-model dual pass (Sonnet primary + Gemini secondary). See architecture.md § D.4 for full workflow.
+
+**Phase A — Shadow mode, no live wiring.** Synthesis output is written to disk only; portfolio.manager.py and CapGuard do NOT read it. Duration: 2 months minimum (~180 cycles at 8h cadence aligned to OKX funding settlements). Cost: ~$32/mo at 8h cadence; ~$65/mo at 4h. Capped at $30/mo via existing `budget-check.sh`.
+
+**Phase B — Gate decision.** Chat-side, after ≥30 paired observations of (verdict_outcome, concurrent_synthesis). Metric chosen at gate-decision time. Three outcomes: proceed to Phase C live wiring; keep gathering data; retire the overlay.
+
+**Phase C — Live wiring (post-gate).** Synthesis flags drive CapGuard excluded_strategies + portfolio.manager.py rebalance risk-flag check. paper_mode=True for first month; live-mode wiring is separate Phase 5 deploy decision.
+
+**Sequencing.** Phase 4.D Phase A runs in parallel with Phase 4.B/4.C exploration — analyst overlay is shadow-only and doesn't touch live strategies, so it doesn't gate anything else. Phase 4.D Phase B gate decision is independent of Phase 4.C branch decision; both can resolve in any order. Phase 4.D Phase C wiring depends only on its own gate, not on Phase 4.A/4.B/4.C outcomes.
+
+**Why this is added.** TradingAgents repo (chat 099a169c, 2026-05-03) was reviewed and pivot-adapted: its analyst-layer pattern adapts to crypto with discrete strategy enable/disable + binary risk flags (overlay v3), not full TradingAgents-style trade execution. This adds market context to the autonomous research loop's direction-finding (Phase 4.C continuation) and provides regime-aware sizing inputs for surviving strategies (if Phase 4.B/4.C produces survivors).
 
 #### Phase 4 (paper deploy) — applies only if Phase 4.C produces ≥1 deployable strategy
 

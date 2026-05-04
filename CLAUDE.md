@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 This file is read by Claude Code and other agents when working in this repo.
 Read it before starting any task.
@@ -26,6 +26,16 @@ and `docs/bot_status.md` for current state.
   multiple-testing correction or the holdout single-access guarantee:
   `backtest/trials.log`, `backtest/holdout_manifest.json`,
   `backtest/holdout_access.log`, and the schema of `backtest/holdout.py`.
+- **Sacred-harness documents (never edit without explicit pre-authorization).**
+  Project-constitution documents whose content is the canonical record of
+  agent rules, plan state, validation methodology, and architectural design.
+  Changes require human pre-authorization in the prompt's AUTONOMY section
+  (per the Pre-authorization exception below) OR a human-only edit:
+  `CLAUDE.md`, `docs/MASTER_PLAN.md`, `docs/architecture.md`,
+  `docs/validation_framework.md`. The existing `.claude/hooks/sacred-block.sh`
+  blocks edits by default; pre-authorization works via the
+  `SACRED_OVERRIDE_FILES` env var on the CC invocation line, which lives
+  only for that session.
 - **Schema-stable code (edit cautiously; contract-preserving changes
   proceed, contract changes need approval).** Validation harness modules
   whose interfaces feed the sacred-harness files. Bug fixes that preserve
@@ -87,7 +97,10 @@ Agents never push or deploy autonomously.
 - Paper deploy to server
 - Live deploy to production
 - Capital or risk parameter changes
-- Modifying `CLAUDE.md` itself or `docs/validation_framework.md`
+- Modifying sacred-harness documents (`CLAUDE.md`, `docs/MASTER_PLAN.md`,
+  `docs/architecture.md`, `docs/validation_framework.md`) without
+  explicit pre-authorization in the prompt's AUTONOMY section. The
+  Pre-authorization exception below covers the bypass mechanism.
 
 > **Pre-authorization exception.** Claude Code may edit any file in
 > this list when the user explicitly pre-authorizes the edit in the
@@ -464,7 +477,8 @@ always — user not being physically present is not a special case):
 Claude Code MUST NOT proceed without explicit approval on:
 - git push, regardless of branch
 - Any deployment command (DigitalOcean, Binance API, production env edits)
-- Edits to sacred-harness files (see Core principles for the canonical two-tier list; the runtime artifacts + holdout schema are the never-edit tier)
+- Edits to sacred-harness runtime artifacts and holdout schema (see Core principles "Sacred-harness files" bullet for the canonical list)
+- Edits to sacred-harness documents (CLAUDE.md, MASTER_PLAN.md, architecture.md, validation_framework.md) without SACRED_OVERRIDE_FILES env-var pre-authorization on the invocation line
 - Edits to .env or any secrets file
 - Schema changes to validation framework artifacts
 

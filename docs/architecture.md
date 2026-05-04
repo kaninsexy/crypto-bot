@@ -191,7 +191,7 @@ State file: `.memory/T1_episodic/_state/session_start.txt` (epoch seconds, writt
 
 ## C. Agent Roster
 
-The roster is fifteen agents total: 1 Strategist + 2 Coordinators + 12 Workers. Every worker is single-responsibility (the Anthropic finding: vague subagents duplicate work). Every worker has a tight tool allowlist. Default `permissionMode: plan` unless writes are required. All file paths under `.claude/agents/`.
+The roster is twenty agents total: 1 Strategist + 2 Coordinators + 17 Workers. Every worker is single-responsibility (the Anthropic finding: vague subagents duplicate work). Every worker has a tight tool allowlist. Default `permissionMode: plan` unless writes are required. All file paths under `.claude/agents/`.
 
 ### C.1 Roster table
 
@@ -212,14 +212,20 @@ The roster is fifteen agents total: 1 Strategist + 2 Coordinators + 12 Workers. 
 | `calibrator` | Phase 5: trains XGBoost+LLM-feature ensemble; computes Brier | sonnet | Read, Edit, Write, Bash(python:*), Bash(pytest:*) | acceptEdits | 20 | phase5-coord | R: T3+T2+T1; W: T1 own + code | PreToolUse→sacred-block | xgboost-calibration | Brier > threshold → escalate |
 | `sizer` | Phase 5: applies fractional Kelly to calibrated probabilities | haiku | Read, Bash(python:*) | plan | 6 | phase5-coord | R: T2; W: T1 own | none | kelly-discipline | edge < threshold → HOLD |
 | `notifier` | Sends email summaries via Resend API; never auto-trades | haiku | Read, Bash(curl:*) | plan | 4 | strategist | R: T1 own; W: none | PreToolUse→no-secrets-in-bash | email-templates | API failure → log to T1 |
+| `market-analyst` | Phase A overlay: indicator + regime + vol synthesis. Reads OHLCV/RSI/MACD/ATR + 6-regime detector output; writes structured AnalystReport markdown. Shadow-mode write-only until Phase B gate. | haiku | Read, Bash(python:*) | plan | 6 | research-manager | R: T2+T1 own; W: T1 own | none subagent-level | analyst-report-template, regime-flag-rules | data unavailable → degraded report flag |
+| `social-analyst` | Phase A overlay: Crypto Twitter/Reddit/fear-greed scan via existing OpenClaw Tavily gateway (127.0.0.1:18789). Shadow-mode write-only until Phase B gate. | haiku | Read, WebFetch, WebSearch | plan | 8 | research-manager | R: T2+T1 own; W: T1 own | PreToolUse → no-secrets-in-bash | analyst-report-template, sentiment-source-list | rate limit / API failure → degraded report flag |
+| `news-analyst` | Phase A overlay: crypto news + macro (Fed/CPI/ETF/FOMC). Reads via WebFetch on curated allowlist defined in news-source-allowlist skill (extensible without architecture edit). Shadow-mode write-only until Phase B gate. | haiku | Read, WebFetch, WebSearch | plan | 8 | research-manager | R: T2+T1 own; W: T1 own | PreToolUse → no-secrets-in-bash | analyst-report-template, news-source-allowlist | source unreachable → degraded report flag |
+| `fundamentals-analyst` | Phase A overlay: on-chain (sources defined in onchain-source-list skill, extensible without architecture edit), exchange flows, funding rates, OI, basis. Crypto-translation of equity fundamentals role. Shadow-mode write-only until Phase B gate. | haiku | Read, WebFetch, Bash(python:*) | plan | 8 | research-manager | R: T2+T1 own; W: T1 own | PreToolUse → no-secrets-in-bash | analyst-report-template, onchain-source-list | data feed gap → degraded report flag |
+| `research-manager` | Phase A overlay synthesizer: reads 4 AnalystReports → emits regime-context score + binary strategy enable/disable flags + binary risk flags. Cross-model dual pass (Sonnet primary, Gemini secondary); divergence escalates. | sonnet (primary), gemini-2.5-pro (secondary via OpenRouter) | Read, Grep, Glob, WebFetch | plan | 12 | strategist | R: T3+T2+T1; W: T1 own | PreToolUse → budget-check | settle-once, exit-ramp, regime-flag-rules | model divergence → escalate to strategist; budget exceeded → block |
 
 ### C.2 Notes on model choices
 
 - **Sonnet 4.6 ($3/$15) for judgment-heavy roles** (Strategist, Coordinators, Proposer, Implementer, Analyst, Calibrator). The 1M context at standard pricing is the killer feature: a full Strategist invocation with all of T3 and the last 24h of T1 summaries fits well under the cache discount.
-- **Haiku 4.5 ($1/$5) for high-volume/low-judgment roles** (Validator, Curator, Scanner, Sizer, Notifier). 73.3% on SWE-bench Verified is more than enough for these roles. The cost ratio (3× cheaper than Sonnet) compounds over the variation queue.
+- **Haiku 4.5 ($1/$5) for high-volume/low-judgment roles** (Validator, Curator, Scanner, Sizer, Notifier, Market-Analyst, Social-Analyst, News-Analyst, Fundamentals-Analyst). 73.3% on SWE-bench Verified is more than enough for these roles. The cost ratio (3× cheaper than Sonnet) compounds over the variation queue.
 - **Gemini 2.5 Pro ($1.25/$10) via OpenRouter for adversarial review** (Citation-Verifier, Adversarial-Reviewer, Deep-Researcher). Cross-model is the design choice, not just cross-prompt — the empirical finding from the Brainstorm/metaswarm/Octopus literature is that adversarial bandits beat stochastic bandits, and that requires a different model family. Gemini's 1M context handles long literature passes. The "concern-acceptance conflict" failure mode (BadScientist paper) is mitigated specifically because the reviewer is a different family.
 - **Why not Opus 4.6 anywhere?** Cost ($5/$25) does not justify the marginal improvement for any role here. The Strategist's judgment is bounded by the verdict tree and human escalation; Sonnet 4.6 is sufficient. Reserve Opus for one-off ad-hoc deep-thinking sessions launched manually outside this fleet.
 - **Why GPT-5.x not in the roster?** Adding a third model family doubles the API-key surface area and doubles the rate-limit failure modes, with diminishing returns past the 2-model adversarial pair (the Auto-Research-In-Sleep paper makes this argument explicitly: "2 is the minimum to break self-play; 4 is rarely worth it").
+- **Cross-model dual pass on Research Manager** (Sonnet primary + Gemini 2.5 Pro secondary) is the design choice for the analyst-overlay synthesis step. Bias-reduction is at the *synthesis* step, not at the *case-building* step — Bull and Bear analysts in the TradingAgents reference design read the same input, so splitting them is theatre (chat 099a169c finding 2026-05-03). Cross-model synthesis surfaces genuinely different blind spots; same logic that puts Citation-Verifier and Adversarial-Reviewer on Gemini. Cost: ~2× a single-model pass; ~½× two-separate-agents because the second pass reuses the same input context.
 
 ### C.3 The subagent-hooks gap (issue #34692) and how this design works around it
 
@@ -493,6 +499,65 @@ Strategist:
 
 The deliberate decision: **agents recommend, human executes.** This is the same boundary as the deploy boundary. Polymarket ordering goes through the same circuit as `doctl` — explicitly disallowed at the hook layer. The literature on calibrated contrarian betting (the prediction-market strategy guide; Manski 2006; Wolfers & Zitzewitz 2006) supports manual execution at this stage because position sizing and timing both benefit from human judgment until the calibration process has accumulated 100+ resolved bets of feedback. Revisit this boundary at Phase 6.
 
+### D.4 Workflow #4 — Analyst overlay cycle (Phase A shadow-mode → Phase B gate → Phase C live wiring)
+
+This workflow runs on a fixed cadence (8h aligned to OKX funding settlements: 00:00, 08:00, 16:00 UTC) plus regime-change triggers. Cost target: ~$32/mo at 8h cadence; ~$65/mo at 4h. Cap via existing `budget-check.sh`. Cadence may rise to 4h after Phase B gate if shadow-mode evaluation shows finer cadence is justified.
+
+```
+Cron entry (or regime-change trigger) → research-manager (Sonnet primary)
+
+research-manager:
+  Step 1: PreToolUse budget-check; if monthly cap reached → block + alert
+          Strategist via Notifier; this cycle is skipped.
+  Step 2: Read .memory/T1_episodic/_state/regime.txt for current
+          deterministic regime label.
+  Step 3: Spawn 4 analysts in parallel (FAN-OUT):
+          Task(market-analyst), Task(social-analyst),
+          Task(news-analyst), Task(fundamentals-analyst).
+          Each writes its AnalystReport markdown to
+          .memory/T1_episodic/episodes/<date>/analysts/<name>_<utc-hour>.md
+          per the analyst-report-template skill.
+  Step 4: FAN-IN: research-manager reads the four reports.
+  Step 5: Sonnet synthesis pass — produces draft synthesis with strategy
+          enable/disable + binary risk flags + cross-analyst rationale.
+  Step 6: Gemini secondary pass — same input + Sonnet's draft as
+          additional context; produces independent synthesis.
+  Step 7: Compare. For each binary flag:
+          - Both models agree → flag adopted
+          - Models disagree → flag held + divergence logged + escalation
+            note added to synthesis output
+  Step 8: Write synthesis markdown to
+          .memory/T1_episodic/episodes/<date>/synthesis/research_manager_<utc-hour>.md
+  Step 9: Phase A (shadow): write-only. Synthesis lives at the path above
+          and nowhere else. portfolio.manager.py and CapGuard do NOT read it.
+          Phase C (live wiring, post-gate): also publish to
+          .memory/T1_episodic/_state/analyst_overlay.json which CapGuard
+          and portfolio.manager.py read at next rebalance step.
+  Step 10: If divergence escalation: research-manager spawns Strategist
+           with the divergence packet. Strategist decides: surface to
+           human via Notifier, or proceed with the deterministic-regime
+           fallback for this cycle.
+  Step 11: Exit-ramp: research-manager writes a one-line entry to
+           decisions_log.jsonl summarizing the cycle (regime label,
+           flags emitted, divergence count, cost in $).
+```
+
+**Phase A → Phase B → Phase C gating:**
+
+- **Phase A (shadow):** synthesis is computed and written to disk; nothing reads it. Duration: 2 months minimum (~180 cycles at 8h cadence). Each retired or newly-passed verdict during this window is paired with the concurrent synthesis for evaluation.
+- **Phase B (gate decision):** chat-side decision after ≥30 paired observations. Specific gate metric (e.g., regime-classification accuracy vs deterministic detector, paper-Sharpe with-vs-without analyst flags) deferred until shadow data lands. Three outcomes: proceed to Phase C; keep gathering data; retire the overlay.
+- **Phase C (live wiring):** synthesis output drives CapGuard's `excluded_strategies` list and a new risk-flag check in portfolio.manager.py rebalance step. Live-wiring is gated by `paper_mode=True` for first month; live-mode wiring is a separate Phase 5 deploy decision.
+
+**Source allowlist extensibility:** the news-source-allowlist and onchain-source-list skill files (`.claude/skills/`) are append-only; sources can be added without an architecture edit. This keeps the architecture document stable while allowing operational source curation. The sentiment-source-list skill follows the same pattern.
+
+**Autonomous research loop integration:** the loop driver is the Strategist agent's scope, extended via a new `next-variation-selector` skill. Strategist reads a new T2 file `.memory/T2_semantic/research_queue.md` listing candidate citation-leads + retired strategies due for re-test, plus research-manager's regime context. So when V1 retires, Strategist's choice of "what citation lead to research next" is regime-conditional: if research-manager flags "perp basis dislocations widening", deep-researcher gets directed at basis-trade literature first. This is how the analyst overlay informs the loop without producing trade decisions itself.
+
+**Curator scope extension:** curator (existing Haiku, hourly cron) gets new responsibility: scan recently-resolved decisions_log entries and update research_queue.md. This extends curator's existing T1→T2 promotion role without a new agent.
+
+**Retired strategies are not terminal.** Each retired strategy gets an entry in research_queue.md with cooldown rules: initial 30 days, 60 days after each subsequent re-test, capped at 180 days. Re-test eligibility requires: new citation surfaced by deep-researcher OR regime context flagged as "previously-untested-by-this-strategy".
+
+**Phase 4.C "0 pass" branch reframing:** the original MASTER_PLAN line "0 pass → wind down" is reframed as "0 pass → continuation via autonomous research loop; wind-down is a separate downstream decision contingent on continuation also failing across N additional cycles." Continuation includes retired-strategy re-tests on cooldowns above. MASTER_PLAN.md edit in Section 3 below carries the parallel update.
+
 ---
 
 ## E. Enforcement layers
@@ -733,6 +798,60 @@ Take a completed variation from history; run it back through the new system. The
 ### Day 12 — Production cutover
 
 Switch your daily Phase-4B work to the new system. Document one week of operation. Surface any failure modes in T2 retired/postmortem, and feed back into agent prompts. Review the cost dashboard against §G estimates.
+
+### Day 13 — Analyst overlay agent bodies (5 new agents, 5 new skills)
+
+Author the 5 new agent bodies under `.claude/agents/`:
+- `market-analyst.md` (Haiku, plan, 6 turns)
+- `social-analyst.md` (Haiku, plan, 8 turns)
+- `news-analyst.md` (Haiku, plan, 8 turns)
+- `fundamentals-analyst.md` (Haiku, plan, 8 turns)
+- `research-manager.md` (Sonnet primary + Gemini secondary, plan, 12 turns)
+
+Author 5 new skills under `.claude/skills/`:
+- `analyst-report-template` — the AnalystReport markdown schema (Inputs read / Observations / Regime view / Risk flags / Degraded?)
+- `regime-flag-rules` — binary-flag emission rules for research-manager (when to emit `macro-event-imminent`, `exchange-flow-anomaly`, `funding-regime-flip`, etc.)
+- `news-source-allowlist` — append-only source list for news-analyst. Initial entries: CoinDesk, The Block, Decrypt, Reuters crypto. Extensible without architecture edit.
+- `onchain-source-list` — append-only source list for fundamentals-analyst. Initial entry: CryptoQuant public dashboards via WebFetch. Extensible without architecture edit.
+- `sentiment-source-list` — append-only source list for social-analyst. Initial entries: Crypto Twitter via Tavily, Reddit via Tavily, fear-greed index direct fetch. Extensible without architecture edit.
+
+**Validation:** YAML parse passes for all 5 agent files. Each skill file is well-formed markdown with clear "Approved", "Deprecated", and "Adding a source" sections. No live wiring this day; agents exist but no cron entry yet.
+
+### Day 14 — Cron + shadow-mode logging + paired-observation harness
+
+Add system cron entry on the MacBook (mirroring the curator entry from Day 7):
+
+```
+0 0,8,16 * * * cd ~/dev/crypto-bot && claude -p "$(cat .claude/agents/_research_manager_prompt.txt)" --agent research-manager >> .memory/T1_episodic/_state/research_manager.log 2>&1
+```
+
+Wire the regime-change trigger: a new file-watcher hook that detects `.memory/T1_episodic/_state/regime.txt` state changes and posts to `.memory/T1_episodic/_state/analyst_trigger.txt`; the cron entry checks that file at every minute and fires an extra cycle on `triggered=true`.
+
+Set up paired-observation logging: for every retired or newly-passed verdict during Phase A, log the pair `(verdict_outcome, concurrent_research_manager_synthesis)` to `.memory/T2_semantic/phase_a_paired_observations.jsonl` for later evaluation.
+
+Add `.memory/T2_semantic/research_queue.md` (append-only schema): active candidates list + retired-strategies-cooldown table. Curator (existing agent, scope extension) maintains it.
+
+**Validation:** wait through one funding settlement (8h); confirm `.memory/T1_episodic/episodes/<date>/synthesis/` has a research-manager file. Confirm 4 AnalystReport files in the same date's `analysts/` directory. Confirm cost stayed under $0.50 for the cycle.
+
+### Day 15 — Phase A shadow mode begins
+
+No code work. Confirm 8h cadence is producing synthesis files and `decisions_log.jsonl` cost lines for at least 7 consecutive cycles. Confirm none of the synthesis output is being read by `portfolio/manager.py` or `CapGuard` (grep the codebase to verify no import or file-read of `analyst_overlay.json`). Document the Phase A start date in `bot_status.md`.
+
+### Phase A duration — 2 months minimum (~180 cycles at 8h cadence)
+
+During Phase A:
+- Shadow synthesis runs continuously
+- Existing 6-regime detector remains the canonical regime source for live strategies
+- Every retired or newly-passed verdict is paired with concurrent synthesis for evaluation
+- Cost monitored via `budget-check.sh`; cap at $30/mo with Notifier alert if hit
+
+### Phase B — gate decision (chat-side, after ≥30 paired observations)
+
+Specific metric chosen at gate-decision time, not pre-committed. Three outcomes: proceed to Phase C (live wiring), keep gathering data, or retire the overlay.
+
+### Phase C — live wiring (post-gate)
+
+If Phase B proceeds: wire research-manager's flags into CapGuard `excluded_strategies` and portfolio.manager.py risk-flag check. Live-wiring is `paper_mode=True` for first month before any live-mode consideration.
 
 ---
 
