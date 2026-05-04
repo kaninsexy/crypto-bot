@@ -104,6 +104,19 @@ class CPCVConfig:
     purge_periods: int = _DEFAULT_PURGE_PERIODS
     embargo_periods: int = _DEFAULT_EMBARGO_PERIODS
 
+    # Warmup-aware block sizing knobs (Phase 4.A TrendFollowing
+    # multi-asset).  When `strategy_warmup_candles > 0` the runner
+    # MAY downshift `n_blocks` so each block has room for both the
+    # strategy's formation window and at least
+    # `min_tradeable_candles_per_block` post-warmup bars.  Existing
+    # callers (every spot/perp runner pre-2026-05-04) leave both at
+    # their defaults (0 / 30) and observe zero behaviour change —
+    # the helper `compute_effective_n_blocks` returns `n_blocks`
+    # verbatim when warmup is 0.  See research/trendfollowing-
+    # literature.md § "Harness changes required" for the motivation.
+    strategy_warmup_candles: int = 0
+    min_tradeable_candles_per_block: int = 30
+
     # Optional per-block signal-event counter.  When None (default),
     # the runner uses the engine's per-block closed-trade count for
     # the >50% NaN guard — exactly the pre-Track-2 behaviour, so
@@ -139,6 +152,16 @@ class CPCVConfig:
         if self.embargo_periods < 0:
             raise ValueError(
                 f"embargo_periods must be ≥ 0; got {self.embargo_periods}"
+            )
+        if self.strategy_warmup_candles < 0:
+            raise ValueError(
+                f"strategy_warmup_candles must be ≥ 0; "
+                f"got {self.strategy_warmup_candles}"
+            )
+        if self.min_tradeable_candles_per_block < 1:
+            raise ValueError(
+                f"min_tradeable_candles_per_block must be ≥ 1; "
+                f"got {self.min_tradeable_candles_per_block}"
             )
 
 
@@ -414,3 +437,35 @@ def summarize(per_path_sharpes: list[float]) -> dict:
             "p95": float(qs[4]),
         },
     }
+
+
+# ── Warmup-aware block sizer (Phase 4.A TrendFollowing multi-asset) ──────────
+
+def compute_effective_n_blocks(total_candles: int, config: CPCVConfig) -> int:
+    """Resolve the effective block count for a warmup-heavy strategy.
+
+    When `config.strategy_warmup_candles == 0` (every pre-2026-05-04
+    caller) this returns `config.n_blocks` verbatim — zero behaviour
+    change.  When `strategy_warmup_candles > 0` (e.g. the 126-day
+    formation window of the Phase 4.A TrendFollowing daily multi-asset
+    runner) the function downshifts so each block has room for both
+    the formation window AND at least
+    `config.min_tradeable_candles_per_block` post-warmup bars:
+
+        effective = total_candles // (
+            config.strategy_warmup_candles
+            + config.min_tradeable_candles_per_block
+        )
+        return max(2, min(config.n_blocks, effective))
+
+    The floor of 2 is the smallest input `summarize()` accepts as
+    something more than a single-Sharpe degenerate distribution; if
+    even that floor cannot be cleared the caller should raise
+    CPCVError before block construction starts (data is too short for
+    a sensible CPCV run).
+    """
+    if config.strategy_warmup_candles == 0:
+        return config.n_blocks
+    denom = config.strategy_warmup_candles + config.min_tradeable_candles_per_block
+    effective = total_candles // denom
+    return max(2, min(config.n_blocks, effective))
