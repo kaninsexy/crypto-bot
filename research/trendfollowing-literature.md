@@ -15,7 +15,7 @@ mismatches vs the academic evidence base.
 
 ## Starting hypothesis
 
-Time-series momentum (TSMOM) on a 12-instrument daily crypto
+Time-series momentum (TSMOM) on an 11-instrument daily crypto
 basket.
 
 **Signal:** sign of the trailing 126-day return for each
@@ -32,20 +32,23 @@ never hardcoded). Long-only on spot substrate.
 **Rebalance:** daily.
 
 **Basket:** read from manifest entry TrendFollowing_multi
-symbols list at runtime. Current list (12 instruments, all
+symbols list at runtime. Current list (11 instruments, all
 OKX USDT spot with 3+ years history): BTC/USDT, ETH/USDT,
 SOL/USDT, BNB/USDT, XRP/USDT, ADA/USDT, AVAX/USDT, DOT/USDT,
-LINK/USDT, POL/USDT, LTC/USDT, UNI/USDT. Future variations
+LINK/USDT, LTC/USDT, UNI/USDT. Future variations
 may use a different basket by updating the manifest symbols
 list with documented rationale -- code reads manifest, never
 hardcodes symbols.
+
+MATIC/USDT removed -- renamed to POL Sept 2024, insufficient
+OKX 1d history for 38-month window.
 
 ## Key structural differences from Phase 3c
 
 | Dimension | Phase 3c | This hypothesis |
 | --- | --- | --- |
 | Timeframe | 1H | Daily |
-| Instruments | 1 (BTC/USDT) | 12-asset basket |
+| Instruments | 1 (BTC/USDT) | 11-asset basket |
 | Signal | EMA 9/21 crossover | 126-day trailing return |
 | Sizing | Fixed notional | Vol-targeted per instrument |
 | Citation | None | Moskowitz+ 2012, Hurst+ 2017, Barroso+ 2015 |
