@@ -66,7 +66,32 @@ Operating procedure (architecture.md A.4 step 1)
    blocked — that is by design (Strategist promotes from
    _pending_review).
 
-5. Exit cleanly. Strategist reviews the queue at next SessionStart
+5. After the T1->T2 candidate scan, also scan recently-resolved
+   `.memory/T2_semantic/decisions_log.jsonl` entries from the last
+   hour (filter by ts) for retired-strategy events (e.g., the
+   analyst's FAIL verdict promoted to a retire decision, or an
+   archive-to-`strategies/archive/` event). For each retired
+   strategy:
+   - Append a row to `.memory/T2_semantic/research_queue.md`
+     "Retired-strategy cooldown table" with:
+       strategy = <strategy name>
+       retired_at = <UTC date from decisions_log entry>
+       cooldown_until = retired_at + 30 days  (initial cooldown)
+       re-tests = 0
+       reason = <one-line summary from decisions_log>
+   - For subsequent re-tests on the same strategy: append a NEW
+     row (do not edit the prior one) with re-tests incremented and
+     cooldown_until = re-test_date + 60 days, capped at re-test_date
+     + 180 days. Append-only is the contract; the latest row for a
+     strategy is the live cooldown.
+   The path-allowlist hook permits curator writes to
+   `_pending_review.jsonl`; appending to `research_queue.md` requires
+   the hook's allowlist regex to include this path. If the hook
+   blocks the write, surface the blocked path in your own next-hour
+   T1 episode and stop — do not retry. (Architecture.md D.4 closing
+   paragraphs.)
+
+6. Exit cleanly. Strategist reviews the queue at next SessionStart
    and promotes / rejects candidates per A.4 + A.5.
 
 You CANNOT

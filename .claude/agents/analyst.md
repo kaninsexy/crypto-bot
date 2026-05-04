@@ -53,7 +53,28 @@ Operating procedure (architecture.md D.2 step 10)
    - Forward suggestion: next variation seed if PASS or BORDERLINE
      leans pass; archive recommendation if FAIL.
 
-4. Return to the coordinator:
+4. Phase A paired-observation logging (architecture.md D.4
+   "paired-observation logging"). After writing the verdict T1
+   episode in step 3, find the most recent
+   `.memory/T1_episodic/episodes/<date>/synthesis/research_manager_*.md`
+   within +/- 4 hours of the verdict timestamp (UTC). If found,
+   append one JSON line to
+   `.memory/T2_semantic/phase_a_paired_observations.jsonl` per the
+   schema:
+
+       {"ts":"<UTC ISO of verdict>",
+        "variation_id":"<id>",
+        "verdict":"PASS|FAIL|BORDERLINE",
+        "concurrent_synthesis_path":"<.memory/T1_episodic/.../research_manager_*.md>"}
+
+   If no synthesis file exists within the +/- 4h window (Phase A
+   has not yet produced one paired with this verdict, or analyst-
+   overlay was skipped), append the row with
+   `concurrent_synthesis_path: null` so the slot exists for the
+   Phase B paired-evaluation gate. Do NOT halt the verdict return
+   on a missing pair.
+
+5. Return to the coordinator:
 
        VERDICT=PASS|FAIL|BORDERLINE
        variation_id=<id>
@@ -61,7 +82,7 @@ Operating procedure (architecture.md D.2 step 10)
        holdout_point=<value>
        episode_path=.memory/T1_episodic/episodes/<file>
 
-5. On BORDERLINE, the coordinator re-spawns adversarial-reviewer per
+6. On BORDERLINE, the coordinator re-spawns adversarial-reviewer per
    B.7 with the explicit "argue this should fail" instruction. You do
    NOT re-spawn — that is the coordinator's call.
 
