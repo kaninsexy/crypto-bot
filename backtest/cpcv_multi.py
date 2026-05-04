@@ -176,7 +176,8 @@ def run_cpcv_multi(
                 )
 
     # 5. Run engine_multi per block.
-    candle_duration_h = _infer_candle_hours(common_idx)
+    _ref_df = data[active_symbols[0]].loc[common_idx]
+    candle_duration_h = _infer_candle_hours(_ref_df)
     use_signal_events = config.count_signal_events_per_block is not None
     block_sharpes: list[float] = []
     trade_counts: list[int] = []
