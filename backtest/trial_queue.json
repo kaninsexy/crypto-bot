@@ -44,9 +44,27 @@
           "key_finding": "Adding social media sentiment indicators to technical features improves BTC/ETH daily price direction classification accuracy from 51-55% to 67-84% across four deep learning architectures (2017-2020 data).",
           "crypto_specific": true,
           "quality_score": 4
+        },
+        {
+          "title": "Do cryptocurrency markets react to issuer sentiments? Evidence from Twitter",
+          "authors": "Zhang, J., Zhang, C.",
+          "year": 2022,
+          "source": "Research in International Business and Finance 61 (2022) 101656",
+          "key_finding": "Cryptocurrency prices react positively to Twitter issuer sentiments within 24h across 47 major cryptocurrencies; effect driven by incremental change in sentiment tone.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "How Elon Musk's Twitter activity moves cryptocurrency markets",
+          "authors": "Ante, L.",
+          "year": 2023,
+          "source": "Technological Forecasting & Social Change 186 (2023) 122112",
+          "key_finding": "Event study on 47 tweets: significant abnormal returns follow Musk crypto tweets; individual tweets raise BTC price by 16.9% or reduce by 11.8%. Confirms social media causality on crypto prices.",
+          "crypto_specific": true,
+          "quality_score": 4
         }
       ],
-      "overall_quality": 3.0,
+      "overall_quality": 3.5,
       "implementation_notes": "LunarCrush data already available in project. Use 24h or 7d rolling sentiment score. Long when score crosses upward threshold, flat/short below lower threshold.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
@@ -68,8 +86,36 @@
       "hypothesis_one_line": "Crypto perpetual futures exhibit statistically significant positive returns during specific UTC hours (21-23 UTC window hypothesised), exploitable as a systematic long-only intraday filter.",
       "source_citation": "proposal-agent dry-run 2026-05-05 (quality 3.5)",
       "literature_doc": "research/intraday-seasonality-effects-literature.md",
-      "citations": [],
-      "overall_quality": 3.5,
+      "citations": [
+        {
+          "title": "On the intraday return curves of Bitcoin: Predictability and trading opportunities",
+          "authors": "Bouri, E., Lau, C.K.M., Saeed, T., Wang, S., Zhao, Y.",
+          "year": 2021,
+          "source": "International Review of Financial Analysis 76 (2021) 101784",
+          "key_finding": "Bitcoin intraday return curves exhibit predictability during periods of serial correlation; profitable intraday trading opportunities confirmed on 2014-2019 data.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Cross-sectional seasonality anomaly in cryptocurrency markets",
+          "authors": "Long, H., Lucey, B., Yarovaya, L.",
+          "year": 2020,
+          "source": "peer-reviewed journal",
+          "key_finding": "Significant same-weekday seasonal pattern across 151 cryptocurrencies (2016-2019): past same-weekday returns positively predict future returns, not subsumed by momentum, size, or liquidity.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Bitcoin time-of-day, day-of-week and month-of-year effects in returns and trading volume",
+          "authors": "Baur, D.G., Cahill, D., Godfrey, K., Liu, Z.",
+          "year": 2019,
+          "source": "Finance Research Letters 31 (2019) 78-92",
+          "key_finding": "NEGATIVE PRIOR: 15M observations from 7 exchanges (2011-2017) find no persistent exploitable pattern in hourly Bitcoin returns. Data predates post-2018 hard filter; included as honest prior.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.3,
       "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \u2014 pure time-of-day filter. Test on 1H candles.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
