@@ -1,10 +1,12 @@
 """
-portfolio/manager.py — Portfolio Manager (Phase D + E combined)
+portfolio/manager.py — Portfolio Manager (Phase 4)
 
 The Portfolio Manager is the top-level brain that coordinates all strategies.
 It replaces the single-strategy main.py loop with a multi-strategy portfolio
 that adapts to market conditions, sizes positions with Kelly Criterion, and
-protects capital with a circuit breaker.
+protects capital with a circuit breaker. Runs against OKX USDT-M paper mode
+across the 10-strategy Phase 4 portfolio (resurrection batch + funding-rate
+harvest).
 
 ARCHITECTURE
 ────────────
@@ -12,7 +14,8 @@ ARCHITECTURE
     ├── RegimeDetector        — detects market regime from BTC/USDT data
     ├── KellyCalculator       — computes per-trade sizes from Phase C backtest
     ├── CircuitBreaker        — 30% drawdown hard stop
-    └── StrategySlot × 6     — each strategy + its own PaperTrading simulator
+    └── StrategySlot × N      — one per active strategy (currently 10), each
+                                 with its own PaperTrading simulator
 
   Note: DepositManager (portfolio/deposit_manager.py) is a standalone utility
   for manual monthly THB→USDT deposit flows. It is NOT used internally here —

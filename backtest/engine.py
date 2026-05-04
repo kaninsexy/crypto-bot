@@ -342,7 +342,7 @@ class BacktestEngine:
                         f"[Backtest] Candle {i} | {active_symbol} | {signal}"
                     )
                 sim.symbol = active_symbol
-                sim.execute_signal(signal, fill_price)
+                sim.execute_signal(signal, fill_price, candle_time=ts)
 
             # ── 7. Tick: OHLCV-accurate SL / TP / trail / time-exit ─────────
             # Use the ACTIVE symbol's high/low/close so SL/TP checks fire

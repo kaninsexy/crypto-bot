@@ -138,7 +138,12 @@ class PaperTrading:
 
     # ── Main execution entry point ────────────────────────────────────────────
 
-    def execute_signal(self, signal: Signal, current_price: float) -> None:
+    def execute_signal(
+        self,
+        signal: Signal,
+        current_price: float,
+        candle_time: Optional[datetime] = None,
+    ) -> None:
         """
         Process a signal and update the virtual portfolio.
 
@@ -147,17 +152,22 @@ class PaperTrading:
           - Partial SELL (quantity_pct < 1.0): tranche exit
           - Full SELL (quantity_pct == 1.0): close entire position
           - HOLD: update trailing peak price only
+
+        ``candle_time`` is the historical candle timestamp used to populate
+        TradeRecord.entry_time / exit_time. Backtest callers pass the
+        candle's index timestamp; live callers may omit it and the
+        simulator falls back to wall-clock UTC.
         """
         self._candle_count += 1
 
         if signal.action == "BUY":
-            self._handle_buy(signal, current_price)
+            self._handle_buy(signal, current_price, candle_time=candle_time)
 
         elif signal.action == "SELL":
             if signal.quantity_pct < 1.0:
-                self._handle_partial_sell(signal, current_price)
+                self._handle_partial_sell(signal, current_price, candle_time=candle_time)
             else:
-                self._handle_full_sell(signal, current_price, signal.reason)
+                self._handle_full_sell(signal, current_price, signal.reason, candle_time=candle_time)
 
         else:  # HOLD
             if self.position and current_price > self.position.peak_price:
@@ -242,9 +252,15 @@ class PaperTrading:
 
     # ── Buy handling ──────────────────────────────────────────────────────────
 
-    def _handle_buy(self, signal: Signal, price: float) -> None:
+    def _handle_buy(
+        self,
+        signal: Signal,
+        price: float,
+        candle_time: Optional[datetime] = None,
+    ) -> None:
         """Open new position or add to existing DCA position."""
         fee_rate = FEE_LIMIT if signal.order_type == "limit" else FEE_MARKET
+        entry_ts = candle_time if candle_time is not None else datetime.now(timezone.utc)
 
         if self.position is None:
             # New position — honour explicit amount_usdt if strategy provided one
@@ -290,7 +306,7 @@ class PaperTrading:
                 quantity=quantity,
                 avg_entry_price=price,
                 total_cost=cost,
-                entry_time=datetime.now(timezone.utc),
+                entry_time=entry_ts,
                 stop_loss=signal.stop_loss,
                 take_profit=signal.take_profit,
                 trailing_tp=signal.trailing_tp,
@@ -359,11 +375,17 @@ class PaperTrading:
 
     # ── Sell handling ─────────────────────────────────────────────────────────
 
-    def _handle_partial_sell(self, signal: Signal, price: float) -> None:
+    def _handle_partial_sell(
+        self,
+        signal: Signal,
+        price: float,
+        candle_time: Optional[datetime] = None,
+    ) -> None:
         """Close a fraction of the position (tranche exit)."""
         if self.position is None:
             logger.debug("[PAPER] No position to partially close.")
             return
+        exit_ts = candle_time if candle_time is not None else datetime.now(timezone.utc)
 
         # Capture position attributes before any mutation so the TradeRecord is
         # always populated correctly even if the position drops to zero afterwards.
@@ -407,7 +429,7 @@ class PaperTrading:
             quantity=qty_to_sell,
             cost=cost_basis,
             entry_time=pos_entry_time,
-            exit_time=datetime.now(timezone.utc),
+            exit_time=exit_ts,
             pnl=pnl, pnl_pct=pnl_pct, fees_paid=fee,
             exit_reason=signal.reason,
             is_partial=True,
@@ -427,11 +449,13 @@ class PaperTrading:
         price: float,
         reason: str,
         order_type: str = "limit",
+        candle_time: Optional[datetime] = None,
     ) -> None:
         """Close the entire remaining position."""
         if self.position is None:
             logger.debug("[PAPER] No position to close.")
             return
+        exit_ts = candle_time if candle_time is not None else datetime.now(timezone.utc)
 
         qty = self.position.quantity
         cost_basis = self.position.total_cost
@@ -461,7 +485,7 @@ class PaperTrading:
             quantity=self.position.quantity,
             cost=self.position.total_cost,
             entry_time=self.position.entry_time,
-            exit_time=datetime.now(timezone.utc),
+            exit_time=exit_ts,
             pnl=pnl, pnl_pct=pnl_pct, fees_paid=fee,
             exit_reason=reason,
             is_partial=False,
