@@ -42,6 +42,7 @@ to `backtest/trials.log`.  Same separation-of-concerns rule as
 
 from __future__ import annotations
 
+import copy
 import math
 from typing import Optional
 
@@ -247,17 +248,8 @@ def run_cpcv_multi(
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _clone_strategy(
-    strategy: TrendFollowingMultiStrategy,
-) -> TrendFollowingMultiStrategy:
-    """Return a fresh strategy instance with the same config so each
-    block runs from a clean state.  TrendFollowingMultiStrategy is
-    stateless w.r.t. positions (the engine owns the position book), so
-    re-instantiating with the same args is sufficient.
-    """
-    return TrendFollowingMultiStrategy(
-        symbols=list(strategy.symbols),
-        timeframe=strategy.timeframe,
-        lookback_days=strategy.lookback_days,
-        target_vol_annual=strategy.target_vol_annual,
-    )
+def _clone_strategy(strategy):
+    """Return a fresh deep-copy of strategy so each CPCV block
+    starts from a clean state. Works for any strategy type."""
+    import copy
+    return copy.deepcopy(strategy)
