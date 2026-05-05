@@ -839,11 +839,52 @@ def process_item(item: dict, queue_data: dict, dry_run: bool) -> None:
     maybe_send_batch_alert(queue_data, dry_run)
 
 
+def reset_error_items(queue_data: dict) -> int:
+    """Reset every queue item with status='error' back to 'queued'.
+
+    Clears verdict, started_at, finished_at, and the error payload
+    so the orchestrator picks the item up again on the next pass.
+    Returns the number of items reset.
+    """
+    n = 0
+    for item in queue_data.get("queue", []):
+        if item.get("status") == "error":
+            item["status"] = "queued"
+            item["verdict"] = None
+            item["started_at"] = None
+            item["finished_at"] = None
+            item["error"] = None
+            n += 1
+    return n
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--reset-errors",
+        action="store_true",
+        help=(
+            "Reset every status='error' item back to 'queued' (clears "
+            "verdict, started_at, finished_at, error). Safe replacement "
+            "for hand-editing the JSON. Exits without running any trial."
+        ),
+    )
     args = parser.parse_args()
+
+    # --reset-errors short-circuits before the email-key check: it
+    # mutates the queue file only, no Resend POSTs are involved.
+    if args.reset_errors:
+        lock_fd = acquire_lock()
+        try:
+            queue_data = load_queue()
+            n = reset_error_items(queue_data)
+            save_queue(queue_data)
+            print(f"Reset {n} error item(s) to queued.")
+        finally:
+            release_lock(lock_fd)
+        return 0
 
     if not args.dry_run and (not RESEND_API_KEY or not EMAIL_TO):
         print(
