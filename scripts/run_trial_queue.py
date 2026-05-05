@@ -1,12 +1,62 @@
-"""scripts/run_trial_queue.py — Trial queue orchestrator.
+"""scripts/run_trial_queue.py — Trial queue orchestrator (parallel).
 
-Reads backtest/trial_queue.json, processes queued items sequentially,
-commits results per the CLAUDE.md trial-queue orchestrator exception.
+Reads backtest/trial_queue.json, processes queued items in parallel via
+concurrent.futures.ProcessPoolExecutor, then commits results per the
+CLAUDE.md trial-queue orchestrator exception.
 
 Usage:
-  python scripts/run_trial_queue.py          # process all queued items
-  python scripts/run_trial_queue.py --once   # process one item then exit
-  python scripts/run_trial_queue.py --dry-run  # print plan, no execution
+  python scripts/run_trial_queue.py                # run all queued items
+  python scripts/run_trial_queue.py --workers 8    # cap parallelism at 8
+  python scripts/run_trial_queue.py --workers 1    # sequential (debuggable)
+  python scripts/run_trial_queue.py --once         # one BATCH then stop
+  python scripts/run_trial_queue.py --dry-run      # print plan, no execution
+  python scripts/run_trial_queue.py --reset-errors # status=error -> queued
+
+Concurrency model (rewritten 2026-05-05 for AMD Threadripper 3960X
+48-thread / 256GB host):
+
+  1. Main process acquires the queue lock (cross-platform fcntl/msvcrt),
+     loads `backtest/trial_queue.json`, and selects every entry where
+     `status == "queued"` AND `needs_trial_script` is falsy.
+
+  2. All selected items are flipped to `status = "running"` and
+     persisted in ONE atomic save (tmp + os.replace). The queue file
+     is then NOT touched again until every worker has returned, so
+     workers never race on `trial_queue.json`.
+
+  3. Workers spawn through ProcessPoolExecutor.  Each worker invokes
+     its trial script via `subprocess.run` with `PYTHONIOENCODING=utf-8`
+     in the env (Windows-stdout-encoding fix), prefixes every stdout/
+     stderr line with `[<item_id>]`, and writes its result to
+     `backtest/cache/trial_result_<item_id>.json` via tmp+rename.
+
+  4. After every future has resolved, the main process collects each
+     per-trial result file, runs the doc updates, persists the queue,
+     and calls `commit_result` sequentially (git index serialises
+     anyway).  KEEP-verdict alerts and the consecutive-failure batch
+     alerter fire from the main process at the end of the batch.
+
+  5. The proposal agent only runs after ALL parallel workers finish
+     and their results have been folded back into the queue.
+
+  6. `--once` runs one BATCH (every currently queued item in parallel)
+     then stops, distinct from the prior per-item semantics.
+     `--workers 1` preserves single-trial-at-a-time execution
+     (in-process, no pool spawn) for debugging.
+
+trials.log atomicity
+────────────────────
+Each trial subprocess appends its own row to `backtest/trials.log` via
+`backtest.trials.record_trial → backtest.logs.append_jsonl`, which uses
+`open(path, "a")` — POSIX O_APPEND is atomic for writes < PIPE_BUF
+(~4 KB), and Windows `FILE_APPEND_DATA` is similarly atomic for short
+rows. A single trials.log row stays well under that ceiling.
+
+`acquire_trials_log_lock` / `release_trials_log_lock` (cross-platform
+fcntl/msvcrt, same pattern as the queue-file lock) are exported for any
+orchestrator-level direct append (none today; reserved for future
+tooling — e.g. batch supersession tags written from the main process
+while trials are running).
 
 Queue item schema (v1):
   id             str   human-assigned slug, e.g. "sq-001"
@@ -37,6 +87,7 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,12 +107,15 @@ ROOT = Path(__file__).resolve().parents[1]
 QUEUE_PATH = ROOT / "backtest" / "trial_queue.json"
 LOCK_PATH = QUEUE_PATH.with_suffix(".lock")
 RUN_LOG_PATH = ROOT / "backtest" / "trial_queue_run_log.jsonl"
+CACHE_DIR = ROOT / "backtest" / "cache"
+TRIALS_LOG_LOCK_PATH = ROOT / "backtest" / "trials.log.lock"
 
 RESEND_API_URL = "https://api.resend.com/emails"
 RESEND_FROM = os.environ.get("TRIAL_QUEUE_FROM", "trial-queue@crypto-bot.local")
 EMAIL_RATE_LIMIT_SLEEP_S = 61  # >60s between calls = safe under 6/hr
 
 TRIAL_TIMEOUT_S = 14_400  # 4h per CLAUDE.md compute budget
+DEFAULT_MAX_WORKERS = 20  # default cap when --workers not specified
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 EMAIL_TO = os.environ.get("TRIAL_QUEUE_EMAIL_TO")
@@ -168,42 +222,65 @@ def release_lock(fd) -> None:
             pass
 
 
-# ── Core ────────────────────────────────────────────────────────────────────
+# ── trials.log lock (cross-platform, blocking) ──────────────────────────────
 
-def find_next_queued(queue_data: dict) -> dict | None:
-    for item in queue_data.get("queue", []):
-        if item.get("status") == "queued":
-            if item.get("needs_trial_script"):
-                # Email notification handled in process_item path;
-                # here just skip silently (notification is sent
-                # by the proposal agent email, not the orchestrator).
-                continue
-            return item
-    return None
+def acquire_trials_log_lock(timeout_s: float = 60.0):
+    """Cross-platform exclusive lock for direct trials.log appends.
+
+    Same fcntl/msvcrt pattern as `acquire_lock`, but BLOCKING up to
+    `timeout_s` seconds: the orchestrator does not race here, it
+    waits.  Returns the lock file handle; pair every acquire with
+    `release_trials_log_lock(fd)` in a try/finally.
+
+    The trial subprocesses themselves do NOT take this lock — their
+    appends happen inside `backtest.logs.append_jsonl` and rely on
+    POSIX O_APPEND / Windows FILE_APPEND_DATA atomicity for short
+    rows.  The helper exists for any orchestrator-level direct
+    append (currently none — reserved for future tooling such as
+    main-process supersession tagging that must serialise with
+    in-flight trial subprocesses).
+    """
+    fd = open(TRIALS_LOG_LOCK_PATH, "w", encoding="utf-8")
+    deadline = time.time() + timeout_s
+    while True:
+        try:
+            if sys.platform == "win32":
+                msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fd
+        except (BlockingIOError, OSError):
+            if time.time() >= deadline:
+                fd.close()
+                raise TimeoutError(
+                    f"trials.log lock not acquired within {timeout_s}s"
+                )
+            time.sleep(0.05)
 
 
-def run_item(item: dict, dry_run: bool) -> tuple[int, str, str]:
-    """Returns (returncode, stdout, stderr)."""
-    script = ROOT / item["script_path"]
-    if not script.exists():
-        return -2, "", f"script not found: {script}"
-    if dry_run:
-        print(f"[dry-run] would run: {script}")
-        return 0, '--- TRIAL SUMMARY JSON ---\n{"verdict":"dry-run"}', ""
+def release_trials_log_lock(fd) -> None:
+    """Mirror of acquire_trials_log_lock; safe even on partial state."""
     try:
-        result = subprocess.run(
-            [sys.executable, str(script)],
-            capture_output=True,
-            text=True,
-            timeout=TRIAL_TIMEOUT_S,
-            cwd=str(ROOT),
-        )
-        return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired as e:
-        return -1, e.stdout or "", f"TIMEOUT after {TRIAL_TIMEOUT_S}s"
-    except Exception as e:  # noqa: BLE001 — orchestrator catch-all
-        return -3, "", str(e)
+        if sys.platform == "win32":
+            try:
+                fd.seek(0)
+                msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        else:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+    finally:
+        fd.close()
+        try:
+            TRIALS_LOG_LOCK_PATH.unlink(missing_ok=True)
+        except OSError:
+            pass
 
+
+# ── Summary parser ──────────────────────────────────────────────────────────
 
 def parse_json_summary(stdout: str) -> dict | None:
     """Find sentinel '--- TRIAL SUMMARY JSON ---' in stdout, return the
@@ -265,6 +342,119 @@ def log_run(
     }
     with RUN_LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+# ── Worker (ProcessPoolExecutor target) ─────────────────────────────────────
+
+def _worker_run_trial(
+    item: dict,
+    root_str: str,
+    timeout_s: int,
+    dry_run: bool,
+) -> dict:
+    """Top-level (picklable) worker body: runs ONE trial subprocess.
+
+    Writes `backtest/cache/trial_result_<item_id>.json` via tmp+rename
+    on every code path. Stdout/stderr is prefixed with `[<item_id>]`
+    so parallel output streams are distinguishable in the run log.
+    PYTHONIOENCODING=utf-8 is forced into the subprocess env so the
+    trial script's `--- TRIAL SUMMARY JSON ---` sentinel survives the
+    Windows cp1252 default.
+    """
+    # Re-import everything explicitly: this function executes inside
+    # ProcessPoolExecutor's "spawn"-started worker on macOS/Windows.
+    import json as _json
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    from datetime import datetime as _dt
+    from datetime import timezone as _tz
+    from pathlib import Path as _P
+
+    root = _P(root_str)
+    item_id = str(item.get("id", "?"))
+    prefix = f"[{item_id}] "
+
+    def _emit(text: str, *, err: bool = False) -> None:
+        stream = _sys.stderr if err else _sys.stdout
+        if not text:
+            return
+        for line in text.splitlines() or [""]:
+            print(f"{prefix}{line}", file=stream, flush=True)
+
+    started_at = _dt.now(_tz.utc).isoformat()
+    cache_dir = root / "backtest" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    result_path = cache_dir / f"trial_result_{item_id}.json"
+
+    if dry_run:
+        _emit(f"would run: {item.get('script_path')} (parallel)")
+        result = {
+            "id": item_id,
+            "returncode": 0,
+            "stdout": '--- TRIAL SUMMARY JSON ---\n{"verdict":"dry-run"}',
+            "stderr": "",
+            "started_at": started_at,
+            "finished_at": _dt.now(_tz.utc).isoformat(),
+        }
+    else:
+        script = root / item["script_path"]
+        if not script.exists():
+            _emit(f"ERROR: script not found: {script}", err=True)
+            result = {
+                "id": item_id,
+                "returncode": -2,
+                "stdout": "",
+                "stderr": f"script not found: {script}",
+                "started_at": started_at,
+                "finished_at": _dt.now(_tz.utc).isoformat(),
+            }
+        else:
+            env = _os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            _emit(f"starting trial subprocess: {script}")
+            try:
+                proc = _sp.run(
+                    [_sys.executable, str(script)],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout_s,
+                    cwd=str(root),
+                    env=env,
+                )
+                stdout = proc.stdout or ""
+                stderr = proc.stderr or ""
+                returncode = proc.returncode
+            except _sp.TimeoutExpired as e:
+                stdout = e.stdout if isinstance(e.stdout, str) else ""
+                stderr = f"TIMEOUT after {timeout_s}s"
+                returncode = -1
+            except Exception as e:  # noqa: BLE001 — orchestrator catch-all
+                stdout = ""
+                stderr = f"subprocess exception: {e}"
+                returncode = -3
+
+            if stdout:
+                _emit(stdout)
+            if stderr:
+                _emit(stderr, err=True)
+
+            result = {
+                "id": item_id,
+                "returncode": returncode,
+                # cap result-file blob sizes; full output is already
+                # streamed to the operator's terminal via _emit above.
+                "stdout": stdout[-200_000:],
+                "stderr": stderr[-20_000:],
+                "started_at": started_at,
+                "finished_at": _dt.now(_tz.utc).isoformat(),
+            }
+
+    tmp = result_path.with_suffix(".json.tmp")
+    tmp.write_text(_json.dumps(result, indent=2), encoding="utf-8")
+    _os.replace(tmp, result_path)
+    _emit(f"finished: returncode={result['returncode']}")
+    return result
 
 
 # ── Doc updates ─────────────────────────────────────────────────────────────
@@ -566,6 +756,16 @@ def commit_result(item: dict, summary: dict, dry_run: bool) -> bool:
             subprocess.run(["git", "add", str(p)], cwd=str(ROOT))
     if not check_commit_scope():
         return False
+    # `git commit` with nothing newly staged (e.g. trial #2 in a parallel
+    # batch where trial #1 already captured the trials.log rows) is a
+    # no-op we treat as success — the row is still recorded in the
+    # earlier commit and the queue state is honest.
+    if not _staged_files():
+        print(
+            f"[queue] nothing new to commit for item {item['id']} "
+            "(an earlier batch commit captured its trials.log row)"
+        )
+        return True
     verdict = summary.get("verdict", "unknown")
     sr = summary.get("sr_observed", float("nan"))
     dsr = summary.get("dsr_validation", float("nan"))
@@ -760,84 +960,223 @@ def maybe_send_batch_alert(queue_data: dict, dry_run: bool) -> None:
         # Already alerted at this completed-count; do not re-alert.
         return
 
-    # Enrich with sr_observed for the body table; absent in queue
-    # items by design (we never persisted the full summary), but the
-    # parsed JSON summary at run time isn't retained either — fall
-    # back to "n/a".
     enriched = [{**it, "_sr_observed": it.get("sharpe", "n/a")} for it in last_n]
     send_batch_summary_email(enriched, dry_run)
     queue_data["batch_alert_sent_at_position"] = n_completed
     save_queue(queue_data)
 
 
-# ── Main loop ───────────────────────────────────────────────────────────────
+# ── Batch runner ────────────────────────────────────────────────────────────
 
-def process_item(item: dict, queue_data: dict, dry_run: bool) -> None:
+def _select_runnable(queue_data: dict) -> list[dict]:
+    """Every queued item that does NOT need a trial script written."""
+    return [
+        it for it in queue_data.get("queue", [])
+        if it.get("status") == "queued" and not it.get("needs_trial_script")
+    ]
+
+
+def _clear_stale_result_files(items: list[dict]) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for it in items:
+        p = CACHE_DIR / f"trial_result_{it.get('id')}.json"
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _spawn_workers(
+    items: list[dict],
+    n_workers: int,
+    dry_run: bool,
+) -> None:
+    """Run the worker function over every item, in parallel or sequential.
+
+    --workers 1 takes the in-process path so the operator can attach a
+    debugger without indirection through the Pool.
+    """
+    if n_workers <= 1:
+        for it in items:
+            try:
+                _worker_run_trial(it, str(ROOT), TRIAL_TIMEOUT_S, dry_run)
+            except Exception as e:  # noqa: BLE001
+                print(
+                    f"[{it.get('id')}] worker exception: {e}",
+                    file=sys.stderr,
+                )
+        return
+
+    with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        futures = {
+            executor.submit(
+                _worker_run_trial, it, str(ROOT), TRIAL_TIMEOUT_S, dry_run,
+            ): it
+            for it in items
+        }
+        for fut in as_completed(futures):
+            it = futures[fut]
+            try:
+                fut.result()
+            except Exception as e:  # noqa: BLE001
+                print(
+                    f"[{it.get('id')}] worker exception: {e}",
+                    file=sys.stderr,
+                )
+
+
+def process_batch_results(
+    queue_data: dict,
+    batch_items: list[dict],
+    dry_run: bool,
+) -> int:
+    """Read every per-trial result file, fold into the queue, run doc
+    updates, save once, then commit each item sequentially.  Returns the
+    number of items that reached `status='done'`."""
+    by_id = {it.get("id"): it for it in queue_data.get("queue", [])}
+    done_count = 0
+
+    for batch_item in batch_items:
+        item_id = batch_item.get("id")
+        item = by_id.get(item_id)
+        if item is None:
+            print(
+                f"[queue] item {item_id} missing from queue after batch",
+                file=sys.stderr,
+            )
+            continue
+
+        result_path = CACHE_DIR / f"trial_result_{item_id}.json"
+        if not result_path.exists():
+            item["status"] = "error"
+            item["error"] = "worker did not produce result file"
+            item["finished_at"] = utcnow_iso()
+            log_run(item, -4, None, item["error"])
+            save_queue(queue_data)
+            continue
+
+        try:
+            result = json.loads(result_path.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            item["status"] = "error"
+            item["error"] = f"failed to parse result file: {e}"
+            item["finished_at"] = utcnow_iso()
+            log_run(item, -4, None, item["error"])
+            save_queue(queue_data)
+            continue
+
+        returncode = int(result.get("returncode", -3))
+        stdout = result.get("stdout", "") or ""
+        stderr = result.get("stderr", "") or ""
+        finished_at = result.get("finished_at") or utcnow_iso()
+        summary = parse_json_summary(stdout) if stdout else None
+        log_run(item, returncode, summary, stderr)
+
+        if returncode != 0 or summary is None:
+            reason = (
+                stderr[:500] if returncode != 0
+                else "sentinel not found in stdout"
+            )
+            item["status"] = "error"
+            item["error"] = reason[:500]
+            item["finished_at"] = finished_at
+            print(f"[queue] FAILED item {item_id}: {reason[:200]}")
+            save_queue(queue_data)
+            maybe_send_batch_alert(queue_data, dry_run)
+            continue
+
+        try:
+            update_strategies_md(item, summary)
+            update_literature_doc(item, summary)
+        except Exception as e:  # noqa: BLE001
+            item["status"] = "error"
+            item["error"] = f"doc update failed: {str(e)[:400]}"
+            item["finished_at"] = finished_at
+            save_queue(queue_data)
+            print(
+                f"[queue] doc update failed for {item_id}: {e}",
+                file=sys.stderr,
+            )
+            maybe_send_batch_alert(queue_data, dry_run)
+            continue
+
+        # Mark done & save BEFORE commit so the commit captures done state.
+        item["status"] = "done"
+        item["verdict"] = summary.get("verdict")
+        item["finished_at"] = finished_at
+        save_queue(queue_data)
+
+        if not commit_result(item, summary, dry_run):
+            item["status"] = "error"
+            item["error"] = "commit failed or scope violation"
+            save_queue(queue_data)
+            maybe_send_batch_alert(queue_data, dry_run)
+            continue
+
+        print(f"[queue] done {item_id}: verdict={item['verdict']}")
+        done_count += 1
+
+        if item["verdict"] == "keep":
+            send_keep_email(item, summary, dry_run)
+            item["email_sent"] = True
+            save_queue(queue_data)
+
+        maybe_send_batch_alert(queue_data, dry_run)
+
+        try:
+            result_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    return done_count
+
+
+def run_batch(
+    items_to_run: list[dict],
+    n_workers: int,
+    dry_run: bool,
+) -> int:
+    """One batch: mark running → spawn → collect → docs+commit.
+    Returns the number of items that reached done."""
+    if not items_to_run:
+        return 0
+
+    # Persist `running` state for every selected item in one save so
+    # workers never race on trial_queue.json.
+    queue_data = load_queue()
+    started_at = utcnow_iso()
+    by_id = {it.get("id"): it for it in queue_data.get("queue", [])}
+    for it in items_to_run:
+        live = by_id.get(it.get("id"))
+        if live is None:
+            continue
+        live["status"] = "running"
+        live["started_at"] = started_at
+    save_queue(queue_data)
+
+    _clear_stale_result_files(items_to_run)
+
     print(
-        f"\n[queue] processing {item['id']}: "
-        f"{item['strategy_id']} / {item['variation_id']}"
+        f"\n[queue] starting batch: {len(items_to_run)} item(s), "
+        f"{n_workers} worker(s)"
     )
-
-    item["status"] = "running"
-    item["started_at"] = utcnow_iso()
-    save_queue(queue_data)
-
-    returncode, stdout, stderr = run_item(item, dry_run)
-    summary = parse_json_summary(stdout)
-    log_run(item, returncode, summary, stderr)
-
-    if returncode != 0 or summary is None:
-        reason = (
-            stderr[:500] if returncode != 0
-            else "sentinel not found in stdout"
+    for it in items_to_run:
+        print(
+            f"  - {it['id']}: {it.get('strategy_id', '?')} / "
+            f"{it.get('variation_id', '?')}"
         )
-        print(f"[queue] FAILED item {item['id']}: {reason[:200]}")
-        item["status"] = "error"
-        item["error"] = reason[:500]
-        item["finished_at"] = utcnow_iso()
-        save_queue(queue_data)
-        # No per-item error email — log_run already records this.
-        # Batch alert below catches consecutive failures.
-        maybe_send_batch_alert(queue_data, dry_run)
-        return
 
-    try:
-        update_strategies_md(item, summary)
-        update_literature_doc(item, summary)
-    except Exception as e:  # noqa: BLE001
-        print(f"[queue] doc update failed: {e}", file=sys.stderr)
-        item["status"] = "error"
-        item["error"] = f"doc update failed: {str(e)[:400]}"
-        item["finished_at"] = utcnow_iso()
-        save_queue(queue_data)
-        maybe_send_batch_alert(queue_data, dry_run)
-        return
+    _spawn_workers(items_to_run, n_workers, dry_run)
 
-    committed = commit_result(item, summary, dry_run)
-    if not committed:
-        item["status"] = "error"
-        item["error"] = "commit failed or scope violation"
-        item["finished_at"] = utcnow_iso()
-        save_queue(queue_data)
-        maybe_send_batch_alert(queue_data, dry_run)
-        return
+    # Reload AFTER workers finish — workers don't touch trial_queue.json,
+    # but we still want the freshest copy in case --reset-errors or a
+    # human edit raced.  (We hold the orchestrator lock, so no other
+    # `run_trial_queue.py` instance is writing.)
+    queue_data = load_queue()
+    return process_batch_results(queue_data, items_to_run, dry_run)
 
-    item["status"] = "done"
-    item["verdict"] = summary.get("verdict")
-    item["finished_at"] = utcnow_iso()
-    save_queue(queue_data)
-    print(f"[queue] done {item['id']}: verdict={item['verdict']}")
 
-    # Per-item email policy: only KEEP triggers an immediate alert.
-    # Any other verdict (retire, under_tested, ...) goes into the
-    # batch-summary alerter, which fires once per N consecutive
-    # non-keep completions.
-    if item["verdict"] == "keep":
-        send_keep_email(item, summary, dry_run)
-        item["email_sent"] = True
-        save_queue(queue_data)
-    maybe_send_batch_alert(queue_data, dry_run)
-
+# ── Reset helper ────────────────────────────────────────────────────────────
 
 def reset_error_items(queue_data: dict) -> int:
     """Reset every queue item with status='error' back to 'queued'.
@@ -858,9 +1197,57 @@ def reset_error_items(queue_data: dict) -> int:
     return n
 
 
+# ── Main loop ───────────────────────────────────────────────────────────────
+
+def _resolve_workers(args_workers: int | None, n_items: int) -> int:
+    if args_workers is not None:
+        return max(1, args_workers)
+    return max(1, min(n_items, DEFAULT_MAX_WORKERS))
+
+
+def _print_dry_run_plan(items_to_run: list[dict], n_workers: int) -> None:
+    print(
+        f"[dry-run] {len(items_to_run)} queued item(s), "
+        f"would run with {n_workers} worker(s):"
+    )
+    for it in items_to_run:
+        print(
+            f"  - {it['id']}: {it.get('strategy_id', '?')} / "
+            f"{it.get('variation_id', '?')} -- would run in parallel"
+        )
+
+
+def _invoke_proposal_agent(dry_run: bool) -> None:
+    print("Queue is empty. Invoking proposal agent...")
+    proposal_script = ROOT / "scripts" / "propose_next_variation.py"
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    proc = subprocess.run(
+        [sys.executable, str(proposal_script)],
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
+        env=env,
+    )
+    if proc.stdout:
+        print(proc.stdout, end="")
+    if proc.stderr:
+        print(proc.stderr, end="", file=sys.stderr)
+    if proc.returncode != 0:
+        print("Proposal agent failed. Check output above.")
+        send_proposal_failure_email(proc.stderr or "", dry_run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--once", action="store_true")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help=(
+            "Run ONE batch (every currently queued item in parallel) "
+            "then stop. Distinct from the prior per-item semantics."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--reset-errors",
@@ -869,6 +1256,16 @@ def main() -> int:
             "Reset every status='error' item back to 'queued' (clears "
             "verdict, started_at, finished_at, error). Safe replacement "
             "for hand-editing the JSON. Exits without running any trial."
+        ),
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=(
+            "Number of parallel workers. Default: min(queued_items, "
+            f"{DEFAULT_MAX_WORKERS}). --workers 1 = sequential "
+            "(in-process, debuggable)."
         ),
     )
     args = parser.parse_args()
@@ -896,45 +1293,34 @@ def main() -> int:
 
     lock_fd = acquire_lock()
     try:
-        processed = 0
+        batches_run = 0
         while True:
             queue_data = load_queue()
-            item = find_next_queued(queue_data)
-            if item is None:
-                if processed == 0:
-                    # Queue is empty (or only needs_trial_script
-                    # items remain) — invoke proposal agent.
-                    print("Queue is empty. Invoking proposal agent...")
-                    proposal_script = ROOT / "scripts" / "propose_next_variation.py"
-                    _result = subprocess.run(
-                        [sys.executable, str(proposal_script)],
-                        capture_output=True,
-                        text=True,
-                        cwd=str(ROOT),
-                    )
-                    # Surface the agent's stdout/stderr so the operator
-                    # still sees what happened in this run's log.
-                    if _result.stdout:
-                        print(_result.stdout, end="")
-                    if _result.stderr:
-                        print(_result.stderr, end="", file=sys.stderr)
-                    if _result.returncode != 0:
-                        print("Proposal agent failed. Check output above.")
-                        send_proposal_failure_email(
-                            _result.stderr or "", args.dry_run,
-                        )
+            items_to_run = _select_runnable(queue_data)
+
+            if not items_to_run:
+                if batches_run == 0:
+                    _invoke_proposal_agent(args.dry_run)
                 else:
                     print(
-                        f"\nQueue exhausted after {processed} item(s). "
+                        f"\nQueue exhausted after {batches_run} batch(es). "
                         "Proposal agent will fill queue on next run."
                     )
-                # Fire-and-forget: do NOT loop back into the queue
-                # after the proposal agent runs. Re-invoke the
-                # orchestrator (cron or manually) to pick up the
-                # newly queued items.
+                # Fire-and-forget: do NOT loop into another batch after
+                # the proposal agent runs. Re-invoke the orchestrator
+                # (cron or manually) to pick up newly queued items.
                 break
-            process_item(item, queue_data, args.dry_run)
-            processed += 1
+
+            n_workers = _resolve_workers(args.workers, len(items_to_run))
+
+            if args.dry_run:
+                _print_dry_run_plan(items_to_run, n_workers)
+                print("[dry-run] no execution; exiting after plan print")
+                break
+
+            run_batch(items_to_run, n_workers, args.dry_run)
+            batches_run += 1
+
             if args.once:
                 break
     finally:

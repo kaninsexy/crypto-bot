@@ -52,7 +52,7 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 
 MIN_CITATION_QUALITY = 3.0
-MAX_QUEUED_ITEMS = int(os.environ.get("TRIAL_QUEUE_MAX_QUEUED_ITEMS", "3"))
+MAX_QUEUED_ITEMS = int(os.environ.get("TRIAL_QUEUE_MAX_QUEUED_ITEMS", "10"))
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
