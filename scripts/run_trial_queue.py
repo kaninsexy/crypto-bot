@@ -31,7 +31,6 @@ Queue item schema (v1):
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -40,6 +39,15 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Cross-platform file locking: fcntl is Unix-only, msvcrt is Windows-only.
+# Both ship with Python stdlib; pick the right one at import time so the
+# orchestrator runs on macOS / Linux dev machines AND on Windows operator
+# laptops without a runtime crash.
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 
 # ── Path constants ──────────────────────────────────────────────────────────
@@ -107,25 +115,51 @@ def save_queue(data: dict) -> None:
 
 
 def acquire_lock():
-    """Exclusive non-blocking flock; sys.exit(1) if another instance holds it."""
+    """Exclusive non-blocking lock; sys.exit(1) if another instance holds it.
+
+    Uses msvcrt.locking on Windows (LK_NBLCK = non-blocking exclusive
+    1-byte lock) and fcntl.flock on Unix (LOCK_EX | LOCK_NB). Both
+    ship with Python stdlib.
+    """
     fd = open(LOCK_PATH, "w", encoding="utf-8")
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        print(
-            f"Another instance is running (lock: {LOCK_PATH}). Exiting.",
-            file=sys.stderr,
-        )
-        fd.close()
-        sys.exit(1)
+    if sys.platform == "win32":
+        try:
+            msvcrt.locking(fd.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            print(
+                f"Another instance is running (lock: {LOCK_PATH}). Exiting.",
+                file=sys.stderr,
+            )
+            fd.close()
+            sys.exit(1)
+    else:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print(
+                f"Another instance is running (lock: {LOCK_PATH}). Exiting.",
+                file=sys.stderr,
+            )
+            fd.close()
+            sys.exit(1)
     fd.write(str(os.getpid()))
     fd.flush()
     return fd
 
 
 def release_lock(fd) -> None:
+    """Release the lock and remove the lock file. Platform-aware mirror
+    of acquire_lock — msvcrt.LK_UNLCK on Windows, fcntl.LOCK_UN on Unix.
+    """
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
+        if sys.platform == "win32":
+            try:
+                fd.seek(0)
+                msvcrt.locking(fd.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+        else:
+            fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
         fd.close()
         try:
