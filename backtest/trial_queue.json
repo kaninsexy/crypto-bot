@@ -4,7 +4,7 @@
   "queue": [
     {
       "id": "sq-000",
-      "status": "queued",
+      "status": "done",
       "strategy_id": "MeanReversion_BTC_Residual",
       "variation_id": "phase4a-btc-residual-mr-v1",
       "script_path": "scripts/run_meanreversion_btc_residual_phase4a_trial.py",
@@ -17,17 +17,17 @@
       "implementation_notes": "Script already exists. Strategy already implemented.",
       "added_by": "kanin",
       "added_at": "2026-05-05T04:42:16.874691+00:00",
-      "started_at": null,
-      "finished_at": null,
-      "verdict": null,
-      "trial_id": null,
-      "error": null,
+      "started_at": "2026-05-05T06:16:38.687029+00:00",
+      "finished_at": "2026-05-05T06:16:40.599570+00:00",
+      "verdict": "retire",
+      "trial_id": "84502729502c48c6a810fe3a659be7d5",
+      "error": "Traceback (most recent call last):\n  File \"C:\\crypto-bot\\scripts\\run_meanreversion_btc_residual_phase4a_trial.py\", line 362, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"C:\\crypto-bot\\scripts\\run_meanreversion_btc_residual_phase4a_trial.py\", line 120, in main\n    print(\n  File \"C:\\Users\\Kanin\\AppData\\Local\\Programs\\Python\\Python312\\Lib\\encodings\\cp1252.py\", line 19, in encode\n    return codecs.charmap_encode(input,self.errors,encoding_table)[0]\n           ^^^^^^^^",
       "email_sent": false,
       "needs_trial_script": false
     },
     {
       "id": "sq-001",
-      "status": "queued",
+      "status": "error",
       "strategy_id": "OnChainMetricModels",
       "variation_id": "onchain-macro-cycle-filter",
       "script_path": "scripts/run_on_chain_metric_models_trial.py",
@@ -40,17 +40,17 @@
       "implementation_notes": "Use publicly available on-chain data (Glassnode or similar). MVRV Z-score > threshold = long-only; < lower threshold = flat or short-only. Rebalance daily.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
-      "started_at": null,
-      "finished_at": null,
+      "started_at": "2026-05-05T06:27:00.123899+00:00",
+      "finished_at": "2026-05-05T06:27:01.965896+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "ON-CHAIN DATA NOT FOUND: run scripts/fetch_onchain_data.py first\n",
       "email_sent": false,
       "needs_trial_script": false
     },
     {
       "id": "sq-002",
-      "status": "queued",
+      "status": "error",
       "strategy_id": "SocialSentimentMomentum",
       "variation_id": "sentiment-momentum-filter",
       "script_path": "scripts/run_social_sentiment_momentum_trial.py",
@@ -91,11 +91,11 @@
       "implementation_notes": "LunarCrush data already available in project. Use 24h or 7d rolling sentiment score. Long when score crosses upward threshold, flat/short below lower threshold.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
-      "started_at": null,
-      "finished_at": null,
+      "started_at": "2026-05-05T07:00:01.967708+00:00",
+      "finished_at": "2026-05-05T07:00:04.642207+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "SENTIMENT DATA NOT FOUND: run scripts/fetch_lunarcrush_history.py first\n",
       "email_sent": false,
       "needs_trial_script": false
     },
@@ -139,7 +139,7 @@
         }
       ],
       "overall_quality": 3.3,
-      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \u2014 pure time-of-day filter. Test on 1H candles.",
+      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \ufffd pure time-of-day filter. Test on 1H candles.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
       "started_at": "2026-05-04T18:05:50.281605+00:00",
@@ -149,6 +149,108 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-005",
+      "status": "queued",
+      "strategy_id": "ArxivOrg",
+      "variation_id": "stat-arb-coint-engle-granger",
+      "script_path": "scripts/run_arxiv_org_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A statistical arbitrage strategy that trades the mean-reversion of a price spread formed by two cointegrated cryptocurrency perpetual futures, using a z-score for entry and exit signals, will yield positive risk-adjusted returns.",
+      "source_citation": "Taekyung Park (2026); Masood Tadi (2023); Daniel da Silva Carvalho (2021)",
+      "literature_doc": "research/arxiv-org-literature.md",
+      "citations": [
+        {
+          "title": "Statistical Arbitrage Strategies Using Cointegration Analysis in Cryptocurrency Markets",
+          "authors": "Taekyung Park",
+          "year": 2026,
+          "source": "International Journal of Science and Research Archive",
+          "key_finding": "Strategies based on cointegrated pairs (especially BTC-ETH) produced significant risk-adjusted returns, with Sharpe ratios ranging from 1.58 to 2.45 and annual alphas of 11-15%.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Copula-Based Trading of Cointegrated Cryptocurrency Pairs",
+          "authors": "Masood Tadi, Ji\u0159\u00ed Witzany",
+          "year": 2023,
+          "source": "arXiv",
+          "key_finding": "A novel pairs trading strategy using copulas to model the dependency of cointegrated crypto pairs outperformed buy-and-hold strategies on both profitability and risk-adjusted returns.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Pairs trading : cointegration-based methods : applied to the cryptocurrency market",
+          "authors": "Daniel da Silva Carvalho",
+          "year": 2021,
+          "source": "Master Dissertation, Universidade Cat\u00f3lica Portuguesa",
+          "key_finding": "The Engle-Granger approach using the ADF test was the best predictor of cointegration, yielding a positive mean return, with strategies based on longer (6-month) formation periods performing better than shorter (3-month) ones.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "1. Identify a universe of liquid perpetual futures.\n2. In a formation period (e.g., 200 hourly candles), test all pairs for cointegration using the Engle-Granger two-step test (or Johansen test).\n3. For cointegrated pairs (p-value < 0.05), calculate the hedge ratio via OLS regression.\n4. Define the spread as `Price_A - (Hedge_Ratio * Price_B)`.\n5. In the trading period, calculate the rolling z-score of the spread (e.g., 21-period window).\n6. Enter a trade when `|z-score|` exceeds an entry threshold (e.g., 2.0) by shorting the overvalued asset and longing the undervalued asset.\n7. Exit the trade when the z-score reverts and crosses its mean (z-score = 0).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-05T08:01:36.467534+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-006",
+      "status": "queued",
+      "strategy_id": "TheSystematicChangeInCryptocur",
+      "variation_id": "us-hours-close-momentum",
+      "script_path": "scripts/run_the_systematic_change_in_cryptocur_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Institutional flows tied to US market hours create exploitable patterns, such as momentum/volume spikes around the 4 PM ET ETF fixing time or positive overnight drift in the hours after the US close.",
+      "source_citation": "Tom J Espel (2024); Alberto Pagani (2025); Matus Padysak (2022)",
+      "literature_doc": "research/the-systematic-change-in-cryptocurrency-price-behavior-during-and-immediately-following-traditional-us-market-hours--e-g---9-30-am---4-00-pm-et---driven-by-institutional-flows--etf-rebalancing--and-cme-futures-activity-literature.md",
+      "citations": [
+        {
+          "title": "Impact of US Bitcoin ETF Introduction on BTC and ETH Intraday Regime Seasonality",
+          "authors": "Tom J Espel",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "Found significant increases in volume and volatility for BTC and ETH during US hours, particularly around the 4 PM ET fixing time, following the introduction of US Bitcoin ETFs.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Seasonality in Bitcoin Intraday Trend Trading",
+          "authors": "Alberto Pagani",
+          "year": 2025,
+          "source": "Concretum Group",
+          "key_finding": "A high-frequency Bitcoin trend-following strategy (overall Sharpe ~1.6) showed weaker performance during US market hours, suggesting a tendency towards mean-reversion during this session.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Seasonality, Trend-following, and Mean reversion in Bitcoin",
+          "authors": "Matus Padysak, Radovan Vojtko",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "A simple seasonality strategy of holding Bitcoin for the two hours immediately following the US market close (22:00-00:00 UTC) yielded a Sharpe ratio of 1.58 over the 2015-2021 period.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "Implement a time-based filter to isolate trading to specific windows related to the US session. One variant is to trade a momentum or breakout strategy only in the 30-60 minutes leading up to and following the 4 PM ET close (20:00/21:00 UTC). Another variant is to implement the simple 'overnight' strategy: enter a long position at 22:00 UTC and close it at 00:00 UTC daily.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-05T08:04:50.296476+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }

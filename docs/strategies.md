@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -508,5 +508,29 @@ Pure time-of-day filter: long BTC/USDT at 21:00 UTC, exit at 23:00 UTC.
 No indicators. Result: sr=-1.17, baseline=1.69, DSR=5.2e-72.
 7/10 CPCV blocks negative. Consistent with Baur et al. (2019) negative
 prior. No edge in this window.
+
+---
+
+### MeanReversion_BTC_Residual
+
+#### Phase 4.A outcomes
+
+- **phase4a-btc-residual-mr-v1 (2026-05-05):** verdict=dry-run. sr=nan, baseline_sr=nan, dsr=nan, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
+
+### OnChainMetricModels
+
+#### Phase 4 outcomes
+
+- **onchain-macro-cycle-filter (2026-05-05):** verdict=dry-run. sr=nan, baseline_sr=nan, dsr=nan, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
+
+### SocialSentimentMomentum
+
+#### Phase 4 outcomes
+
+- **sentiment-momentum-filter (2026-05-05):** verdict=dry-run. sr=nan, baseline_sr=nan, dsr=nan, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---

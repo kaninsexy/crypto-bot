@@ -1,9 +1,22 @@
 {
   "schema_version": 1,
-  "searched_domains": [],
+  "searched_domains": [
+    "Crypto Cointegration Pairs Trading",
+    "Indicator-Based Mean Reversion (Bollinger Bands)",
+    "Z-Score Based Statistical Reversal",
+    "Cryptocurrency Cross-Sectional Momentum",
+    "Drawdown-Based Mean Reversion",
+    "US Market Hours Seasonality Effect",
+    "Volatility-Filtered Mean Reversion",
+    "Adaptive Trend Following (Regime-Filtered)",
+    "Oscillator-Based Mean Reversion (RSI)",
+    "Volatility Spike Reversal"
+  ],
   "proposed_variations": [
     "onchain-macro-cycle-filter",
     "sentiment-momentum-filter",
-    "intraday-hourly-long-21-23utc"
+    "intraday-hourly-long-21-23utc",
+    "stat-arb-coint-engle-granger",
+    "us-hours-close-momentum"
   ]
 }
