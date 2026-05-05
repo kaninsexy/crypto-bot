@@ -79,12 +79,13 @@ Agents never push or deploy autonomously.
 - Fix tooling, infrastructure, caches
 - Investigate performance issues and implement fixes
 - Archive retired experiments (move to `strategies/archive/`)
+- Add new strategy variations to `backtest/trial_queue.json` when `scripts/propose_next_variation.py` produces a qualifying proposal (citation score >= 3.0, not previously tested per trials.log)
 
 ### Agent consults the human (present findings, wait for decision)
 
 - Pair substitution (swap the canonical pair of a strategy)
 - Adding a new strategy category not in the original portfolio
-- Adding a new test or strategy variation not enumerated in `docs/MASTER_PLAN.md`
+- Adding a new test or strategy variation not enumerated in `docs/MASTER_PLAN.md` — UNLESS the addition comes from `scripts/propose_next_variation.py` with a citation quality score >= 3.0 (≥3 qualifying peer-reviewed or SSRN citations) AND the variation has not been tested before (checked against trials.log). In that case the proposal agent adds the item to the queue autonomously; the human reviews trial RESULTS after the run, not hypotheses before.
 - Modifying the validation harness or `trials.log` schema
 - Borderline retire/keep calls (DSR within ±0.05 of threshold on holdout)
 - Scope changes that increase the multiple-testing count meaningfully
@@ -110,6 +111,23 @@ Agents never push or deploy autonomously.
 > the rule protects. Without explicit pre-authorization, the default
 > Human-only rule applies and the agent must refuse the edit and
 > surface the restriction.
+
+> **Trial queue orchestrator exception.** `scripts/run_trial_queue.py`
+> may commit autonomously, scoped strictly to: `backtest/trials.log`
+> (row already appended by the trial script before the orchestrator
+> runs), `docs/strategies.md` (trial outcome subsection update),
+> `research/<strategy>-literature.md` or `research/<substrate>-
+> literature.md` (outcome row in the variation table), and
+> `backtest/trial_queue.json` (status field update only). The
+> orchestrator MUST NOT commit harness code, scripts, sacred-harness
+> files, `CLAUDE.md`, `docs/MASTER_PLAN.md`, or any file outside the
+> above list. Commit is gated on: (1) trial script exit code 0,
+> (2) JSON summary block successfully parsed, (3) `git diff --name-only
+> --cached` containing only files in the permitted list — if any file
+> is outside the list, unstage everything, email the violation, and
+> abort the commit. Commit message format:
+> `trials: <strategy_id> <variation_id> <verdict>`. This exception
+> does not extend to git push; push remains human-only.
 
 ### Agent edits documents autonomously (no approval needed)
 
@@ -332,6 +350,13 @@ read the right evidence to catch the drift.
 a strategy, trial, or harness component, read the following
 end-to-end before responding or acting (each is a separate
 authority and skipping any of them produces drift):
+
+Repomix beats standalone uploads: repomix-output.xml reflects the
+current repo state for backtest/, strategies/, portfolio/, scripts/;
+standalone project knowledge files may lag by one or more commits.
+Search repomix first; use standalone uploads only for files repomix
+excludes (research/, most docs/).
+
   1. `research/<strategy>-literature.md` — hypothesis-of-
      record + locked pre-trial gates + Variation #1/#N rows
   2. `backtest/holdout_manifest.json` entry — substrate

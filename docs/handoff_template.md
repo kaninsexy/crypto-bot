@@ -10,6 +10,9 @@ a chat-close handoff for a fresh chat.
 Before any response that asks the user to do something, run this
 5-line check:
 
+- Search repomix-output.xml first for any harness file — it is
+  always more current than standalone project knowledge uploads.
+
 1. Can I self-execute this with `bash_tool`, `conversation_search`,
    `project_knowledge_search`, or `view`? If yes — do it; don't ask.
 2. Am I outputting 2+ bash blocks for independent commands? If yes
