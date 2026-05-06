@@ -923,6 +923,107 @@ def check_commit_scope() -> bool:
     return True
 
 
+# CITATION: status-commit helper
+def _commit_status_update(items: list[dict], label: str, dry_run: bool = False) -> None:
+    """Commit the trial_queue.json status field update so a sibling
+    machine's `git pull` cannot conflict on the queue file mid-trial.
+
+    Authorized by CLAUDE.md "Trial queue orchestrator exception":
+    `backtest/trial_queue.json` (status field update only) is on the
+    orchestrator's auto-commit allow-list.
+
+    Architectural note: the per-item `_commit_status_update(item, label)`
+    spec referenced a pre-rewrite `process_item()` flow. The current
+    `run_batch()` flips an entire batch to running in ONE `save_queue`,
+    so this helper accepts the full batch and produces ONE commit
+    covering every id. A per-item loop would only succeed for the first
+    call (the file is fully committed after that) and would generate
+    empty-stage no-ops for the rest -- not what the spec wants.
+
+    Behaviour:
+      1. Stages ONLY `backtest/trial_queue.json` via `git add`.
+      2. Verifies `git diff --name-only --cached` lists exactly that
+         one path; on any other staged path, unstages everything and
+         raises RuntimeError (same scope-guard pattern as commit_result).
+      3. Runs `git commit --message <msg>` with the per-spec subject
+         line (`trials: status update <ids> -> <label>`) and a body
+         enumerating per-item id / strategy_id / variation_id.
+      4. On git add or git commit non-zero return: prints a warning to
+         stderr and returns. A failed status commit is not fatal -- the
+         trial still runs; the conflict (if any) just recurs.
+
+    `dry_run=True` mirrors `commit_result`: log the intended commit
+    and return without touching git.
+    """
+    if not items:
+        return
+    if dry_run:
+        ids = ", ".join(str(it.get("id")) for it in items)
+        print(f"[dry-run] would commit status update for [{ids}] -> {label}")
+        return
+
+    queue_rel = "backtest/trial_queue.json"
+
+    # 1. Stage only the queue file.
+    proc_add = subprocess.run(
+        ["git", "add", queue_rel],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if proc_add.returncode != 0:
+        print(
+            f"[queue] _commit_status_update: git add failed "
+            f"(non-fatal): {proc_add.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return
+
+    # 2. Scope guard: only trial_queue.json may be staged.
+    staged = _staged_files()
+    if staged != [queue_rel]:
+        # Unstage everything before raising so the working tree is clean.
+        subprocess.run(["git", "reset", "HEAD"], cwd=str(ROOT))
+        raise RuntimeError(
+            f"_commit_status_update scope violation: staged {staged}; "
+            f"only {queue_rel!r} permitted."
+        )
+
+    # 3. Build the message. Subject line follows the spec format,
+    #    extended for the batch case.
+    if len(items) == 1:
+        item = items[0]
+        subject = (
+            f"trials: status update {item.get('id')} "
+            f"{item.get('strategy_id')} -> {label}"
+        )
+    else:
+        ids = ", ".join(str(it.get("id")) for it in items)
+        subject = f"trials: status update [{ids}] -> {label}"
+
+    body_lines = [subject, "", "Per-item:"]
+    for it in items:
+        body_lines.append(
+            f"  - {it.get('id')}: {it.get('strategy_id')} / "
+            f"{it.get('variation_id')}"
+        )
+    body_lines += [
+        "",
+        "Orchestrator auto-commit per CLAUDE.md "
+        "Trial queue orchestrator exception (status field update only).",
+    ]
+    msg = "\n".join(body_lines)
+
+    proc_commit = subprocess.run(
+        ["git", "commit", "--message", msg],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if proc_commit.returncode != 0:
+        print(
+            f"[queue] _commit_status_update: git commit failed "
+            f"(non-fatal): {proc_commit.stderr.strip()}",
+            file=sys.stderr,
+        )
+
+
 def commit_result(item: dict, summary: dict, dry_run: bool) -> bool:
     if dry_run:
         print(f"[dry-run] would commit for item {item['id']}")
@@ -1481,6 +1582,20 @@ def run_batch(
         live["status"] = "running"
         live["started_at"] = started_at
     save_queue(queue_data)
+    # Commit the running-status transition before workers spawn so a
+    # sibling machine's `git pull` cannot conflict on trial_queue.json
+    # mid-trial. Authorized by CLAUDE.md "Trial queue orchestrator
+    # exception" (status field update only).
+    try:
+        _commit_status_update(items_to_run, "running", dry_run)
+    except RuntimeError as exc:
+        # Scope guard tripped -- surface but do not abort the batch.
+        # The trial can still run; the conflict (if any) just recurs.
+        print(
+            f"[queue] _commit_status_update scope guard: {exc} "
+            "(non-fatal; continuing without status commit)",
+            file=sys.stderr,
+        )
 
     _clear_stale_result_files(items_to_run)
 
