@@ -177,6 +177,14 @@ all remain in force during pre-justified batch execution. The batch
 permission is about removing per-test chat friction, not about
 removing the discipline rules that make trials.log interpretable.
 
+**CPCVError handling (mandatory in all trial scripts):** Every call to
+`run_cpcv_multi()` must be wrapped in `try/except CPCVError`. On catch:
+call `_trials.record_trial()` with `verdict="retire"`, `sr_observed=nan`,
+`n_trades=0`, and a notes string containing the CPCVError message, then
+`return 0`. This ensures insufficient-trades failures produce a clean
+trial row and a `done` queue status instead of a crash and an `error`
+status requiring manual cleanup.
+
 ## Safety guardrails
 
 ### Compute budget circuit breaker

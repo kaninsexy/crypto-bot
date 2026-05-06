@@ -100,7 +100,7 @@ Dev window: ~2.5 years of 1H bars (~21k bars per leg). Holdout sealed.
 
 | variation_id                 | trial_id | verdict | sharpe | notes |
 |------------------------------|----------|---------|--------|-------|
-| stat-arb-coint-rotation-v1   | (pending)| (pending)| (pending) | Phase 4.C v1: BTC/ETH 1H rotation, hedge=720, zscore=168, entry \|z\|>2.0, exit \|z\|<0.5, ADF p<0.05 filter. Long-only. |
+| stat-arb-coint-rotation-v1   | n/a | retire | n/a | CPCVError: 1/10 blocks had sufficient trades. ADF p<0.05 filter too strict -- cointegration relationship episodic, not persistent across 1H rolling windows. Class exhausted. |
 
 ## Open questions
 
@@ -120,4 +120,15 @@ Dev window: ~2.5 years of 1H bars (~21k bars per leg). Holdout sealed.
 
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
-| stat-arb-coint-rotation-v1 | (pending) | (pending) | (pending) | (pending) | (pending) |
+| stat-arb-coint-rotation-v1 | 2026-05-06 | retire | n/a | n/a | insufficient (1/10 CPCV blocks valid) |
+
+## Retirement note
+
+stat-arb-coint-rotation-v1 retired due to CPCVError: only 1 of 10 CPCV
+blocks produced sufficient trades for a reliable Sharpe estimate. The
+ADF p<0.05 cointegration filter gates entries so strictly that BTC-ETH
+cointegration -- which is episodic and regime-dependent, not persistent
+-- produces near-zero trade counts in most rolling windows. No variation
+2 is warranted: loosening the ADF threshold or entry z defeats the
+academic rationale for the strategy. The cointegration signal is not
+stable enough to support systematic rotation at 1H on this data.

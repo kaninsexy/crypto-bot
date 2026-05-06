@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backtest import trials as _trials
-from backtest.cpcv_common import CPCVConfig
+from backtest.cpcv_common import CPCVConfig, CPCVError
 from backtest.cpcv_multi import run_cpcv_multi
 from backtest.dsr import dsr_from_cpcv_result
 from backtest.engine_multi import run_engine_multi
@@ -197,12 +197,83 @@ def main() -> int:
         ),
     )
     cpcv_strategy = _build_strategy(symbol_a, symbol_b)
-    cpcv_result = run_cpcv_multi(
-        data=data,
-        strategy=cpcv_strategy,
-        config=config,
-        initial_balance=10_000.0,
-    )
+    try:
+        cpcv_result = run_cpcv_multi(
+            data=data,
+            strategy=cpcv_strategy,
+            config=config,
+            initial_balance=10_000.0,
+        )
+    except CPCVError as exc:
+        # Mandatory CPCVError handler per CLAUDE.md: insufficient-trades
+        # failures must record a clean retire row and exit 0 rather than
+        # crash the orchestrator into an `error` queue status that needs
+        # manual cleanup. The cpcv block is filled with placeholder
+        # zeros / NaN; the verdict is carried in `notes` since the
+        # full_cpcv schema does not have a top-level `verdict` field.
+        print(f"\nCPCVError: {exc}")
+        print(
+            "Insufficient trades across CPCV blocks -- recording as "
+            "retire/under_tested."
+        )
+        nan = float("nan")
+        cpcv_error_event = {
+            "strategy_id": STRATEGY_ID,
+            "variation_id": VARIATION_ID,
+            "trial_type": "full_cpcv",
+            "params": PARAMS,
+            "hypothesis": HYPOTHESIS_TEXT,
+            "split_holdout_start": entry["holdout_start"],
+            "symbols": symbols,
+            "n_trades": 0,
+            "sharpe": nan,
+            "cpcv": {
+                "n_paths": 0,
+                "n_blocks": 0,
+                "k_held_out": int(config.k_held_out),
+                "purge_periods": int(config.purge_periods),
+                "embargo_periods": int(config.embargo_periods),
+                "strategy_warmup_candles": int(
+                    config.strategy_warmup_candles
+                ),
+                "min_tradeable_candles_per_block": int(
+                    config.min_tradeable_candles_per_block
+                ),
+                "sharpe_distribution": {
+                    "mean": nan, "std": nan,
+                    "quantiles": {
+                        "p05": nan, "p25": nan, "p50": nan,
+                        "p75": nan, "p95": nan,
+                    },
+                },
+            },
+            "dsr_validation": nan,
+            "mintrl": None,
+            "buy_and_hold_sharpe": nan,
+            "notes": (
+                f"verdict=retire | CPCVError: {exc}. Insufficient "
+                "trades; filter too strict or signal too sparse."
+            ),
+        }
+        _trials.record_trial(cpcv_error_event)
+        print(
+            f"Trial row recorded. trial_id={cpcv_error_event['trial_id']} | "
+            f"params_hash={cpcv_error_event['params_hash']} | "
+            "Exiting cleanly."
+        )
+        # Emit the TRIAL SUMMARY JSON sentinel so the orchestrator's
+        # parser sees a well-formed summary block even on the error path.
+        print("\n--- TRIAL SUMMARY JSON ---")
+        print(json.dumps({
+            "strategy": STRATEGY_ID,
+            "variation": VARIATION_ID,
+            "verdict": "retire",
+            "sr_observed": None,
+            "dsr_validation": None,
+            "n_trades_total": 0,
+            "cpcv_error": str(exc),
+        }, indent=2))
+        return 0
     effective_n_blocks = int(cpcv_result.n_paths)
     if effective_n_blocks < 2:
         print(
