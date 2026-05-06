@@ -197,7 +197,7 @@
       "finished_at": null,
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "BLOCKED: engine_multi long-only; short leg support needed before trial run",
       "email_sent": false,
       "needs_trial_script": true
     },
