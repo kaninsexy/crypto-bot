@@ -1,13 +1,17 @@
-"""scripts/run_pairs_trading_cointegration_trial.py — Phase 4.A
-PairsTradingCointegration trial #1 (variation btc-eth-engle-granger-v1).
+"""scripts/run_pairs_trading_cointegration_trial.py -- Phase 4.C
+PairsTradingCointegration trial #1 (variation stat-arb-coint-rotation-v1).
 
-Runs the BTC/ETH cointegration-based pairs-trading strategy through the
-dev_cpcv harness (run_cpcv_multi), computes DSR + verdict, and appends
-one trial_type='full_cpcv' row to backtest/trials.log via the
+Runs the BTC/USDT vs ETH/USDT cointegration **rotation** strategy
+(Option B2 reframe, 2026-05-06: long-only, at most one asset held at
+a time -- engine_multi compatible without short-side support) through
+the dev_cpcv harness (run_cpcv_multi), computes DSR + verdict, and
+appends one trial_type='full_cpcv' row to backtest/trials.log via the
 schema-validating writer. No holdout access, no commit, no deployment.
 
-Structure mirrors run_meanreversion_btc_residual_phase4a_trial.py — the
-authoritative two-symbol Phase 4.A template.
+Structure mirrors run_meanreversion_btc_residual_phase4a_trial.py --
+the authoritative two-symbol Phase 4 template.
+
+Output is ASCII-only (Windows cp1252 terminal compatibility).
 """
 
 from __future__ import annotations
@@ -37,51 +41,57 @@ from strategies.pairs_trading_cointegration import (
 
 
 STRATEGY_ID = "PairsTradingCointegration"
-VARIATION_ID = "btc-eth-engle-granger-v1"
+VARIATION_ID = "stat-arb-coint-rotation-v1"
 
 HYPOTHESIS_TEXT = (
-    "Phase 4.A variation #1: BTC/USDT vs ETH/USDT cointegration-based "
-    "pairs trading on 1H candles. Rolling 200-bar Engle-Granger "
-    "cointegration test (statsmodels.tsa.stattools.coint, ADF-based), "
-    "OLS hedge ratio via np.polyfit, 21-bar spread z-score window, "
-    "entry on |z|>2.0 (long undervalued / short overvalued), exit on "
-    "z crossing zero. Source: Park (2026), Tadi & Witzany (2023), "
-    "Carvalho (2021)."
+    "Phase 4.C sq-005 Variation #1: cointegration-based rotation between "
+    "BTC/USDT and ETH/USDT at 1H. Rolling 720-bar OLS hedge ratio, "
+    "168-bar spread z-score, entry |z|>2.0, exit |z|<0.5, ADF p<0.05 "
+    "cointegration filter. Long-only rotation -- no short positions. "
+    "Sources: Park (2026) IJSRA; Carvalho (2021) UCP dissertation; "
+    "Tadi & Witzany (2023) arXiv."
 )
 
 # PARAMS dict: keys mirror PairsTradingCointegrationStrategy.__init__
-# keyword arguments exactly. base_symbol/quote_symbol/timeframe come
-# from the manifest at runtime and are not tuned, so they are not in
-# PARAMS — same convention as the MeanReversion_BTC_Residual script
+# keyword arguments exactly. symbols / symbol_a / symbol_b / timeframe
+# come from the manifest at runtime and are not tuned, so they are not
+# in PARAMS -- same convention as the MeanReversion_BTC_Residual script
 # excludes `symbols` and `btc_symbol`.
 PARAMS: dict = {
-    "formation_window": 200,
-    "zscore_window": 21,
+    "hedge_ratio_window": 720,
+    "zscore_window": 168,
     "entry_z_threshold": 2.0,
+    "exit_z_threshold": 0.5,
+    "cointegration_pvalue_threshold": 0.05,
     "notional_capital": 10_000.0,
     "timeframe": "1h",
 }
 
 
 def _build_strategy(
-    base_symbol: str, quote_symbol: str,
+    symbol_a: str, symbol_b: str,
 ) -> PairsTradingCointegrationStrategy:
     """Strategy factory.
 
-    Per pre-trial gate #10: returns a FRESH
+    Per pre-trial gate #9: returns a FRESH
     PairsTradingCointegrationStrategy instance on every call so internal
-    state (`_position_side`, entry prices, hedge ratio) resets between
-    callers. run_cpcv_multi additionally deepcopies the instance per
-    block via `_clone_strategy`, but constructing fresh here keeps the
-    factory contract explicit at every call site.
+    state (`_current_position`) resets between callers. run_cpcv_multi
+    additionally deepcopies the instance per block via `_clone_strategy`,
+    but constructing fresh here keeps the factory contract explicit at
+    every call site.
     """
     return PairsTradingCointegrationStrategy(
-        base_symbol=base_symbol,
-        quote_symbol=quote_symbol,
+        symbols=[symbol_a, symbol_b],
+        symbol_a=symbol_a,
+        symbol_b=symbol_b,
         timeframe=PARAMS["timeframe"],
-        formation_window=PARAMS["formation_window"],
+        hedge_ratio_window=PARAMS["hedge_ratio_window"],
         zscore_window=PARAMS["zscore_window"],
         entry_z_threshold=PARAMS["entry_z_threshold"],
+        exit_z_threshold=PARAMS["exit_z_threshold"],
+        cointegration_pvalue_threshold=PARAMS[
+            "cointegration_pvalue_threshold"
+        ],
         notional_capital=PARAMS["notional_capital"],
     )
 
@@ -89,7 +99,7 @@ def _build_strategy(
 def main() -> int:
     print("=" * 72)
     print(
-        "Phase 4.A -- PairsTradingCointegration trial #1 (dev_cpcv only)"
+        "Phase 4.C -- PairsTradingCointegration trial #1 (dev_cpcv only)"
     )
     print("=" * 72)
 
@@ -107,11 +117,11 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    base_symbol, quote_symbol = symbols[0], symbols[1]
+    symbol_a, symbol_b = symbols[0], symbols[1]
     print(
         f"manifest entry: timeframe={entry['timeframe']} "
         f"holdout_start={entry['holdout_start']} "
-        f"base={base_symbol} quote={quote_symbol}"
+        f"symbol_a={symbol_a} symbol_b={symbol_b}"
     )
     print(
         f"  strategy_warmup_candles={entry['strategy_warmup_candles']} "
@@ -155,11 +165,11 @@ def main() -> int:
 
     # -- 2. Headline backtest on the full dev window ---------------------------
     print("\n--- Headline run on full dev window ---")
-    headline_strategy = _build_strategy(base_symbol, quote_symbol)
+    headline_strategy = _build_strategy(symbol_a, symbol_b)
     headline_result = run_engine_multi(
         data=data,
         strategy=headline_strategy,
-        period_label="phase4a-pairs-coint-dev-headline",
+        period_label="phase4c-pairs-coint-rotation-dev-headline",
         initial_balance=10_000.0,
     )
     sr_observed = float(headline_result.metrics.sharpe_ratio)
@@ -186,7 +196,7 @@ def main() -> int:
             entry["min_tradeable_candles_per_block"]
         ),
     )
-    cpcv_strategy = _build_strategy(base_symbol, quote_symbol)
+    cpcv_strategy = _build_strategy(symbol_a, symbol_b)
     cpcv_result = run_cpcv_multi(
         data=data,
         strategy=cpcv_strategy,
@@ -245,11 +255,10 @@ def main() -> int:
     concat_returns = (
         np.concatenate(valid_returns) if valid_returns else np.array([])
     )
-    # Baseline = BTC/USDT B&H over the same dev window. BTC is the
-    # largest-cap traded asset in the pair and the natural counterfactual
-    # for "did the cointegration spread trade beat just buying the
-    # dominant leg".
-    baseline_df = data[base_symbol]
+    # Baseline: BTC/USDT B&H. The strategy rotates between BTC and ETH;
+    # the relevant counterfactual is passive BTC B&H (the default crypto
+    # allocation that the rotation is trying to outperform).
+    baseline_df = data[symbol_a]
     verdict = compute_verdict(
         strategy_id=STRATEGY_ID,
         sr_candidate=sr_observed,
@@ -286,15 +295,19 @@ def main() -> int:
 
     # -- 6. Append trial row ---------------------------------------------------
     notes = (
-        "Phase 4.A variation #1. BTC/USDT vs ETH/USDT cointegration-"
-        "based pairs trading at 1H. Rolling 200-bar Engle-Granger "
-        "test, OLS hedge ratio via np.polyfit, 21-bar spread z-score, "
-        "entry on |z|>2.0 (long undervalued / short overvalued), exit "
-        "on z crossing zero. "
+        "Phase 4.C variation #1 (B2 reframe approved 2026-05-06). "
+        "BTC/USDT vs ETH/USDT cointegration-based **rotation** at 1H -- "
+        "long-only by construction (at most one asset held at a time). "
+        "This is directional rotation, NOT delta-neutral pairs trading: "
+        "engine_multi is long-only and silently drops short legs, so the "
+        "classical two-leg variant cannot be tested without engine "
+        "changes. Algorithm: 720-bar OLS hedge ratio (cov/var in log "
+        "space), 168-bar spread series, ADF p<0.05 cointegration filter, "
+        "z<-2.0 -> hold BTC, z>+2.0 -> hold ETH, exit at |z|<0.5. "
         f"Warmup-aware CPCV: strategy_warmup_candles="
         f"{config.strategy_warmup_candles}, effective_n_blocks="
         f"{effective_n_blocks}. "
-        "Source: Park (2026), Tadi & Witzany (2023), Carvalho (2021)."
+        "Sources: Park (2026); Carvalho (2021); Tadi & Witzany (2023)."
     )
     event = {
         "strategy_id": STRATEGY_ID,
