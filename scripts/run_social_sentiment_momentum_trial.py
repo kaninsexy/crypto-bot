@@ -1,8 +1,13 @@
 """scripts/run_social_sentiment_momentum_trial.py -- sq-002 trial.
 
 Runs the SocialSentimentMomentum strategy on BTC/USDT 1D through the
-single-symbol dev_cpcv harness (run_cpcv) with LunarCrush Galaxy Score
-held in-strategy. No holdout access, no commit, no deployment.
+single-symbol dev_cpcv harness (run_cpcv) with the Crypto Fear & Greed
+Index (alternative.me) held in-strategy. No holdout access, no commit,
+no deployment.
+
+Data source change (2026-05-07): substituted LunarCrush Galaxy Score
+(HTTP 402, $72/mo subscription) with the alternative.me Fear & Greed
+Index (free, no key, daily history from 2018-02-01).
 
 Output is ASCII-only (Windows cp1252 terminal compatibility).
 """
@@ -27,9 +32,9 @@ from backtest.dsr import dsr_from_cpcv_result
 from backtest.engine import BacktestEngine
 from backtest.holdout import load_dev, load_manifest
 from backtest.verdict import compute_verdict
-from data.lunarcrush import (
-    LunarCrushError,
-    load_or_fetch_galaxy_score,
+from data.fear_greed import (
+    FearGreedError,
+    fetch_fear_greed,
 )
 from strategies.social_sentiment_momentum import (
     SocialSentimentMomentumStrategy,
@@ -39,17 +44,14 @@ from strategies.social_sentiment_momentum import (
 STRATEGY_ID = "SocialSentimentMomentum"
 VARIATION_ID = "sentiment-momentum-filter"
 
-# 38 months covers the full data window for the 1D substrate
-# (2023-03-06 -> 2026-04-19) plus warmup buffer.
-SENTIMENT_HISTORY_MONTHS = 38
-
 HYPOTHESIS_TEXT = (
-    "sq-002 variation #1: aggregated LunarCrush Galaxy Score momentum "
-    "on BTC/USDT 1D as a directional signal. Long when 7-day rolling "
-    "mean Galaxy Score > 50 and rising; flat when 7-day rolling mean "
-    "drops below 45. Long-only; single concurrent BTC long. Sources: "
-    "Zhang & Zhang (2022) RIBAF; Ante (2023) TFSC; Ortu et al (2022) "
-    "Expert Systems with Applications."
+    "sq-002 variation #1: Crypto Fear & Greed Index (alternative.me) "
+    "momentum on BTC/USDT 1D as a directional signal. Long when 7-day "
+    "rolling mean Fear & Greed value > 50 and rising; flat when 7-day "
+    "rolling mean drops below 45. Long-only; single concurrent BTC "
+    "long. Sources: Zhang & Zhang (2022) RIBAF; Ante (2023) TFSC; "
+    "Ortu et al (2022) Expert Systems with Applications; Lietor et al "
+    "(2023) Finance Research Letters (Fear & Greed predictor)."
 )
 
 PARAMS: dict = {
@@ -104,22 +106,23 @@ def main() -> int:
         f"{entry['min_tradeable_candles_per_block']}"
     )
 
-    # 1. Fetch (or read cached) LunarCrush Galaxy Score data.
+    # 1. Fetch (or read cached) Crypto Fear & Greed Index data. Symbol
+    #    is irrelevant: the index is a single market-wide series.
     try:
-        sentiment_df = load_or_fetch_galaxy_score(
-            symbol=symbol, months=SENTIMENT_HISTORY_MONTHS,
-        )
-    except LunarCrushError as exc:
-        print(f"FAIL: LunarCrushError: {exc}", file=sys.stderr)
+        sentiment_df = fetch_fear_greed()
+    except FearGreedError as exc:
+        print(f"FAIL: FearGreedError: {exc}", file=sys.stderr)
         return 1
 
-    if "galaxy_score" not in sentiment_df.columns:
+    if "fear_greed_value" not in sentiment_df.columns:
         print(
-            "FAIL: LunarCrush response missing 'galaxy_score' column.",
+            "FAIL: Fear & Greed response missing 'fear_greed_value' column.",
             file=sys.stderr,
         )
         return 1
-    sentiment_series = sentiment_df["galaxy_score"].astype(float).sort_index()
+    sentiment_series = (
+        sentiment_df["fear_greed_value"].astype(float).sort_index()
+    )
 
     # 2. Load dev OHLCV.
     raw = load_dev(STRATEGY_ID)
@@ -148,7 +151,7 @@ def main() -> int:
         return 1
     print(f"sentiment coverage: {coverage}")
 
-    # Reindex to OHLCV index with forward-fill so daily LunarCrush
+    # Reindex to OHLCV index with forward-fill so daily Fear & Greed
     # buckets line up with the dev frame.
     aligned_sentiment = (
         sentiment_series.sort_index()
@@ -323,12 +326,14 @@ def main() -> int:
     print(f"n_trials                = {verdict.n_trials}")
 
     notes = (
-        "sq-002 variation #1. Single-symbol BTC/USDT 1D long-only. "
-        "LunarCrush Galaxy Score 7-day rolling mean; long when "
-        "mean>50 and rising; flat when mean<45. Sentiment held "
-        "in-strategy via the make_strategy closure; aligned to OHLCV "
-        "via reindex+ffill. Baseline = BTC/USDT B&H. "
-        "Sources: Zhang & Zhang (2022); Ante (2023); Ortu et al (2022)."
+        "sq-002 variation #1 (data source substituted 2026-05-07: "
+        "LunarCrush HTTP 402 -> alternative.me Fear & Greed Index). "
+        "Single-symbol BTC/USDT 1D long-only. Fear & Greed Index 7-day "
+        "rolling mean; long when mean>50 and rising; flat when mean<45. "
+        "Sentiment held in-strategy via the make_strategy closure; "
+        "aligned to OHLCV via reindex+ffill. Baseline = BTC/USDT B&H. "
+        "Sources: Zhang & Zhang (2022); Ante (2023); Ortu et al (2022); "
+        "Lietor et al (2023)."
     )
     event = {
         "strategy_id": STRATEGY_ID,

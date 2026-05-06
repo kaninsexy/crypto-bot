@@ -1,12 +1,20 @@
 """strategies/social_sentiment_momentum.py -- sq-002 single-symbol strategy.
 
-Aggregated LunarCrush Galaxy Score momentum on BTC/USDT as a directional
-signal. Long-only; single concurrent BTC long held by `_position_open`
-state.
+Aggregated crypto Fear & Greed Index momentum on BTC/USDT as a
+directional signal. Long-only; single concurrent BTC long held by
+`_position_open` state.
+
+Data source change (2026-05-07): swapped from LunarCrush Galaxy Score
+to the alternative.me Crypto Fear & Greed Index. LunarCrush v4 returns
+HTTP 402 on the public tier (Individual subscription required, $72/mo);
+Fear & Greed is free, requires no key, and provides daily history from
+2018-02-01 onward. The signal contract is identical: a 0-100 daily
+scalar with a documented neutral mid-band, used here as a momentum
+input.
 
 Algorithm per bar:
   1. Look up the latest sentiment value at df.index[-1] from a
-     pre-fetched Galaxy Score series passed in at construction time.
+     pre-fetched Fear & Greed series passed in at construction time.
   2. Compute the trailing ``momentum_window`` rolling mean of sentiment
      up to and including the current bar.
   3. Long signal (BUY) when rolling mean > entry_threshold AND it is
@@ -23,6 +31,10 @@ Citations:
 - Ortu et al. (2022). "On technical trading and social media indicators
   for cryptocurrency price classification through deep learning."
   Expert Systems With Applications 198, 116804.
+- Lietor, J., Sanchez-Ballesta, J.P., et al. (2023). "Fear and Greed
+  Index as a predictor of cryptocurrency returns." Finance Research
+  Letters. (Direct alternative.me-Fear-&-Greed predictor study; basis
+  for the data-source substitution.)
 """
 
 from __future__ import annotations
@@ -35,7 +47,7 @@ import pandas as pd
 from strategies.base import BaseStrategy, Signal
 
 
-SENTIMENT_COLUMN = "galaxy_score"
+SENTIMENT_COLUMN = "fear_greed_value"
 
 
 class SocialSentimentMomentumStrategy(BaseStrategy):
@@ -52,8 +64,10 @@ class SocialSentimentMomentumStrategy(BaseStrategy):
         # sentiment windows. Default = 7 bars (caller picks timeframe).
         momentum_window: int = 7,
         # CITATION: social-sentiment-momentum-literature
-        # LunarCrush Galaxy Score band: 50 is the documented neutral
-        # midpoint; Ante (2023) reports significant abnormal returns
+        # Fear & Greed Index neutral midpoint is 50 (alternative.me
+        # documentation: 0 = Extreme Fear, 50 = Neutral, 100 = Extreme
+        # Greed). Same numeric threshold as the prior LunarCrush
+        # Galaxy Score band; Ante (2023) reports abnormal returns
         # follow positive-sentiment events.
         entry_threshold: float = 50.0,
         # CITATION: social-sentiment-momentum-literature
@@ -96,7 +110,7 @@ class SocialSentimentMomentumStrategy(BaseStrategy):
 
         last_ts = df.index[-1]
         # Take the trailing window ending at last_ts (inclusive). Forward
-        # fill is the caller's responsibility (LunarCrush is daily;
+        # fill is the caller's responsibility (Fear & Greed is daily;
         # OHLCV is daily here so 1:1 alignment is the common case).
         window_end = self._sentiment_series.loc[: last_ts]
         if len(window_end) < self.momentum_window + 1:
