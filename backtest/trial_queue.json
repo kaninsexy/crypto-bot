@@ -27,7 +27,7 @@
     },
     {
       "id": "sq-001",
-      "status": "error",
+      "status": "deferred",
       "strategy_id": "OnChainMetricModels",
       "variation_id": "onchain-macro-cycle-filter",
       "script_path": "scripts/run_on_chain_metric_models_trial.py",
@@ -44,13 +44,13 @@
       "finished_at": "2026-05-05T06:27:01.965896+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": "ON-CHAIN DATA NOT FOUND: run scripts/fetch_onchain_data.py first\n",
+      "error": "deferred: data dependency (Glassnode/LunarCrush) not justified pre-edge",
       "email_sent": false,
       "needs_trial_script": false
     },
     {
       "id": "sq-002",
-      "status": "error",
+      "status": "deferred",
       "strategy_id": "SocialSentimentMomentum",
       "variation_id": "sentiment-momentum-filter",
       "script_path": "scripts/run_social_sentiment_momentum_trial.py",
@@ -95,7 +95,7 @@
       "finished_at": "2026-05-05T07:00:04.642207+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": "SENTIMENT DATA NOT FOUND: run scripts/fetch_lunarcrush_history.py first\n",
+      "error": "deferred: data dependency (Glassnode/LunarCrush) not justified pre-edge",
       "email_sent": false,
       "needs_trial_script": false
     },
@@ -153,13 +153,13 @@
     {
       "id": "sq-005",
       "status": "queued",
-      "strategy_id": "ArxivOrg",
-      "variation_id": "stat-arb-coint-engle-granger",
-      "script_path": "scripts/run_arxiv_org_trial.py",
+      "strategy_id": "PairsTradingCointegration",
+      "variation_id": "stat-arb-coint-rotation-v1",
+      "script_path": "scripts/run_pairs_trading_cointegration_trial.py",
       "trial_type": "full_cpcv",
-      "hypothesis_one_line": "A statistical arbitrage strategy that trades the mean-reversion of a price spread formed by two cointegrated cryptocurrency perpetual futures, using a z-score for entry and exit signals, will yield positive risk-adjusted returns.",
+      "hypothesis_one_line": "Cointegration-based rotation between BTC/USDT and ETH/USDT at 1H: rolling OLS hedge ratio, 168-bar spread z-score, entry |z|>2.0, exit |z|<0.5, ADF p<0.05 filter. Long-only rotation (no shorts). Tests whether cointegration spread has directional predictive power in crypto.",
       "source_citation": "Taekyung Park (2026); Masood Tadi (2023); Daniel da Silva Carvalho (2021)",
-      "literature_doc": "research/arxiv-org-literature.md",
+      "literature_doc": "research/pairs-trading-cointegration-literature.md",
       "citations": [
         {
           "title": "Statistical Arbitrage Strategies Using Cointegration Analysis in Cryptocurrency Markets",
@@ -190,7 +190,7 @@
         }
       ],
       "overall_quality": 3.0,
-      "implementation_notes": "1. Identify a universe of liquid perpetual futures.\n2. In a formation period (e.g., 200 hourly candles), test all pairs for cointegration using the Engle-Granger two-step test (or Johansen test).\n3. For cointegrated pairs (p-value < 0.05), calculate the hedge ratio via OLS regression.\n4. Define the spread as `Price_A - (Hedge_Ratio * Price_B)`.\n5. In the trading period, calculate the rolling z-score of the spread (e.g., 21-period window).\n6. Enter a trade when `|z-score|` exceeds an entry threshold (e.g., 2.0) by shorting the overvalued asset and longing the undervalued asset.\n7. Exit the trade when the z-score reverts and crosses its mean (z-score = 0).",
+      "implementation_notes": "B2 rotation reframe approved 2026-05-06. Hold BTC when spread z<-2 (BTC cheap vs ETH), hold ETH when z>+2 (ETH cheap vs BTC), exit when |z|<0.5. ADF cointegration filter gates entries. No short positions — engine_multi compatible as-is.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-05T08:01:36.467534+00:00",
       "started_at": null,
@@ -199,11 +199,11 @@
       "trial_id": null,
       "error": "BLOCKED: engine_multi long-only; short leg support needed before trial run",
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-006",
-      "status": "queued",
+      "status": "deferred",
       "strategy_id": "TheSystematicChangeInCryptocur",
       "variation_id": "us-hours-close-momentum",
       "script_path": "scripts/run_the_systematic_change_in_cryptocur_trial.py",
@@ -248,7 +248,7 @@
       "finished_at": null,
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "dropped: sq-003 adjacent window retired hard; Pagani contradicts momentum framing",
       "email_sent": false,
       "needs_trial_script": true
     }
