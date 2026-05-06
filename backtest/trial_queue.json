@@ -152,7 +152,7 @@
     },
     {
       "id": "sq-005",
-      "status": "queued",
+      "status": "error",
       "strategy_id": "PairsTradingCointegration",
       "variation_id": "stat-arb-coint-rotation-v1",
       "script_path": "scripts/run_pairs_trading_cointegration_trial.py",
@@ -190,14 +190,14 @@
         }
       ],
       "overall_quality": 3.0,
-      "implementation_notes": "B2 rotation reframe approved 2026-05-06. Hold BTC when spread z<-2 (BTC cheap vs ETH), hold ETH when z>+2 (ETH cheap vs BTC), exit when |z|<0.5. ADF cointegration filter gates entries. No short positions — engine_multi compatible as-is.",
+      "implementation_notes": "B2 rotation reframe approved 2026-05-06. Hold BTC when spread z<-2 (BTC cheap vs ETH), hold ETH when z>+2 (ETH cheap vs BTC), exit when |z|<0.5. ADF cointegration filter gates entries. No short positions \u2014 engine_multi compatible as-is.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-05T08:01:36.467534+00:00",
-      "started_at": null,
-      "finished_at": null,
+      "started_at": "2026-05-06T06:00:00.888005+00:00",
+      "finished_at": "2026-05-06T06:02:35.654901+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": "BLOCKED: engine_multi long-only; short leg support needed before trial run",
+      "error": "2026-05-06 13:00:02.653 | INFO     | backtest.engine_multi:run_engine_multi:170 - [EngineMulti] Starting phase4c-pairs-coint-rotation-dev-headline | strategy=PairsTradingCointegration | symbols=2/2 aligned | bars=22195 | balance=$10,000\n2026-05-06 13:01:37.288 | INFO     | backtest.engine_multi:run_engine_multi:298 - [EngineMulti] phase4c-pairs-coint-rotation-dev-headline done | return=+3.74% | sharpe=0.367 | trades=25 | final_cash=$10,374.10\n2026-05-06 13:01:37.289 | INFO     | backtest.cpcv_mu",
       "email_sent": false,
       "needs_trial_script": false
     },
@@ -249,6 +249,108 @@
       "verdict": null,
       "trial_id": null,
       "error": "dropped: sq-003 adjacent window retired hard; Pagani contradicts momentum framing",
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-007",
+      "status": "dropped",
+      "strategy_id": "PapersSsrnCom",
+      "variation_id": "weekend-effect-long-only",
+      "script_path": "scripts/run_papers_ssrn_com_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Cryptocurrencies exhibit a positive 'weekend effect' anomaly, whereby holding long positions from Friday evening through Monday morning generates positive excess returns.",
+      "source_citation": "Matus Padysak (2022); Radovan Vojtko (2023); So\u0148a Belusk\u00e1 (2024)",
+      "literature_doc": "research/papers-ssrn-com-literature.md",
+      "citations": [
+        {
+          "title": "Seasonality, Trend-following, and Mean reversion in Bitcoin",
+          "authors": "Matus Padysak, Radovan Vojtko",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "The paper primarily documents a significant intraday seasonality effect, proposing a profitable strategy based on holding BTC for only two specific hours per day, but does not present backtested results for weekly or monthly effects.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "The Seasonality of Bitcoin",
+          "authors": "Radovan Vojtko, Juli\u00e1na Javorsk\u00e1",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "This follow-up study confirms the persistence of the two-hour intraday seasonality strategy and examines how patterns are influenced by market trend and volatility, but does not extend the analysis to weekly or monthly strategies.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Revisiting Trend-following and Mean-Reversion Strategies in Bitcoin",
+          "authors": "So\u0148a Belusk\u00e1, Radovan Vojtko",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "This paper extends the analysis with more recent data (through August 2024), reassessing trend, mean-reversion, and seasonality, confirming earlier intraday findings without introducing or testing specific weekly or monthly seasonal effects.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "Although the provided literature focuses on intraday effects, a logical extension is to test for weekly patterns. A simple test would be to go long BTC and ETH perpetual futures at a fixed time on Friday (e.g., 17:00 UTC) and close the position on Monday (e.g., 09:00 UTC). This could be further refined by examining specific days of the month (e.g., turn-of-the-month effect).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-06T07:01:36.327434+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": "dropped: citation mismatch -- all three citations are intraday seasonality papers, not weekend-effect evidence; seasonality class exhausted after sq-003 RETIRE",
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-008",
+      "status": "deferred",
+      "strategy_id": "InterExchangeVolumeFlowAnalysi",
+      "variation_id": "exchange-netflow-reversal",
+      "script_path": "scripts/run_inter_exchange_volume_flow_analysi_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Anomalously large net inflows of an asset (e.g., BTC) to exchanges signal future selling pressure and predict negative returns, while large net outflows signal accumulation and predict positive returns over a 1-24 hour horizon.",
+      "source_citation": "Konstantinos Gkillas (2022); Elie Bouri (2021); Kaiko Research (2023)",
+      "literature_doc": "research/inter-exchange-volume-flow-analysis-literature.md",
+      "citations": [
+        {
+          "title": "On the Information Content of Cryptocurrency Exchange Flows",
+          "authors": "Konstantinos Gkillas, Christoforos K. Tsiotas, Rangan Gupta",
+          "year": 2022,
+          "source": "Economics Letters",
+          "key_finding": "Bitcoin exchange netflows demonstrate significant out-of-sample predictive power for next-day returns, with net outflows preceding positive returns.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Forecasting Bitcoin prices: A new model based on exchange inflows and outflows",
+          "authors": "Elie Bouri, Rangan Gupta, Christian Pierdzioch",
+          "year": 2021,
+          "source": "International Journal of Finance & Economics",
+          "key_finding": "Models that incorporate daily Bitcoin inflows and outflows to exchanges provide significantly more accurate price forecasts than models without this data.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Can Exchange Flows Predict Prices?",
+          "authors": "Kaiko Research",
+          "year": 2023,
+          "source": "Kaiko Research",
+          "key_finding": "A simple backtested strategy of shorting BTC on days with net inflows to exchanges and longing on days with net outflows generated positive cumulative returns between 2020 and 2023.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.7,
+      "implementation_notes": "Requires an on-chain data provider API (e.g., Glassnode, CryptoQuant) for hourly/daily exchange netflow data. A trading signal is generated when the netflow value (or its z-score over a lookback period) crosses a predefined threshold. A short position is initiated on a large positive netflow (inflow), and a long position on a large negative netflow (outflow), with a time-based stop (e.g., T+24 hours).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-06T07:09:53.006318+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": "deferred: requires Glassnode/CryptoQuant exchange netflow data -- same on-chain data wall as sq-001; revisit post-edge",
       "email_sent": false,
       "needs_trial_script": true
     }
