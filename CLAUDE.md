@@ -112,22 +112,9 @@ Agents never push or deploy autonomously.
 > Human-only rule applies and the agent must refuse the edit and
 > surface the restriction.
 
-> **Trial queue orchestrator exception.** `scripts/run_trial_queue.py`
-> may commit autonomously, scoped strictly to: `backtest/trials.log`
-> (row already appended by the trial script before the orchestrator
-> runs), `docs/strategies.md` (trial outcome subsection update),
-> `research/<strategy>-literature.md` or `research/<substrate>-
-> literature.md` (outcome row in the variation table), and
-> `backtest/trial_queue.json` (status field update only). The
-> orchestrator MUST NOT commit harness code, scripts, sacred-harness
-> files, `CLAUDE.md`, `docs/MASTER_PLAN.md`, or any file outside the
-> above list. Commit is gated on: (1) trial script exit code 0,
-> (2) JSON summary block successfully parsed, (3) `git diff --name-only
-> --cached` containing only files in the permitted list — if any file
-> is outside the list, unstage everything, email the violation, and
-> abort the commit. Commit message format:
-> `trials: <strategy_id> <variation_id> <verdict>`. This exception
-> does not extend to git push; push remains human-only.
+> **Trial queue orchestrator exception.** See
+> `.claude/rules/backtest.md` for the full scoped commit rules
+> for `scripts/run_trial_queue.py`. Push remains human-only.
 
 ### Agent edits documents autonomously (no approval needed)
 
@@ -138,61 +125,6 @@ data clearly answers the question. Specifically: `docs/MASTER_PLAN.md`,
 and any future audit or per-strategy doc. Sacred-harness rule (above)
 covers runtime artifacts, not docs. Do not gate doc edits on judgment
 that doesn't apply.
-
-## Safety guardrails
-
-### Compute budget circuit breaker
-
-If a single strategy's iteration exceeds 4 hours of PC compute without converging
-to a surviving candidate, stop and report. Do not grind indefinitely on a
-strategy that isn't going to work.
-
-### Archive by default, delete only with approval
-
-When retiring a strategy, move its files to `strategies/archive/<strategy>/` with
-a kill report documenting why. Do not delete unless explicitly approved by the
-human. Reversibility is cheap; lost work is not.
-
-### Iteration cap per strategy
-
-Maximum 20 parameter variations per strategy before the strategy is retired.
-Prevents p-hacking via unlimited iteration. If no variation passes DSR within
-20 attempts, the strategy does not have edge. **This cap applies whether
-variations are run via single-prompt manual triggers or via pre-justified
-batch execution — autonomy does not raise the cap.**
-
-### Consecutive failure escalation
-
-If 3 consecutive variations have failed their hypothesis, stop and consult before
-attempting a 4th. Likely indicates the strategy's edge theory is wrong, not that
-the next tweak will find it. **This applies in batch execution: after 3
-consecutive failures, the agent stops the batch on that strategy and
-surfaces the failure pattern, regardless of how many starting-hypothesis
-slots remain.**
-
-## No p-hacking rule
-
-Agents may only propose parameter variations that have an explicit theoretical
-justification citing a source (paper, validated blog post, or a written
-hypothesis documented in `research/<strategy>-literature.md`). Hyperparameter
-searches over numeric ranges without per-variation justification are prohibited
-— even if the search space is bounded.
-
-This rule applies because every tested variation appends to `trials.log` and
-inflates the multiple-testing correction in Deflated Sharpe Ratio. An agent
-running a grid search of 50 parameter combinations does not produce a "best
-Sharpe" — it produces 50 trials whose DSR haircut makes any result
-statistically insignificant.
-
-Pre-justified batches enumerated in `docs/MASTER_PLAN.md` satisfy this rule
-*at batch entry* — each row in the resurrection table cites its source,
-which is what the rule requires. Running the batch is execution of an
-already-justified plan, not new exploration. Variations beyond the
-enumerated starting hypothesis are new exploration and require fresh
-per-variation justification before the trial runs.
-
-Agents unsure whether a proposed test violates this rule must consult before
-running it.
 
 ## Code conventions
 
@@ -222,83 +154,8 @@ running it.
 
 These rules govern how agents communicate work, not what work to do.
 
-### Runnable artifacts only
-
-If a step is executable (shell, git, str_replace, create_file, prompt for
-another agent), provide the runnable artifact, not a prose description.
-Test: could the user copy-paste the response and execute it? If no,
-rewrite as code. Prose is reserved for decisions, trade-offs, and
-explanations — never for actions. "You should run X" is wrong; the
-command for X is right.
-
-### Bundle by default
-
-When a goal needs N known actions, deliver all N in one response. Multiple
-code blocks per response are fine. Independent actions bundle together;
-only hard sequential dependencies (where action 2 needs action 1's output)
-justify splitting across turns. Dribbling fixes one-per-turn wastes context
-re-establishment cost and forces the user to carry state.
-
-### Single-message completeness
-
-Before sending: does this message contain everything the user needs to act
-on the current goal without coming back to ask? If "now do X" is
-predictable, X belongs in the current response.
-
-### Self-execute mechanically-derivable steps
-
-Anything Claude can do with available tools (`bash_tool`,
-`conversation_search`, `project_knowledge_search`, `view`,
-`str_replace`, `create_file`), Claude does — never routes through
-the user as "paste this output and I'll respond." Includes checking
-`/mnt/project/` state, comparing repo to project knowledge, reading
-file headers to verify scope, splitting hunks, staging git
-operations. Routing mechanical inspection through the user is the
-broadest version of the bundle-violation pattern.
-
-### Commit and shell-bundle rule
-
-(1) Every "stop for commit" surface bundles the runnable git
-command (scoped `git add` + `git commit` with message composed from
-the work just done) in the same response. The user should never
-need to ask for the commit code separately.
-
-(2) Independent shell commands sharing a goal go in ONE bash block,
-not N. Three commits, three test runs, three stagings = one block,
-chained via `&&` or sequential lines under one fence. Splitting an
-N-action shell sequence into N blocks violates bundle-by-default
-even when each block is technically runnable.
-
-### Don't pre-write downstream content
-
-After Claude Code reports completion, deliver verification (tests
-pass/fail, flagged items) and stop. Do not pre-write doc edits,
-commit messages, or commit-status checklists unless explicitly
-asked. Doc updates and commit content are the user's job at commit
-time. Distinct from the autonomy-sign-off rule: that one is about
-not gating on permission, this one is about not producing
-unsolicited downstream content.
-
-### Pushback re-check
-
-When the user pushes back ("is X right?", "shouldn't this be Y?"),
-do NOT immediately validate or flip the answer. First re-read
-evidence (handoff verbatim, project files, past chats via
-`conversation_search`). Then judge if pushback is right, partially
-right, or wrong. Reflexive flipping creates wrong-fix loops. If
-right, say so after verifying. If partially right, separate right
-from wrong. Better to take a turn re-checking than flip twice.
-
-### Missing-or-stale evidence
-
-When project files contradict the handoff prompt, when load-bearing
-fields are absent (manifest schema slots, commit hashes, citations),
-or when sources disagree on a locked decision: STOP. Do not fill
-the gap with judgment, do not assume the newer-looking source wins.
-Surface the discrepancy explicitly; resolve via
-`conversation_search` if past chats answer, else ask the user.
-Does NOT fire on routine search-empties or expected lag
-(bot_status updates, log appends).
+> Communication and output rules: see `.claude/rules/communication.md`
+> (always loaded). Mandates F and G remain here as core invariants.
 
 ### Drift prevention
 

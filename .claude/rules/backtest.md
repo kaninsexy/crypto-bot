@@ -118,3 +118,77 @@ closes. Each `research/<strategy>-literature.md` carries a
 every locked constraint with source citation. Variation rows
 reference these gates; rows that contradict a gate are drift
 bugs caught by reading the literature end-to-end.
+
+## Safety guardrails
+
+### Compute budget circuit breaker
+
+If a single strategy's iteration exceeds 4 hours of PC compute without converging
+to a surviving candidate, stop and report. Do not grind indefinitely on a
+strategy that isn't going to work.
+
+### Archive by default, delete only with approval
+
+When retiring a strategy, move its files to `strategies/archive/<strategy>/` with
+a kill report documenting why. Do not delete unless explicitly approved by the
+human. Reversibility is cheap; lost work is not.
+
+### Iteration cap per strategy
+
+Maximum 20 parameter variations per strategy before the strategy is retired.
+Prevents p-hacking via unlimited iteration. If no variation passes DSR within
+20 attempts, the strategy does not have edge. **This cap applies whether
+variations are run via single-prompt manual triggers or via pre-justified
+batch execution — autonomy does not raise the cap.**
+
+### Consecutive failure escalation
+
+If 3 consecutive variations have failed their hypothesis, stop and consult before
+attempting a 4th. Likely indicates the strategy's edge theory is wrong, not that
+the next tweak will find it. **This applies in batch execution: after 3
+consecutive failures, the agent stops the batch on that strategy and
+surfaces the failure pattern, regardless of how many starting-hypothesis
+slots remain.**
+
+## No p-hacking rule
+
+Agents may only propose parameter variations that have an explicit theoretical
+justification citing a source (paper, validated blog post, or a written
+hypothesis documented in `research/<strategy>-literature.md`). Hyperparameter
+searches over numeric ranges without per-variation justification are prohibited
+— even if the search space is bounded.
+
+This rule applies because every tested variation appends to `trials.log` and
+inflates the multiple-testing correction in Deflated Sharpe Ratio. An agent
+running a grid search of 50 parameter combinations does not produce a "best
+Sharpe" — it produces 50 trials whose DSR haircut makes any result
+statistically insignificant.
+
+Pre-justified batches enumerated in `docs/MASTER_PLAN.md` satisfy this rule
+*at batch entry* — each row in the resurrection table cites its source,
+which is what the rule requires. Running the batch is execution of an
+already-justified plan, not new exploration. Variations beyond the
+enumerated starting hypothesis are new exploration and require fresh
+per-variation justification before the trial runs.
+
+Agents unsure whether a proposed test violates this rule must consult before
+running it.
+
+## Trial queue orchestrator exception
+
+> **Trial queue orchestrator exception.** `scripts/run_trial_queue.py`
+> may commit autonomously, scoped strictly to: `backtest/trials.log`
+> (row already appended by the trial script before the orchestrator
+> runs), `docs/strategies.md` (trial outcome subsection update),
+> `research/<strategy>-literature.md` or `research/<substrate>-
+> literature.md` (outcome row in the variation table), and
+> `backtest/trial_queue.json` (status field update only). The
+> orchestrator MUST NOT commit harness code, scripts, sacred-harness
+> files, `CLAUDE.md`, `docs/MASTER_PLAN.md`, or any file outside the
+> above list. Commit is gated on: (1) trial script exit code 0,
+> (2) JSON summary block successfully parsed, (3) `git diff --name-only
+> --cached` containing only files in the permitted list — if any file
+> is outside the list, unstage everything, email the violation, and
+> abort the commit. Commit message format:
+> `trials: <strategy_id> <variation_id> <verdict>`. This exception
+> does not extend to git push; push remains human-only.
