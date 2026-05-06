@@ -152,11 +152,7 @@
     },
     {
       "id": "sq-005",
-<<<<<<< HEAD
-      "status": "error",
-=======
       "status": "retired",
->>>>>>> origin/claude/unruffled-elbakyan-057350
       "strategy_id": "PairsTradingCointegration",
       "variation_id": "stat-arb-coint-rotation-v1",
       "script_path": "scripts/run_pairs_trading_cointegration_trial.py",
