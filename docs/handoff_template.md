@@ -36,7 +36,7 @@ Before any response that asks the user to do something, run this
 
 If output contains "paste the output" / "let me know" / "can you
 check" / "after that, I'll" / "did we already" / "do you remember
-setting" — STOP. Re-check items 0 and 1.
+setting" — STOP. Re-check items 0 and 2.
 
 ## Logical breakpoints (replaces turn-count flag)
 
