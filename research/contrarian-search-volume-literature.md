@@ -35,3 +35,10 @@ buy-and-hold.
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
 | 1 | contrarian-search-volume-spike | window=4, threshold=1.0 | full_cpcv | TBD | TBD | TBD | first trial |
+
+## Trial outcomes
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| contrarian-search-volume-spike | 2026-05-06 | retire | None | None | 0 |
+

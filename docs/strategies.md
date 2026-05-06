@@ -551,3 +551,11 @@ prior. No edge in this window.
 - **cs-illiquidity-premium-v1 (2026-05-06):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---
+
+### ContrarianSearchVolume
+
+#### Phase 4 outcomes
+
+- **contrarian-search-volume-spike (2026-05-06):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
