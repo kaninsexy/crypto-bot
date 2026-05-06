@@ -1,6 +1,6 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
 
-Last updated: 2026-05-04
+Last updated: 2026-05-06
 
 This file is read by Claude Code and other agents when working in this repo.
 Read it before starting any task.
@@ -69,7 +69,7 @@ Agents never push or deploy autonomously.
 - Fix bugs in strategy implementations
 - Propose and test parameter variations within theoretically-justified ranges
 - **Run pre-justified test batches end-to-end without per-test approval**
-  (see "Pre-justified test batch execution" below)
+  (see `.claude/rules/backtest.md` for full discipline rules)
 - Run backtests, CPCV, DSR computation
 - Retire strategies when data is clearly negative (DSR well below threshold,
   no variation improves it within theoretical bounds)
@@ -138,52 +138,6 @@ data clearly answers the question. Specifically: `docs/MASTER_PLAN.md`,
 and any future audit or per-strategy doc. Sacred-harness rule (above)
 covers runtime artifacts, not docs. Do not gate doc edits on judgment
 that doesn't apply.
-
-### Pre-justified test batch execution
-
-When a test set is enumerated in `docs/MASTER_PLAN.md` with named source
-citations per the no-p-hacking rule (e.g., the Phase 4.A Resurrection
-Batch table), the agent runs the full batch autonomously without
-per-test chat approval. Justification + source is the gate that
-protects against p-hacking; the gate is passed when the test enters the
-plan, not when each individual run is triggered. Per-test chat approval
-would be friction that protects nothing.
-
-**This applies to:**
-- Running each enumerated starting hypothesis as a CPCV trial
-- Appending the resulting row to `trials.log` per existing schema
-- Surfacing the verdict-tree result and proceeding to the next hypothesis
-  in the batch
-
-**This does NOT extend to:**
-- **Variations beyond the starting hypothesis if it fails.** Variation #2
-  of a strategy still requires a written hypothesis citing a source
-  before the trial runs (no-p-hacking rule). The agent may propose the
-  variation, run it if the source justification is sound, and continue
-  — but stops at the 20-variation cap or after 3 consecutive failed
-  hypotheses, whichever comes first (see "Iteration cap" and
-  "Consecutive failure escalation" below).
-- **Tests outside the enumerated batch.** Adding a strategy or test
-  not in MASTER_PLAN.md still requires the consult-the-human rule.
-- **Push and deploy.** Trial intentionality is preserved by mandatory
-  heredoc-embedded commit messages enforced at the hook layer
-  (commit-heredoc-required.sh, sacred-block.sh, pre-commit). Agents
-  commit autonomously per mandate G; agents stop short of git push
-  and any deploy command. The deliberate human act is the push,
-  where remote state changes and audit exposure begin.
-
-The 20-variation cap, 3-failure escalation rule, and no-p-hacking rule
-all remain in force during pre-justified batch execution. The batch
-permission is about removing per-test chat friction, not about
-removing the discipline rules that make trials.log interpretable.
-
-**CPCVError handling (mandatory in all trial scripts):** Every call to
-`run_cpcv_multi()` must be wrapped in `try/except CPCVError`. On catch:
-call `_trials.record_trial()` with `verdict="retire"`, `sr_observed=nan`,
-`n_trades=0`, and a notes string containing the CPCVError message, then
-`return 0`. This ensures insufficient-trades failures produce a clean
-trial row and a `done` queue status instead of a crash and an `error`
-status requiring manual cleanup.
 
 ## Safety guardrails
 
@@ -354,104 +308,11 @@ constraint existed in chat memory or a handoff prompt but
 not in any project file, and the agent producing work didn't
 read the right evidence to catch the drift.
 
-**A. Read evidence end-to-end before acting.** When working on
-a strategy, trial, or harness component, read the following
-end-to-end before responding or acting (each is a separate
-authority and skipping any of them produces drift):
-
-Repomix beats standalone uploads: repomix-output.xml reflects the
-current repo state for backtest/, strategies/, portfolio/, scripts/;
-standalone project knowledge files may lag by one or more commits.
-Search repomix first; use standalone uploads only for files repomix
-excludes (research/, most docs/).
-
-  1. `research/<strategy>-literature.md` — hypothesis-of-
-     record + locked pre-trial gates + Variation #1/#N rows
-  2. `backtest/holdout_manifest.json` entry — substrate
-     truth (timeframe, symbol/symbols/legs, dev/holdout
-     boundaries)
-  3. `backtest/trials.log` rows for the strategy — ground
-     truth for what's been tested (variation_id, params_hash,
-     observed_sharpe, distribution stats, smoke vs full_cpcv
-     tagging, supersession status)
-  4. `docs/bot_status.md` row — running results table +
-     forensic links
-  5. `docs/strategies.md` section — Phase 3c verdict + 3-year
-     diagnosis + Phase 4.A outcome subsection if applicable
-  6. `docs/research_log.md` relevant section — *why* the
-     hypothesis was chosen, especially "AI/algo trading
-     viability and strategy-archetype evidence (consolidated
-     2026-04-29)" for resurrection-batch hypotheses, and the
-     venue/tax sections for Phase 4.B work
-Do not pattern-match from variation names or chat-memory
-summaries. Variation names describe intent ("phase4a-daily-
-resurrection-v1"); the literature file describes what was
-actually tested. The chat 2026-04-30 audit-loop happened
-because variation names were treated as if they specified
-harness behavior; they don't.
-
-  7. Past chats are part of the evidence. Before answering
-     questions about what was decided, why a choice was made,
-     what state the harness is in, or whether a prior decision
-     still holds — call `conversation_search` and/or
-     `recent_chats`. Do not answer from `/mnt/project/` files
-     alone; scoping decisions, pre-trial gates, and rationale
-     often live in chats and don't always make it into
-     `MASTER_PLAN.md`. Single-source-from-project-files is a
-     recurring failure mode.
-
-**B. holdout_manifest.json is source of truth for substrate.**
-Per-strategy timeframe AND symbol/symbols/legs are both in
-the manifest entry, not in code. When auditing a trial or
-designing a new entry, check the manifest's timeframe AND
-the manifest's symbol/symbols/legs against the strategy's
-hypothesis-of-record. Mismatch is drift; surface and fix the
-manifest before re-running, not after. Per the timeframe-per-
-strategy principle in MASTER_PLAN.md, the same applies to
-pair/basket — there is no global project pair, just as there
-is no global project timeframe.
-
-**C. Pre-trial gates persist in project files, not just chat
-handoffs.** Chat-level scoping decisions that constrain
-future variation design ("Variation #1 must be single-pair",
-"manifest schema extends additively only", etc.) are
-persisted in the relevant per-strategy literature file under
-`research/` AND in `docs/MASTER_PLAN.md` before the chat
-closes. Each `research/<strategy>-literature.md` carries a
-"Pre-trial gates (locked)" section near the top listing
-every locked constraint with source citation. Variation rows
-reference these gates; rows that contradict a gate are drift
-bugs caught by reading the literature end-to-end.
-
-**D. Pre-trial gates carry verbatim into Claude Code prompts
-from chat handoffs.** When the chat agent drafts a Claude
-Code prompt from a handoff prompt, every numbered pre-trial
-gate, scoping constraint, and "must hold before X" item from
-the handoff copies verbatim into the Claude Code prompt — not
-summarized, not paraphrased, not dropped because they "feel
-covered" by track scope. Constraints not in the prompt do not
-bind the agent. Today's Track C drift happened because gate
-#8 ("first dev_cpcv trial single-pair before adding alts")
-was in the chat handoff prompt but not in the Claude Code
-prompt, so the literature stub the agent produced drifted to
-multi-pair selection without violating any constraint
-visible to it.
-
-**E. Review agent output against original scoping, not just
-against tests.** Two passes: (1) Claude Code self-check
-before reporting completion — re-read the handoff prompt's
-pre-trial gates and verify each produced artifact (literature
-file, spec doc, manifest entry, code module) satisfies them.
-A test-passing artifact that contradicts a scoping decision
-is still wrong; surface as a drift flag, do not report
-completion as clean. (2) Chat agent review after Claude Code
-reports — open the produced artifact and compare substantive
-content against each gate from the handoff. Drift detection
-is the chat agent's job, not the implementation agent's, but
-the implementation agent's self-check makes drift visible
-earlier. Today's review missed Track C drift because the
-review was against test results and Claude Code's own report,
-not against the literature file's actual content vs. gate #8.
+> Path-scoped rules: `.claude/rules/backtest.md` (trial
+> discipline, CPCVError, evidence mandates A-C) and
+> `.claude/rules/prompts.md` (CC prompt construction, mandates
+> D-E). These load automatically when CC touches the relevant
+> paths.
 
 **F. Decision authority — design choices are agent calls.**
 When the data answers the question (project files + past
@@ -505,7 +366,7 @@ always — user not being physically present is not a special case):
 - Running diagnostic commands such as grep, git status, git diff, git log
 - Iterating on a fix until verification passes
 - Executing pre-justified test batches enumerated in `docs/MASTER_PLAN.md`
-  end-to-end (see "Pre-justified test batch execution" above)
+  end-to-end (see `.claude/rules/backtest.md`)
 
 Claude Code MUST NOT proceed without explicit approval on:
 - git push, regardless of branch
