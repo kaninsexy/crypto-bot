@@ -146,7 +146,18 @@ _RUNTIME_DEFAULTS: dict = {
     "retry_count": 0,
     "last_fetch_attempt": None,
     "needs_script_digested": False,
+    # 429 auto-retry: timestamp (ISO) at which a retry_pending item is
+    # eligible to flip back to queued. None when the item is not in
+    # retry_pending.
+    "retry_after": None,
 }
+
+
+# 429 retry policy: backoff window before a rate-limited trial may
+# rerun, and the per-item attempt cap. After RETRY_429_MAX_ATTEMPTS
+# the item falls through to status="error" as normal.
+RETRY_429_BACKOFF_HOURS = 4
+RETRY_429_MAX_ATTEMPTS = 3
 
 
 # ── Time helper ─────────────────────────────────────────────────────────────
@@ -963,8 +974,14 @@ def _commit_status_update(items: list[dict], label: str, dry_run: bool = False) 
         return
 
     queue_rel = "backtest/trial_queue.json"
+    state_rel = "backtest/trial_queue_state.json"
+    permitted = {queue_rel, state_rel}
 
-    # 1. Stage only the queue file.
+    # 1. Stage the queue file. The orchestrator no longer mutates
+    #    trial_queue.json directly (status flips go to the gitignored
+    #    trial_queue_state.json instead), so this `git add` is usually
+    #    a no-op; we keep the call so any Mac-side definitions edit
+    #    that the operator forgot to stage gets picked up too.
     proc_add = subprocess.run(
         ["git", "add", queue_rel],
         capture_output=True, text=True, cwd=str(ROOT),
@@ -977,14 +994,25 @@ def _commit_status_update(items: list[dict], label: str, dry_run: bool = False) 
         )
         return
 
-    # 2. Scope guard: only trial_queue.json may be staged.
+    # 2. Scope guard. trial_queue_state.json is gitignored (file-split
+    #    design): the orchestrator's status writes go there, and `git
+    #    add` cannot stage it. So in steady state `staged` is empty --
+    #    treat that as "nothing to commit" and silently return rather
+    #    than logging a false-positive scope violation on every run.
+    #    Anything outside the permitted set (queue.json, state.json)
+    #    is still a real violation and raises.
     staged = _staged_files()
-    if staged != [queue_rel]:
+    if not staged:
+        # Nothing changed to commit; the status flip already lives in
+        # the gitignored state file. No-op (intentionally silent).
+        return
+    extras = set(staged) - permitted
+    if extras:
         # Unstage everything before raising so the working tree is clean.
         subprocess.run(["git", "reset", "HEAD"], cwd=str(ROOT))
         raise RuntimeError(
             f"_commit_status_update scope violation: staged {staged}; "
-            f"only {queue_rel!r} permitted."
+            f"only {sorted(permitted)} permitted."
         )
 
     # 3. Build the message. Subject line follows the spec format,
@@ -1506,6 +1534,39 @@ def process_batch_results(
                         save_queue(queue_data)
                         continue
 
+            # 429 / TooManyRequests auto-retry: stash the item for
+            # RETRY_429_BACKOFF_HOURS and try again, up to
+            # RETRY_429_MAX_ATTEMPTS attempts. Items that exhaust the
+            # cap fall through to status="error" via the block below.
+            combined_err = (stderr or "") + "\n" + (stdout or "")
+            is_429 = (
+                "429" in combined_err
+                or "TooManyRequests" in combined_err
+            )
+            retry_count = int(item.get("retry_count", 0))
+            if is_429 and retry_count < RETRY_429_MAX_ATTEMPTS:
+                from datetime import timedelta as _td
+                retry_after = (
+                    datetime.now(timezone.utc)
+                    + _td(hours=RETRY_429_BACKOFF_HOURS)
+                ).isoformat()
+                item["status"] = "retry_pending"
+                item["retry_after"] = retry_after
+                item["retry_count"] = retry_count + 1
+                item["error"] = (
+                    f"HTTP 429 / TooManyRequests; attempt "
+                    f"{retry_count + 1}/{RETRY_429_MAX_ATTEMPTS}; "
+                    f"retry_after={retry_after}"
+                )[:500]
+                item["finished_at"] = finished_at
+                save_queue(queue_data)
+                print(
+                    f"[queue] RATE_LIMITED item {item_id}: retry_pending "
+                    f"until {retry_after} (attempt "
+                    f"{retry_count + 1}/{RETRY_429_MAX_ATTEMPTS})"
+                )
+                continue
+
             # Fall-through: unrecognised error type or already retried.
             reason = (
                 stderr[:500] if returncode != 0
@@ -1620,6 +1681,39 @@ def run_batch(
 
 
 # ── Reset helper ────────────────────────────────────────────────────────────
+
+def promote_retry_pending(queue_data: dict) -> int:
+    """Flip retry_pending items whose retry_after has elapsed back to
+    queued so they get picked up by the next batch selection.
+
+    A retry_pending item carries an ISO retry_after timestamp set when
+    the orchestrator detected an HTTP 429 / TooManyRequests in the
+    trial subprocess output. When `now >= retry_after`, the item
+    becomes queued again with retry_after cleared. retry_count is
+    preserved so the per-item cap (RETRY_429_MAX_ATTEMPTS) keeps
+    counting across promotions.
+
+    Returns the number of items promoted. Caller is responsible for
+    calling `save_queue` after promotion.
+    """
+    now = datetime.now(timezone.utc)
+    n = 0
+    for item in queue_data.get("queue", []):
+        if item.get("status") != "retry_pending":
+            continue
+        retry_after = item.get("retry_after")
+        if not retry_after:
+            continue
+        try:
+            ra_dt = datetime.fromisoformat(retry_after)
+        except (TypeError, ValueError):
+            continue
+        if ra_dt <= now:
+            item["status"] = "queued"
+            item["retry_after"] = None
+            n += 1
+    return n
+
 
 def reset_error_items(queue_data: dict) -> int:
     """Reset every queue item with status='error' back to 'queued'.
@@ -1741,6 +1835,14 @@ def main() -> int:
         # so a crash mid-batch still records the attempt.
         startup_data = load_queue()
         startup_data["last_run_at"] = utcnow_iso()
+        # 429 auto-retry: promote retry_pending items whose retry_after
+        # has elapsed back to queued before batch selection.
+        promoted = promote_retry_pending(startup_data)
+        if promoted:
+            print(
+                f"[queue] promoted {promoted} retry_pending item(s) "
+                "to queued (429 backoff elapsed)"
+            )
         save_queue(startup_data)
 
         batches_run = 0
