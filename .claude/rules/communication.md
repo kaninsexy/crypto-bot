@@ -79,3 +79,9 @@ Surface the discrepancy explicitly; resolve via
 `conversation_search` if past chats answer, else ask the user.
 Does NOT fire on routine search-empties or expected lag
 (bot_status updates, log appends).
+
+### Response format after Claude Code output
+
+Terse summary. Do not list which lines were touched or explain code
+purpose — the user reads the diff. Format: edits-land statement, one-line
+per file changed, forward-plan if applicable, stop.

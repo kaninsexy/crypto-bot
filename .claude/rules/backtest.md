@@ -192,3 +192,7 @@ running it.
 > abort the commit. Commit message format:
 > `trials: <strategy_id> <variation_id> <verdict>`. This exception
 > does not extend to git push; push remains human-only.
+
+## Proposal agent queue exception
+
+Adding a new test or strategy variation not enumerated in `docs/MASTER_PLAN.md` — UNLESS the addition comes from `scripts/propose_next_variation.py` with a citation quality score >= 3.0 (≥3 qualifying peer-reviewed or SSRN citations) AND the variation has not been tested before (checked against trials.log). In that case the proposal agent adds the item to the queue autonomously; the human reviews trial RESULTS after the run, not hypotheses before.

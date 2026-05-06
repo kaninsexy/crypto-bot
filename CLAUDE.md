@@ -61,7 +61,7 @@ and `docs/bot_status.md` for current state.
 Agents decide autonomously when data clearly answers the question.
 Agents consult with the human when the decision changes what's being tested
 or affects money/deployment.
-Agents commit autonomously with heredoc-embedded messages per mandate H.
+Agents commit autonomously with heredoc-embedded messages per mandate G.
 Agents never push or deploy autonomously.
 
 ### Agent decides (no approval needed)
@@ -85,7 +85,8 @@ Agents never push or deploy autonomously.
 
 - Pair substitution (swap the canonical pair of a strategy)
 - Adding a new strategy category not in the original portfolio
-- Adding a new test or strategy variation not enumerated in `docs/MASTER_PLAN.md` — UNLESS the addition comes from `scripts/propose_next_variation.py` with a citation quality score >= 3.0 (≥3 qualifying peer-reviewed or SSRN citations) AND the variation has not been tested before (checked against trials.log). In that case the proposal agent adds the item to the queue autonomously; the human reviews trial RESULTS after the run, not hypotheses before.
+- Adding a new test or strategy variation not in MASTER_PLAN.md
+  (see `.claude/rules/backtest.md` proposal agent exception)
 - Modifying the validation harness or `trials.log` schema
 - Borderline retire/keep calls (DSR within ±0.05 of threshold on holdout)
 - Scope changes that increase the multiple-testing count meaningfully
@@ -159,17 +160,7 @@ These rules govern how agents communicate work, not what work to do.
 
 ### Drift prevention
 
-Seven mandates persisted from chat 2026-04-30 audit, where a
-Phase 4.B Track C drift bug surfaced a class of failures: the
-constraint existed in chat memory or a handoff prompt but
-not in any project file, and the agent producing work didn't
-read the right evidence to catch the drift.
-
-> Path-scoped rules: `.claude/rules/backtest.md` (trial
-> discipline, CPCVError, evidence mandates A-C) and
-> `.claude/rules/prompts.md` (CC prompt construction, mandates
-> D-E). These load automatically when CC touches the relevant
-> paths.
+**Mandates F and G** (path-scoped rules cover A-E):
 
 **F. Decision authority — design choices are agent calls.**
 When the data answers the question (project files + past
@@ -206,31 +197,10 @@ Historical drift cases and worked examples: see
 `docs/drift_history.md` (do not load unless investigating a
 specific past failure pattern).
 
-### Response format after Claude Code output
+## Execution autonomy
 
-Terse summary. Do not list which lines were touched or explain code
-purpose — the user reads the diff. Format: edits-land statement, one-line
-per file changed, forward-plan if applicable, stop.
-
-## Execution autonomy (default)
-
-Claude Code proceeds without asking for consent on (default mode, applies
-always — user not being physically present is not a special case):
-- File edits within the repo
-- Running tests, linters, and verification scripts
-- Reading any non-secret file
-- Installing dependencies into the project venv
-- Running diagnostic commands such as grep, git status, git diff, git log
-- Iterating on a fix until verification passes
-- Executing pre-justified test batches enumerated in `docs/MASTER_PLAN.md`
-  end-to-end (see `.claude/rules/backtest.md`)
-
-Claude Code MUST NOT proceed without explicit approval on:
-- git push, regardless of branch
-- Any deployment command (DigitalOcean, Binance API, production env edits)
-- Edits to sacred-harness runtime artifacts and holdout schema (see Core principles "Sacred-harness files" bullet for the canonical list)
-- Edits to sacred-harness documents (CLAUDE.md, MASTER_PLAN.md, architecture.md, validation_framework.md) without SACRED_OVERRIDE_FILES env-var pre-authorization on the invocation line
-- Edits to .env or any secrets file
-- Schema changes to validation framework artifacts
-
-When verification passes, commit autonomously with a heredoc-embedded message per mandate H, surface git log -1 plus test output, and stop. The user reviews the commit and pushes manually if/when ready.
+Claude Code proceeds without approval on everything in "Agent
+decides" above. Claude Code must not proceed without approval on
+everything in "Human only" above. When verification passes, commit
+autonomously with a heredoc message and stop; push remains
+human-only.
