@@ -17,7 +17,10 @@
     "strategies/dual_momentum.py",
     "CLAUDE.md",
     ".memory/T3_procedural/**/*.md",
-    ".claude/agents/**/*.md"
+    ".claude/agents/**/*.md",
+    "research/**",
+    "docs/strategies.md",
+    "strategies/pairs_trading_cointegration.py"
   ],
   "ignore": {
     "useGitignore": true,
@@ -31,7 +34,6 @@
       "strategies/volatility_breakout.py",
       "docs/deploy_security.md",
       "docs/strategy_failure_analysis_2026-04-19.md",
-      "docs/strategies.md",
       "backtest/holdout_manifest.json",
       "backtest/generate_holdout_manifest.py",
       ".memory/T0_working/**",
