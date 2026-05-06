@@ -32,3 +32,10 @@ basket.
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
 | 1 | cs-illiquidity-premium-v1 | window=30, top_n=3 | full_cpcv | TBD | TBD | TBD | first trial |
+
+## Trial outcomes
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-illiquidity-premium-v1 | 2026-05-06 | retire | None | None | 0 |
+

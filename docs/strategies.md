@@ -542,3 +542,11 @@ prior. No edge in this window.
 - **idio-residual-tsmom-v1 (2026-05-06):** verdict=retire. sr=0.3859, baseline_sr=0.8867, dsr=1.0000, n_trades=228, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### IlliquidityPremium
+
+#### Phase 4 outcomes
+
+- **cs-illiquidity-premium-v1 (2026-05-06):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
