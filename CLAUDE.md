@@ -158,10 +158,6 @@ These rules govern how agents communicate work, not what work to do.
 > Communication and output rules: see `.claude/rules/communication.md`
 > (always loaded). Mandates F and G remain here as core invariants.
 
-### Drift prevention
-
-**Mandates F and G** (path-scoped rules cover A-E):
-
 **F. Decision authority — design choices are agent calls.**
 When the data answers the question (project files + past
 chats + handoff prompt), the agent decides and executes — no
