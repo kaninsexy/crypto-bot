@@ -50,7 +50,7 @@
     },
     {
       "id": "sq-002",
-      "status": "deferred",
+      "status": "queued",
       "strategy_id": "SocialSentimentMomentum",
       "variation_id": "sentiment-momentum-filter",
       "script_path": "scripts/run_social_sentiment_momentum_trial.py",
@@ -95,7 +95,7 @@
       "finished_at": "2026-05-05T07:00:04.642207+00:00",
       "verdict": null,
       "trial_id": null,
-      "error": "deferred: data dependency (Glassnode/LunarCrush) not justified pre-edge",
+      "error": null,
       "email_sent": false,
       "needs_trial_script": false
     },
@@ -353,6 +353,141 @@
       "error": "deferred: requires Glassnode/CryptoQuant exchange netflow data -- same on-chain data wall as sq-001; revisit post-edge",
       "email_sent": false,
       "needs_trial_script": true
+    },
+    {
+      "id": "sq-009",
+      "status": "queued",
+      "strategy_id": "IdiosyncraticResidualTSMOM",
+      "variation_id": "idio-residual-tsmom-v1",
+      "script_path": "scripts/run_idiosyncratic_residual_tsmom_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Time-series momentum applied to the idiosyncratic residual returns of ETH/USDT (after regressing against BTC/USDT as the market factor) generates positive risk-adjusted returns vs ETH buy-and-hold.",
+      "source_citation": "Blitz/Huij/Martens (2011); Kim (2022)",
+      "literature_doc": "research/idiosyncratic-residual-tsmom-literature.md",
+      "citations": [
+        {
+          "title": "Residual momentum",
+          "authors": "Blitz, D., Huij, J., Martens, M.",
+          "year": 2011,
+          "source": "Journal of Empirical Finance",
+          "key_finding": "Residual momentum (after stripping market beta) outperforms classical price momentum on a risk-adjusted basis on equities; methodology motivates the crypto market-factor analogue.",
+          "crypto_specific": false,
+          "quality_score": 4
+        },
+        {
+          "title": "Idiosyncratic momentum in cryptocurrency markets",
+          "authors": "Kim, J.",
+          "year": 2022,
+          "source": "Applied Economics",
+          "key_finding": "Idiosyncratic-residual momentum yields positive risk-adjusted returns on crypto vs market-neutral baselines; ETH-on-BTC factor model documented.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.5,
+      "implementation_notes": "ETH/USDT is the traded leg; BTC/USDT is the market factor (always HOLD). Rolling 720-bar OLS beta on 1H log-returns; momentum signal = sign of trailing 168-bar residual sum.",
+      "added_by": "manual",
+      "added_at": "2026-05-06T00:00:00+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": false
+    },
+    {
+      "id": "sq-011",
+      "status": "queued",
+      "strategy_id": "ContrarianSearchVolume",
+      "variation_id": "contrarian-search-volume-spike",
+      "script_path": "scripts/run_contrarian_search_volume_spike_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Abnormally high Google Trends search volume for 'bitcoin' predicts negative subsequent returns; staying flat during high-search periods and long during normal/low-search periods outperforms BTC buy-and-hold.",
+      "source_citation": "Chemkha/Ben Jabeur/Naifar (2023); Dastgir et al (2019); Salisu/Gupta/Bouri (2021)",
+      "literature_doc": "research/contrarian-search-volume-literature.md",
+      "citations": [
+        {
+          "title": "Search-volume effects in cryptocurrency markets",
+          "authors": "Chemkha, R., Ben Jabeur, S., Naifar, N.",
+          "year": 2023,
+          "source": "Research in International Business and Finance",
+          "key_finding": "Search-volume spikes precede negative subsequent returns on BTC; ASVI is a tradeable contrarian filter.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Search volume index and Bitcoin returns",
+          "authors": "Dastgir, S., et al.",
+          "year": 2019,
+          "source": "Research in International Business and Finance",
+          "key_finding": "Abnormal SVI is a one-sigma contrarian indicator on Bitcoin daily returns over the 2015-2018 window.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Predicting Bitcoin with search-volume data",
+          "authors": "Salisu, A.A., Gupta, R., Bouri, E.",
+          "year": 2021,
+          "source": "PLOS ONE",
+          "key_finding": "Search-volume features add out-of-sample predictive power on BTC daily returns vs. price-only baselines.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.3,
+      "implementation_notes": "BTC/USDT 1D long-only. ASVI = (current - rolling_median_4) / (rolling_std_4 + 1e-9); flat when ASVI > 1.0; long otherwise. Trends weekly resampled to daily via ffill.",
+      "added_by": "manual",
+      "added_at": "2026-05-06T00:00:00+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": false
+    },
+    {
+      "id": "sq-014",
+      "status": "queued",
+      "strategy_id": "IlliquidityPremium",
+      "variation_id": "cs-illiquidity-premium-v1",
+      "script_path": "scripts/run_illiquidity_premium_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Cryptocurrencies with higher Amihud illiquidity (mean |daily_return| / daily_volume over a 30-day lookback) generate positive excess returns vs BTC buy-and-hold on a long-only top-3 basket.",
+      "source_citation": "Youssef/El Wajdi (2023) RIBAF; Dan/Wang/Zhou (2020) FRL",
+      "literature_doc": "research/illiquidity-premium-literature.md",
+      "citations": [
+        {
+          "title": "Illiquidity premium in cryptocurrency markets",
+          "authors": "Youssef, M., El Wajdi, F.",
+          "year": 2023,
+          "source": "Research in International Business and Finance",
+          "key_finding": "Cross-sectional Amihud illiquidity is a priced factor in crypto; high-illiquidity baskets earn positive excess returns vs market-cap-weighted benchmarks.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Liquidity and asset prices in the cryptocurrency market",
+          "authors": "Dan, X., Wang, P., Zhou, Y.",
+          "year": 2020,
+          "source": "Finance Research Letters",
+          "key_finding": "Liquidity-sorted portfolios on a 100+ crypto universe show a robust illiquidity premium across multiple liquidity proxies.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "10-symbol 1D basket; equal-weight top 3 by Amihud illiquidity (mean(|log_return|/volume) over 30 bars); rebalance per bar.",
+      "added_by": "manual",
+      "added_at": "2026-05-06T00:00:00+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": false
     }
   ]
 }

@@ -1,192 +1,162 @@
-"""
-strategies/social_sentiment_momentum.py — sq-002 strategy.
+"""strategies/social_sentiment_momentum.py -- sq-002 single-symbol strategy.
 
-Aggregated social sentiment momentum on a crypto basket. Reads a
-`sentiment` column injected alongside OHLCV by the trial script
-(LunarCrush Galaxy Score, scored 0-100) and emits long/flat signals
-based on the rolling sentiment mean.
+Aggregated LunarCrush Galaxy Score momentum on BTC/USDT as a directional
+signal. Long-only; single concurrent BTC long held by `_position_open`
+state.
 
 Algorithm per bar:
-  1. Read each symbol's `sentiment` column.
-  2. If column absent for any symbol, that symbol receives HOLD.
-  3. Compute rolling mean of sentiment over `sentiment_window` bars.
-  4. Long signal (BUY) when rolling mean > `long_threshold`.
-  5. Flat signal (SELL) when rolling mean < `flat_threshold`.
-  6. Otherwise HOLD.
-
-Single concurrent position per symbol, long-only — the engine
-naturally enforces the "one open position per symbol" cap, so no
-internal state tracking is needed.
-
-Contract with backtest.engine_multi:
-
-  * `symbols`, `timeframe` exposed as constructor args.
-  * `lookback_days = sentiment_window` exposes the warmup floor used
-    by engine_multi's `min_history_bars = strategy.lookback_days + 2`.
-  * `position_fraction(df, n_active)` returns 1 / n_active so each
-    symbol's full sleeve is sized equally across the basket.
-  * `generate_signals(prices) -> dict[symbol, Signal]` mirrors the
-    multi-asset interface.
+  1. Look up the latest sentiment value at df.index[-1] from a
+     pre-fetched Galaxy Score series passed in at construction time.
+  2. Compute the trailing ``momentum_window`` rolling mean of sentiment
+     up to and including the current bar.
+  3. Long signal (BUY) when rolling mean > entry_threshold AND it is
+     rising (current rolling mean strictly > prior bar's rolling mean).
+  4. Flat signal (SELL) when rolling mean < exit_threshold and a
+     position is currently open.
+  5. Otherwise HOLD.
 
 Citations:
-- Ortu et al. (2022). "On technical trading and social media
-  indicators for cryptocurrency price classification through deep
-  learning." Expert Systems With Applications 198, 116804.
 - Zhang & Zhang (2022). "Do cryptocurrency markets react to issuer
-  sentiments?" Research in International Business and Finance 61,
-  101656.
+  sentiments? Evidence from Twitter."  RIBAF 61, 101656.
+- Ante (2023). "How Elon Musk's Twitter activity moves cryptocurrency
+  markets."  TFSC 186, 122112.
+- Ortu et al. (2022). "On technical trading and social media indicators
+  for cryptocurrency price classification through deep learning."
+  Expert Systems With Applications 198, 116804.
 """
 
 from __future__ import annotations
 
 import math
+from typing import Optional
 
-import numpy as np
 import pandas as pd
 
-from strategies.base import Signal
+from strategies.base import BaseStrategy, Signal
 
 
-SENTIMENT_COLUMN = "sentiment"
+SENTIMENT_COLUMN = "galaxy_score"
 
 
-class SocialSentimentMomentumStrategy:
-    """Social-sentiment momentum strategy on a crypto basket."""
+class SocialSentimentMomentumStrategy(BaseStrategy):
+    """Single-symbol BTC long-only sentiment-momentum strategy."""
 
     def __init__(
         self,
-        symbols: list[str],
+        symbol: str = "BTC/USDT",
         timeframe: str = "1d",
+        sentiment_series: Optional[pd.Series] = None,
         # CITATION: social-sentiment-momentum-literature
-        # Ortu et al. (2022) §4 use 7-day Twitter sentiment windows;
-        # Zhang & Zhang (2022) report a 1-7 day sentiment-to-price
-        # response horizon. Default = 7 bars (caller picks timeframe).
-        sentiment_window: int = 7,
+        # Zhang & Zhang (2022) RIBAF report a 1-7 day sentiment-to-price
+        # response horizon; Ortu et al. (2022) use 7-day Twitter
+        # sentiment windows. Default = 7 bars (caller picks timeframe).
+        momentum_window: int = 7,
         # CITATION: social-sentiment-momentum-literature
-        # Galaxy Score band thresholds: 60/40 are LunarCrush's
-        # documented "bullish/bearish" Galaxy Score bands.
-        long_threshold: float = 60.0,
+        # LunarCrush Galaxy Score band: 50 is the documented neutral
+        # midpoint; Ante (2023) reports significant abnormal returns
+        # follow positive-sentiment events.
+        entry_threshold: float = 50.0,
         # CITATION: social-sentiment-momentum-literature
-        flat_threshold: float = 40.0,
-        # CITATION: social-sentiment-momentum-literature
-        # Engine default initial_balance for the Phase 4 backtest harness.
-        notional_capital: float = 10_000.0,
+        # Hysteresis exit at 45 (5 points below entry) reduces
+        # round-trips when sentiment hovers near the entry band.
+        exit_threshold: float = 45.0,
     ):
-        if not symbols:
-            raise ValueError("symbols must be a non-empty list")
-        if sentiment_window < 1:
-            raise ValueError("sentiment_window must be >= 1")
-        if not (flat_threshold < long_threshold):
+        super().__init__(
+            name="SocialSentimentMomentum",
+            symbol=symbol,
+            timeframe=timeframe,
+        )
+        if momentum_window < 2:
+            raise ValueError("momentum_window must be >= 2")
+        if not (exit_threshold < entry_threshold):
             raise ValueError(
-                f"flat_threshold ({flat_threshold}) must be < "
-                f"long_threshold ({long_threshold})"
+                f"exit_threshold ({exit_threshold}) must be < "
+                f"entry_threshold ({entry_threshold})"
             )
 
-        self.name = "SocialSentimentMomentum"
-        self.symbols: list[str] = list(symbols)
-        self.timeframe = timeframe
-        self.sentiment_window = int(sentiment_window)
-        self.long_threshold = float(long_threshold)
-        self.flat_threshold = float(flat_threshold)
-        self.notional_capital = float(notional_capital)
+        self.momentum_window = int(momentum_window)
+        self.entry_threshold = float(entry_threshold)
+        self.exit_threshold = float(exit_threshold)
+        self._sentiment_series = sentiment_series
 
-        # engine_multi.min_history_bars = strategy.lookback_days + 2,
-        # so we set lookback_days = sentiment_window to guarantee the
-        # rolling mean has a full window before signal generation.
-        self.lookback_days = self.sentiment_window
+        # Per-instance long-only state -- resets to False on every
+        # fresh instantiation. Critical for CPCV block-boundary
+        # correctness (the strategy_factory in the trial script
+        # constructs a new instance per block).
+        self._position_open: bool = False
 
-    # ── Engine sizing hook ───────────────────────────────────────────────────
+    def generate_signal(self, df: Optional[pd.DataFrame]) -> Signal:
+        if df is None or df.empty:
+            return self.hold(price=0.0, reason="empty df")
 
-    def position_fraction(
-        self,
-        df: pd.DataFrame,
-        n_active: int,
-        max_concentration_mult: float = 2.0,
-    ) -> float:
-        """1 / n_active sizing — equal-weight basket."""
-        if n_active <= 0:
-            return 0.0
-        return float(1.0 / float(n_active))
+        price = float(df["close"].iloc[-1])
 
-    # ── Signal generation ────────────────────────────────────────────────────
+        if self._sentiment_series is None or len(self._sentiment_series) == 0:
+            return self.hold(price=price, reason="no-sentiment-series")
 
-    def generate_signals(
-        self,
-        prices: dict[str, pd.DataFrame],
-    ) -> dict[str, Signal]:
-        """Map of symbol -> Signal for the current bar."""
-        out: dict[str, Signal] = {}
+        last_ts = df.index[-1]
+        # Take the trailing window ending at last_ts (inclusive). Forward
+        # fill is the caller's responsibility (LunarCrush is daily;
+        # OHLCV is daily here so 1:1 alignment is the common case).
+        window_end = self._sentiment_series.loc[: last_ts]
+        if len(window_end) < self.momentum_window + 1:
+            return self.hold(
+                price=price,
+                reason=(
+                    f"warmup | sentiment_n={len(window_end)} < "
+                    f"required={self.momentum_window + 1}"
+                ),
+            )
 
-        for sym in self.symbols:
-            df = prices.get(sym)
-            if df is None or len(df) == 0:
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=0.0,
-                    reason="missing-data",
-                )
-                continue
+        recent = window_end.iloc[-(self.momentum_window + 1):].astype(float)
+        if recent.isna().any():
+            return self.hold(
+                price=price, reason="sentiment-window-contains-nan",
+            )
 
-            price = float(df["close"].iloc[-1])
+        current_mean = float(recent.iloc[-self.momentum_window:].mean())
+        prior_mean = float(recent.iloc[-(self.momentum_window + 1):-1].mean())
+        if not (math.isfinite(current_mean) and math.isfinite(prior_mean)):
+            return self.hold(
+                price=price, reason="rolling-mean-non-finite",
+            )
 
-            if SENTIMENT_COLUMN not in df.columns:
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=price,
-                    reason="sentiment-column-absent",
-                )
-                continue
+        # Long-only entry: rolling mean must be both above the entry
+        # threshold AND strictly rising vs. the prior bar's window.
+        if (
+            not self._position_open
+            and current_mean > self.entry_threshold
+            and current_mean > prior_mean
+        ):
+            self._position_open = True
+            return self.buy(
+                price=price,
+                reason=(
+                    f"sentiment-long | mean={current_mean:.2f} > "
+                    f"{self.entry_threshold} | rising "
+                    f"(prior={prior_mean:.2f})"
+                ),
+                order_type="market",
+            )
 
-            if len(df) < self.sentiment_window:
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=price,
-                    reason=(
-                        f"warmup | n_bars={len(df)} < "
-                        f"sentiment_window={self.sentiment_window}"
-                    ),
-                )
-                continue
+        if (
+            self._position_open
+            and current_mean < self.exit_threshold
+        ):
+            self._position_open = False
+            return self.sell(
+                price=price,
+                reason=(
+                    f"sentiment-flat | mean={current_mean:.2f} < "
+                    f"{self.exit_threshold}"
+                ),
+                order_type="market",
+            )
 
-            sentiment = df[SENTIMENT_COLUMN].astype(float)
-            window = sentiment.iloc[-self.sentiment_window:]
-            if window.isna().any():
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=price,
-                    reason="sentiment-window-contains-nan",
-                )
-                continue
-
-            rolling_mean = float(window.mean())
-            if not math.isfinite(rolling_mean):
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=price,
-                    reason="rolling-mean-not-finite",
-                )
-                continue
-
-            if rolling_mean > self.long_threshold:
-                out[sym] = Signal(
-                    action="BUY", strategy=self.name, price=price,
-                    reason=(
-                        f"sentiment-long | rolling_mean={rolling_mean:.2f} "
-                        f"> {self.long_threshold}"
-                    ),
-                    order_type="market",
-                )
-            elif rolling_mean < self.flat_threshold:
-                out[sym] = Signal(
-                    action="SELL", strategy=self.name, price=price,
-                    reason=(
-                        f"sentiment-flat | rolling_mean={rolling_mean:.2f} "
-                        f"< {self.flat_threshold}"
-                    ),
-                    order_type="market",
-                )
-            else:
-                out[sym] = Signal(
-                    action="HOLD", strategy=self.name, price=price,
-                    reason=(
-                        f"sentiment-mid | rolling_mean={rolling_mean:.2f} "
-                        f"in [{self.flat_threshold}, {self.long_threshold}]"
-                    ),
-                )
-
-        return out
+        return self.hold(
+            price=price,
+            reason=(
+                f"sentiment-mid | mean={current_mean:.2f} | "
+                f"position_open={self._position_open}"
+            ),
+        )

@@ -1,8 +1,10 @@
-"""scripts/run_social_sentiment_momentum_trial.py -- sq-002 trial.
+"""scripts/run_idiosyncratic_residual_tsmom_trial.py -- Phase 4 sq-009.
 
-Runs the SocialSentimentMomentum strategy on BTC/USDT 1D through the
-single-symbol dev_cpcv harness (run_cpcv) with LunarCrush Galaxy Score
-held in-strategy. No holdout access, no commit, no deployment.
+Runs the IdiosyncraticResidualTSMOM strategy on ETH/USDT (with BTC/USDT
+as the market factor leg) through dev_cpcv (run_cpcv_multi), computes
+DSR + verdict, and appends one trial_type='full_cpcv' row to
+backtest/trials.log via the schema-validating writer. No holdout
+access, no commit, no deployment.
 
 Output is ASCII-only (Windows cp1252 terminal compatibility).
 """
@@ -21,70 +23,66 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backtest import trials as _trials
-from backtest.cpcv import run_cpcv
 from backtest.cpcv_common import CPCVConfig, CPCVError
+from backtest.cpcv_multi import run_cpcv_multi
 from backtest.dsr import dsr_from_cpcv_result
-from backtest.engine import BacktestEngine
+from backtest.engine_multi import run_engine_multi
 from backtest.holdout import load_dev, load_manifest
 from backtest.verdict import compute_verdict
-from data.lunarcrush import (
-    LunarCrushError,
-    load_or_fetch_galaxy_score,
-)
-from strategies.social_sentiment_momentum import (
-    SocialSentimentMomentumStrategy,
+from strategies.idiosyncratic_residual_tsmom import (
+    IdiosyncraticResidualTSMOMStrategy,
 )
 
 
-STRATEGY_ID = "SocialSentimentMomentum"
-VARIATION_ID = "sentiment-momentum-filter"
-
-# 38 months covers the full data window for the 1D substrate
-# (2023-03-06 -> 2026-04-19) plus warmup buffer.
-SENTIMENT_HISTORY_MONTHS = 38
+STRATEGY_ID = "IdiosyncraticResidualTSMOM"
+VARIATION_ID = "idio-residual-tsmom-v1"
 
 HYPOTHESIS_TEXT = (
-    "sq-002 variation #1: aggregated LunarCrush Galaxy Score momentum "
-    "on BTC/USDT 1D as a directional signal. Long when 7-day rolling "
-    "mean Galaxy Score > 50 and rising; flat when 7-day rolling mean "
-    "drops below 45. Long-only; single concurrent BTC long. Sources: "
-    "Zhang & Zhang (2022) RIBAF; Ante (2023) TFSC; Ortu et al (2022) "
-    "Expert Systems with Applications."
+    "Phase 4 sq-009 Variation #1: idiosyncratic-residual time-series "
+    "momentum on ETH/USDT with BTC/USDT as the market factor at 1H. "
+    "Rolling 720-bar OLS beta of ETH log-returns vs BTC log-returns; "
+    "residual_ret = eth_ret - beta*btc_ret; momentum signal = sign of "
+    "sum of residuals over trailing 168 bars. Long ETH when sum>0, "
+    "flat otherwise. Long-only; BTC is factor-only (never traded). "
+    "Sources: Blitz/Huij/Martens (2011) J Empirical Finance; "
+    "Kim (2022) Applied Economics."
 )
 
 PARAMS: dict = {
-    "momentum_window": 7,
-    "entry_threshold": 50.0,
-    "exit_threshold": 45.0,
-    "timeframe": "1d",
-    "symbol": "BTC/USDT",
+    "beta_window": 720,
+    "momentum_window": 168,
+    "notional_capital": 10_000.0,
+    "timeframe": "1h",
 }
 
 
-def _verify_sentiment_coverage(
-    sentiment_series: pd.Series,
-    dev_index: pd.Index,
-) -> str:
-    """Return a coverage summary string. Raises ValueError if the
-    sentiment series cannot cover the dev window."""
-    if len(sentiment_series) == 0:
-        raise ValueError("sentiment series is empty")
-    s_min, s_max = sentiment_series.index.min(), sentiment_series.index.max()
-    d_min, d_max = dev_index.min(), dev_index.max()
-    if s_max < d_min or s_min > d_max:
-        raise ValueError(
-            f"sentiment series [{s_min} .. {s_max}] does not overlap "
-            f"dev window [{d_min} .. {d_max}]"
-        )
-    return (
-        f"sentiment_rows={len(sentiment_series)} "
-        f"range={s_min} -> {s_max} (dev range={d_min} -> {d_max})"
+def _build_strategy(
+    eth_symbol: str, btc_symbol: str,
+) -> IdiosyncraticResidualTSMOMStrategy:
+    """Strategy factory.
+
+    Returns a fresh IdiosyncraticResidualTSMOMStrategy instance on every
+    call so internal state (`_long_eth`) resets between callers.
+    run_cpcv_multi additionally deepcopies the instance per block via
+    `_clone_strategy`, but constructing fresh here keeps the factory
+    contract explicit at every call site.
+    """
+    return IdiosyncraticResidualTSMOMStrategy(
+        symbols=[eth_symbol, btc_symbol],
+        eth_symbol=eth_symbol,
+        btc_symbol=btc_symbol,
+        timeframe=PARAMS["timeframe"],
+        beta_window=PARAMS["beta_window"],
+        momentum_window=PARAMS["momentum_window"],
+        notional_capital=PARAMS["notional_capital"],
     )
 
 
 def main() -> int:
     print("=" * 72)
-    print("sq-002 -- SocialSentimentMomentum trial #1 (dev_cpcv only)")
+    print(
+        "Phase 4 sq-009 -- IdiosyncraticResidualTSMOM trial #1 (dev_cpcv only)"
+    )
     print("=" * 72)
 
     manifest = load_manifest()
@@ -92,11 +90,20 @@ def main() -> int:
         print(f"FAIL: '{STRATEGY_ID}' not in manifest.", file=sys.stderr)
         return 1
     entry = manifest[STRATEGY_ID]
-    symbol: str = entry["symbol"]
+    symbols: list[str] = list(entry["symbols"])
+    if len(symbols) != 2:
+        print(
+            f"FAIL: IdiosyncraticResidualTSMOM manifest must have exactly "
+            f"2 symbols; got {symbols}.",
+            file=sys.stderr,
+        )
+        return 1
+    # ETH is symbols[0], BTC is symbols[1] per manifest convention.
+    eth_symbol, btc_symbol = symbols[0], symbols[1]
     print(
         f"manifest entry: timeframe={entry['timeframe']} "
-        f"symbol={symbol} "
-        f"holdout_start={entry['holdout_start']}"
+        f"holdout_start={entry['holdout_start']} "
+        f"eth_symbol={eth_symbol} btc_symbol={btc_symbol}"
     )
     print(
         f"  strategy_warmup_candles={entry['strategy_warmup_candles']} "
@@ -104,82 +111,46 @@ def main() -> int:
         f"{entry['min_tradeable_candles_per_block']}"
     )
 
-    # 1. Fetch (or read cached) LunarCrush Galaxy Score data.
-    try:
-        sentiment_df = load_or_fetch_galaxy_score(
-            symbol=symbol, months=SENTIMENT_HISTORY_MONTHS,
-        )
-    except LunarCrushError as exc:
-        print(f"FAIL: LunarCrushError: {exc}", file=sys.stderr)
-        return 1
-
-    if "galaxy_score" not in sentiment_df.columns:
-        print(
-            "FAIL: LunarCrush response missing 'galaxy_score' column.",
-            file=sys.stderr,
-        )
-        return 1
-    sentiment_series = sentiment_df["galaxy_score"].astype(float).sort_index()
-
-    # 2. Load dev OHLCV.
     raw = load_dev(STRATEGY_ID)
-    if isinstance(raw, pd.DataFrame) and "symbol" in raw.columns:
-        dev_df = raw.drop(columns=["symbol"]).sort_index()
-    else:
-        dev_df = raw if isinstance(raw, pd.DataFrame) else None
-    if dev_df is None or len(dev_df) == 0:
+    if not isinstance(raw, pd.DataFrame) or "symbol" not in raw.columns:
         print(
-            f"FAIL: load_dev returned empty for {STRATEGY_ID}.",
+            "FAIL: load_dev did not return a stacked DataFrame with a "
+            f"'symbol' column; got type={type(raw).__name__}.",
             file=sys.stderr,
         )
         return 1
     print(
-        f"\ndev frame: rows={len(dev_df):,} "
-        f"range={dev_df.index.min()} -> {dev_df.index.max()}"
+        f"\ndev frame: rows={len(raw):,} "
+        f"range={raw.index.min()} -> {raw.index.max()}"
     )
 
-    # 3. Verify coverage and forward-fill sentiment onto the dev index.
-    try:
-        coverage = _verify_sentiment_coverage(
-            sentiment_series, dev_df.index,
+    data: dict[str, pd.DataFrame] = {
+        sym: raw[raw["symbol"] == sym]
+            .drop(columns=["symbol"])
+            .sort_index()
+        for sym in symbols
+    }
+    missing = [sym for sym in symbols if sym not in data or len(data[sym]) == 0]
+    if missing:
+        print(
+            f"FAIL: missing or empty per-symbol slices for: {missing}",
+            file=sys.stderr,
         )
-    except ValueError as exc:
-        print(f"FAIL: sentiment coverage: {exc}", file=sys.stderr)
         return 1
-    print(f"sentiment coverage: {coverage}")
-
-    # Reindex to OHLCV index with forward-fill so daily LunarCrush
-    # buckets line up with the dev frame.
-    aligned_sentiment = (
-        sentiment_series.sort_index()
-        .reindex(dev_df.index, method="ffill")
-        .astype(float)
-    )
-
-    # 4. Strategy factory: fresh instance per call so _position_open
-    #    resets across CPCV blocks. The aligned sentiment series is
-    #    captured by closure and shared across instances (read-only).
-    def make_strategy() -> SocialSentimentMomentumStrategy:
-        return SocialSentimentMomentumStrategy(
-            symbol=symbol,
-            timeframe=PARAMS["timeframe"],
-            sentiment_series=aligned_sentiment,
-            momentum_window=PARAMS["momentum_window"],
-            entry_threshold=PARAMS["entry_threshold"],
-            exit_threshold=PARAMS["exit_threshold"],
+    print("\nper-symbol dev coverage:")
+    for sym, df in data.items():
+        print(
+            f"  {sym:<12} rows={len(df):>6} "
+            f"range={df.index.min()} -> {df.index.max()}"
         )
 
-    # 5. Headline backtest on the full dev window.
     print("\n--- Headline run on full dev window ---")
-    headline_engine = BacktestEngine(
+    headline_strategy = _build_strategy(eth_symbol, btc_symbol)
+    headline_result = run_engine_multi(
+        data=data,
+        strategy=headline_strategy,
+        period_label="phase4-idio-resid-tsmom-dev-headline",
         initial_balance=10_000.0,
-        warm_up_candles=int(entry["strategy_warmup_candles"]),
-        verbose=False,
-    )
-    headline_result = headline_engine.run(
-        df=dev_df,
-        strategy=make_strategy(),
-        period_label="sq-002-sentiment-dev-headline",
     )
     sr_observed = float(headline_result.metrics.sharpe_ratio)
     n_trades_headline = int(headline_result.metrics.total_trades)
@@ -190,17 +161,27 @@ def main() -> int:
         f"max_dd = {headline_result.metrics.max_drawdown_pct:.2f}%"
     )
 
-    # 6. CPCV block-Sharpe distribution.
-    print("\n--- CPCV: 10 blocks, full_cpcv ---")
-    config = CPCVConfig(
-        n_blocks=10, k_held_out=2, purge_periods=0, embargo_periods=0,
+    print(
+        "\n--- CPCV: requested n_blocks=10, "
+        "warmup-aware downshift via compute_effective_n_blocks ---"
     )
+    config = CPCVConfig(
+        n_blocks=10,
+        k_held_out=2,
+        purge_periods=0,
+        embargo_periods=0,
+        strategy_warmup_candles=int(entry["strategy_warmup_candles"]),
+        min_tradeable_candles_per_block=int(
+            entry["min_tradeable_candles_per_block"]
+        ),
+    )
+    cpcv_strategy = _build_strategy(eth_symbol, btc_symbol)
     try:
-        cpcv_result = run_cpcv(
-            strategy_id=STRATEGY_ID,
-            params=PARAMS,
+        cpcv_result = run_cpcv_multi(
+            data=data,
+            strategy=cpcv_strategy,
             config=config,
-            strategy_factory=make_strategy,
+            initial_balance=10_000.0,
         )
     except CPCVError as exc:
         print(f"\nCPCVError: {exc}")
@@ -216,7 +197,7 @@ def main() -> int:
             "params": PARAMS,
             "hypothesis": HYPOTHESIS_TEXT,
             "split_holdout_start": entry["holdout_start"],
-            "symbols": [symbol],
+            "symbols": symbols,
             "n_trades": 0,
             "sharpe": nan,
             "cpcv": {
@@ -225,6 +206,12 @@ def main() -> int:
                 "k_held_out": int(config.k_held_out),
                 "purge_periods": int(config.purge_periods),
                 "embargo_periods": int(config.embargo_periods),
+                "strategy_warmup_candles": int(
+                    config.strategy_warmup_candles
+                ),
+                "min_tradeable_candles_per_block": int(
+                    config.min_tradeable_candles_per_block
+                ),
                 "sharpe_distribution": {
                     "mean": nan, "std": nan,
                     "quantiles": {
@@ -237,8 +224,8 @@ def main() -> int:
             "mintrl": None,
             "buy_and_hold_sharpe": nan,
             "notes": (
-                f"verdict=retire | CPCVError: {exc}. Sentiment signal "
-                "too sparse to meet the per-block trade-count floor."
+                f"verdict=retire | CPCVError: {exc}. Insufficient "
+                "trades; signal too sparse or filter too strict."
             ),
         }
         _trials.record_trial(cpcv_error_event)
@@ -259,15 +246,25 @@ def main() -> int:
         }, indent=2))
         return 0
 
-    print(f"per-block Sharpes: {cpcv_result.per_block_sharpes}")
-    print(f"per-block trade counts: {cpcv_result.trades_per_path}")
-    print(f"distribution: {cpcv_result.sharpe_distribution}")
+    effective_n_blocks = int(cpcv_result.n_paths)
+    if effective_n_blocks < 2:
+        print(
+            f"FAIL: effective_n_blocks={effective_n_blocks} < 2; dev "
+            f"window too short for warmup-aware splitting. Aborting "
+            f"before record_trial.",
+            file=sys.stderr,
+        )
+        return 1
 
-    # 7. DSR on validation (dev). Monkeypatch n_trials lookup to
-    #    max(N, 1) for the first full_cpcv (count_trials_for_dsr
-    #    returns 0 prior to append).
+    print(f"effective_n_blocks      = {effective_n_blocks}")
+    print(f"per-block Sharpes       : {cpcv_result.per_block_sharpes}")
+    print(f"per-block trade counts  : {cpcv_result.trades_per_path}")
+    print(f"sharpe_distribution     : {cpcv_result.sharpe_distribution}")
+
     n_trials_pre = _trials.count_trials_for_dsr(STRATEGY_ID)
-    print(f"\nn_trials_for_dsr({STRATEGY_ID}) before append = {n_trials_pre}")
+    print(
+        f"\nn_trials_for_dsr({STRATEGY_ID}) before append = {n_trials_pre}"
+    )
 
     import backtest.trials as _t_mod
     _orig_count = _t_mod.count_trials_for_dsr
@@ -289,17 +286,20 @@ def main() -> int:
         f"T={dsr_result.t} | n_trials={dsr_result.n_trials}"
     )
 
-    # 8. Verdict tree (dev-side preview).
     valid_returns = [r for r in cpcv_result.per_block_returns if r.size > 0]
     concat_returns = (
         np.concatenate(valid_returns) if valid_returns else np.array([])
     )
+    # Baseline = ETH/USDT B&H over the same dev window. ETH is the
+    # only traded leg; BTC is factor-only and not the relevant
+    # counterfactual. The strategy is trying to outperform passive ETH.
+    baseline_df = data[eth_symbol]
     verdict = compute_verdict(
         strategy_id=STRATEGY_ID,
         sr_candidate=sr_observed,
         returns=concat_returns,
         total_trades=int(sum(cpcv_result.trades_per_path)),
-        baseline_df=dev_df,
+        baseline_df=baseline_df,
         n_trials=n_trials_pre + 1,
         min_trade_count=30,
         confidence=0.95,
@@ -313,22 +313,31 @@ def main() -> int:
     )
     print(f"mintrl_pass             = {verdict.mintrl_pass}")
     print(f"mintrl_required_at_eval = {verdict.mintrl_required_at_eval}")
+    print(f"t_observed              = {verdict.t_observed}")
     print(f"sr_observed             = {verdict.sr_observed:.4f}")
+    print(
+        f"sr_zero_expected_at_eval= {verdict.sr_zero_expected_at_eval}"
+    )
     print(
         f"baseline_sharpe_at_eval = {verdict.baseline_sharpe_at_eval:.4f}"
     )
     print(f"mt_mean_pass            = {verdict.mt_mean_pass}")
     print(f"baseline_pass           = {verdict.baseline_pass}")
+    print(f"sr_margin_vs_mt_mean    = {verdict.sr_margin_vs_mt_mean}")
+    print(f"sr_margin_vs_baseline   = {verdict.sr_margin_vs_baseline}")
     print(f"dsr                     = {verdict.dsr}")
     print(f"n_trials                = {verdict.n_trials}")
 
     notes = (
-        "sq-002 variation #1. Single-symbol BTC/USDT 1D long-only. "
-        "LunarCrush Galaxy Score 7-day rolling mean; long when "
-        "mean>50 and rising; flat when mean<45. Sentiment held "
-        "in-strategy via the make_strategy closure; aligned to OHLCV "
-        "via reindex+ffill. Baseline = BTC/USDT B&H. "
-        "Sources: Zhang & Zhang (2022); Ante (2023); Ortu et al (2022)."
+        "Phase 4 sq-009 variation #1. Idiosyncratic-residual TSMOM on "
+        "ETH/USDT with BTC/USDT as the market factor at 1H. "
+        "720-bar OLS beta (cov/var of log-returns), 168-bar residual "
+        "momentum sum, sign-based long/flat. BTC is factor-only and "
+        "always emits HOLD; baseline = ETH/USDT B&H. "
+        f"Warmup-aware CPCV: strategy_warmup_candles="
+        f"{config.strategy_warmup_candles}, effective_n_blocks="
+        f"{effective_n_blocks}. "
+        "Sources: Blitz/Huij/Martens (2011); Kim (2022)."
     )
     event = {
         "strategy_id": STRATEGY_ID,
@@ -337,15 +346,19 @@ def main() -> int:
         "params": PARAMS,
         "hypothesis": HYPOTHESIS_TEXT,
         "split_holdout_start": entry["holdout_start"],
-        "symbols": [symbol],
+        "symbols": symbols,
         "n_trades": int(sum(cpcv_result.trades_per_path)),
         "sharpe": sr_observed,
         "cpcv": {
-            "n_paths": int(config.n_blocks),
-            "n_blocks": int(config.n_blocks),
+            "n_paths": effective_n_blocks,
+            "n_blocks": effective_n_blocks,
             "k_held_out": int(config.k_held_out),
             "purge_periods": int(config.purge_periods),
             "embargo_periods": int(config.embargo_periods),
+            "strategy_warmup_candles": int(config.strategy_warmup_candles),
+            "min_tradeable_candles_per_block": int(
+                config.min_tradeable_candles_per_block
+            ),
             "sharpe_distribution": cpcv_result.sharpe_distribution,
         },
         "dsr_validation": float(dsr_result.dsr),
@@ -365,7 +378,9 @@ def main() -> int:
     )
 
     n_trials_post = _trials.count_trials_for_dsr(STRATEGY_ID)
-    print(f"n_trials_for_dsr({STRATEGY_ID}) after append  = {n_trials_post}")
+    print(
+        f"n_trials_for_dsr({STRATEGY_ID}) after append  = {n_trials_post}"
+    )
 
     print("\n--- Final summary ---")
     summary = {
@@ -384,6 +399,7 @@ def main() -> int:
         "block_sharpes": cpcv_result.per_block_sharpes,
         "block_trades": cpcv_result.trades_per_path,
         "sharpe_distribution": cpcv_result.sharpe_distribution,
+        "effective_n_blocks": effective_n_blocks,
         "dsr_validation": float(dsr_result.dsr),
         "n_trials_post_append": n_trials_post,
     }

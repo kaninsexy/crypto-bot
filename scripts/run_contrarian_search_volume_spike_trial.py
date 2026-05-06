@@ -1,8 +1,13 @@
-"""scripts/run_social_sentiment_momentum_trial.py -- sq-002 trial.
+"""scripts/run_contrarian_search_volume_spike_trial.py -- sq-011 trial.
 
-Runs the SocialSentimentMomentum strategy on BTC/USDT 1D through the
-single-symbol dev_cpcv harness (run_cpcv) with LunarCrush Galaxy Score
-held in-strategy. No holdout access, no commit, no deployment.
+Runs the ContrarianSearchVolume strategy on BTC/USDT 1D through the
+single-symbol dev_cpcv harness (run_cpcv) with Google Trends weekly
+search volume held in-strategy after forward-fill resampling onto the
+OHLCV daily index. No holdout access, no commit, no deployment.
+
+If the pytrends fetch fails after retries the script prints the error
+and exits 1 cleanly; the queue orchestrator records the failure as an
+error status, not a partial trial.
 
 Output is ASCII-only (Windows cp1252 terminal compatibility).
 """
@@ -27,64 +32,41 @@ from backtest.dsr import dsr_from_cpcv_result
 from backtest.engine import BacktestEngine
 from backtest.holdout import load_dev, load_manifest
 from backtest.verdict import compute_verdict
-from data.lunarcrush import (
-    LunarCrushError,
-    load_or_fetch_galaxy_score,
+from data.google_trends import (
+    GoogleTrendsError,
+    keyword_for,
+    load_or_fetch_trends,
 )
-from strategies.social_sentiment_momentum import (
-    SocialSentimentMomentumStrategy,
+from strategies.contrarian_search_volume import (
+    ContrarianSearchVolumeStrategy,
 )
 
 
-STRATEGY_ID = "SocialSentimentMomentum"
-VARIATION_ID = "sentiment-momentum-filter"
+STRATEGY_ID = "ContrarianSearchVolume"
+VARIATION_ID = "contrarian-search-volume-spike"
 
-# 38 months covers the full data window for the 1D substrate
-# (2023-03-06 -> 2026-04-19) plus warmup buffer.
-SENTIMENT_HISTORY_MONTHS = 38
+TRENDS_HISTORY_MONTHS = 38
 
 HYPOTHESIS_TEXT = (
-    "sq-002 variation #1: aggregated LunarCrush Galaxy Score momentum "
-    "on BTC/USDT 1D as a directional signal. Long when 7-day rolling "
-    "mean Galaxy Score > 50 and rising; flat when 7-day rolling mean "
-    "drops below 45. Long-only; single concurrent BTC long. Sources: "
-    "Zhang & Zhang (2022) RIBAF; Ante (2023) TFSC; Ortu et al (2022) "
-    "Expert Systems with Applications."
+    "sq-011 variation #1: contrarian Google Trends search-volume spike "
+    "filter on BTC/USDT 1D. ASVI = (current - rolling_median_4) / "
+    "(rolling_std_4 + 1e-9). Flat when ASVI > 1.0 (search spike); long "
+    "BTC otherwise. Long-only. Sources: "
+    "Chemkha/Ben Jabeur/Naifar (2023) RIBAF; Dastgir et al (2019) "
+    "RIBAF; Salisu/Gupta/Bouri (2021) PLOS ONE."
 )
 
 PARAMS: dict = {
-    "momentum_window": 7,
-    "entry_threshold": 50.0,
-    "exit_threshold": 45.0,
+    "asvi_window": 4,
+    "spike_threshold": 1.0,
     "timeframe": "1d",
     "symbol": "BTC/USDT",
 }
 
 
-def _verify_sentiment_coverage(
-    sentiment_series: pd.Series,
-    dev_index: pd.Index,
-) -> str:
-    """Return a coverage summary string. Raises ValueError if the
-    sentiment series cannot cover the dev window."""
-    if len(sentiment_series) == 0:
-        raise ValueError("sentiment series is empty")
-    s_min, s_max = sentiment_series.index.min(), sentiment_series.index.max()
-    d_min, d_max = dev_index.min(), dev_index.max()
-    if s_max < d_min or s_min > d_max:
-        raise ValueError(
-            f"sentiment series [{s_min} .. {s_max}] does not overlap "
-            f"dev window [{d_min} .. {d_max}]"
-        )
-    return (
-        f"sentiment_rows={len(sentiment_series)} "
-        f"range={s_min} -> {s_max} (dev range={d_min} -> {d_max})"
-    )
-
-
 def main() -> int:
     print("=" * 72)
-    print("sq-002 -- SocialSentimentMomentum trial #1 (dev_cpcv only)")
+    print("sq-011 -- ContrarianSearchVolume trial #1 (dev_cpcv only)")
     print("=" * 72)
 
     manifest = load_manifest()
@@ -104,22 +86,23 @@ def main() -> int:
         f"{entry['min_tradeable_candles_per_block']}"
     )
 
-    # 1. Fetch (or read cached) LunarCrush Galaxy Score data.
+    # 1. Fetch Google Trends weekly data, resampled to daily via ffill.
     try:
-        sentiment_df = load_or_fetch_galaxy_score(
-            symbol=symbol, months=SENTIMENT_HISTORY_MONTHS,
+        trends_df = load_or_fetch_trends(
+            keyword=keyword_for(symbol),
+            months=TRENDS_HISTORY_MONTHS,
         )
-    except LunarCrushError as exc:
-        print(f"FAIL: LunarCrushError: {exc}", file=sys.stderr)
+    except GoogleTrendsError as exc:
+        print(f"FAIL: GoogleTrendsError: {exc}", file=sys.stderr)
         return 1
 
-    if "galaxy_score" not in sentiment_df.columns:
+    if "search_volume" not in trends_df.columns:
         print(
-            "FAIL: LunarCrush response missing 'galaxy_score' column.",
+            "FAIL: Google Trends payload missing 'search_volume' column.",
             file=sys.stderr,
         )
         return 1
-    sentiment_series = sentiment_df["galaxy_score"].astype(float).sort_index()
+    sv_series = trends_df["search_volume"].astype(float).sort_index()
 
     # 2. Load dev OHLCV.
     raw = load_dev(STRATEGY_ID)
@@ -137,36 +120,29 @@ def main() -> int:
         f"\ndev frame: rows={len(dev_df):,} "
         f"range={dev_df.index.min()} -> {dev_df.index.max()}"
     )
+    print(
+        f"trends rows={len(sv_series)} "
+        f"range={sv_series.index.min()} -> {sv_series.index.max()}"
+    )
 
-    # 3. Verify coverage and forward-fill sentiment onto the dev index.
-    try:
-        coverage = _verify_sentiment_coverage(
-            sentiment_series, dev_df.index,
-        )
-    except ValueError as exc:
-        print(f"FAIL: sentiment coverage: {exc}", file=sys.stderr)
-        return 1
-    print(f"sentiment coverage: {coverage}")
-
-    # Reindex to OHLCV index with forward-fill so daily LunarCrush
-    # buckets line up with the dev frame.
-    aligned_sentiment = (
-        sentiment_series.sort_index()
+    # 3. Align trends to OHLCV index via reindex+ffill.
+    aligned_sv = (
+        sv_series.sort_index()
         .reindex(dev_df.index, method="ffill")
         .astype(float)
     )
+    nan_count = int(aligned_sv.isna().sum())
+    print(f"aligned trends nan_count={nan_count} (initial-warmup expected)")
 
     # 4. Strategy factory: fresh instance per call so _position_open
-    #    resets across CPCV blocks. The aligned sentiment series is
-    #    captured by closure and shared across instances (read-only).
-    def make_strategy() -> SocialSentimentMomentumStrategy:
-        return SocialSentimentMomentumStrategy(
+    #    resets across CPCV blocks.
+    def make_strategy() -> ContrarianSearchVolumeStrategy:
+        return ContrarianSearchVolumeStrategy(
             symbol=symbol,
             timeframe=PARAMS["timeframe"],
-            sentiment_series=aligned_sentiment,
-            momentum_window=PARAMS["momentum_window"],
-            entry_threshold=PARAMS["entry_threshold"],
-            exit_threshold=PARAMS["exit_threshold"],
+            search_volume_series=aligned_sv,
+            asvi_window=PARAMS["asvi_window"],
+            spike_threshold=PARAMS["spike_threshold"],
         )
 
     # 5. Headline backtest on the full dev window.
@@ -179,7 +155,7 @@ def main() -> int:
     headline_result = headline_engine.run(
         df=dev_df,
         strategy=make_strategy(),
-        period_label="sq-002-sentiment-dev-headline",
+        period_label="sq-011-asvi-spike-dev-headline",
     )
     sr_observed = float(headline_result.metrics.sharpe_ratio)
     n_trades_headline = int(headline_result.metrics.total_trades)
@@ -237,8 +213,8 @@ def main() -> int:
             "mintrl": None,
             "buy_and_hold_sharpe": nan,
             "notes": (
-                f"verdict=retire | CPCVError: {exc}. Sentiment signal "
-                "too sparse to meet the per-block trade-count floor."
+                f"verdict=retire | CPCVError: {exc}. ASVI signal too "
+                "sparse to meet the per-block trade-count floor."
             ),
         }
         _trials.record_trial(cpcv_error_event)
@@ -263,9 +239,7 @@ def main() -> int:
     print(f"per-block trade counts: {cpcv_result.trades_per_path}")
     print(f"distribution: {cpcv_result.sharpe_distribution}")
 
-    # 7. DSR on validation (dev). Monkeypatch n_trials lookup to
-    #    max(N, 1) for the first full_cpcv (count_trials_for_dsr
-    #    returns 0 prior to append).
+    # 7. DSR on validation (dev). First full_cpcv -> monkeypatch.
     n_trials_pre = _trials.count_trials_for_dsr(STRATEGY_ID)
     print(f"\nn_trials_for_dsr({STRATEGY_ID}) before append = {n_trials_pre}")
 
@@ -289,7 +263,7 @@ def main() -> int:
         f"T={dsr_result.t} | n_trials={dsr_result.n_trials}"
     )
 
-    # 8. Verdict tree (dev-side preview).
+    # 8. Verdict tree.
     valid_returns = [r for r in cpcv_result.per_block_returns if r.size > 0]
     concat_returns = (
         np.concatenate(valid_returns) if valid_returns else np.array([])
@@ -323,12 +297,12 @@ def main() -> int:
     print(f"n_trials                = {verdict.n_trials}")
 
     notes = (
-        "sq-002 variation #1. Single-symbol BTC/USDT 1D long-only. "
-        "LunarCrush Galaxy Score 7-day rolling mean; long when "
-        "mean>50 and rising; flat when mean<45. Sentiment held "
-        "in-strategy via the make_strategy closure; aligned to OHLCV "
-        "via reindex+ffill. Baseline = BTC/USDT B&H. "
-        "Sources: Zhang & Zhang (2022); Ante (2023); Ortu et al (2022)."
+        "sq-011 variation #1. Single-symbol BTC/USDT 1D long-only. "
+        "ASVI = (current - rolling_median_4) / (rolling_std_4 + 1e-9); "
+        "flat when ASVI > 1.0; long otherwise. Trends weekly data "
+        "resampled daily via ffill. Baseline = BTC/USDT B&H. "
+        "Sources: Chemkha/Ben Jabeur/Naifar (2023); Dastgir et al "
+        "(2019); Salisu/Gupta/Bouri (2021)."
     )
     event = {
         "strategy_id": STRATEGY_ID,
