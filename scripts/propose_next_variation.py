@@ -494,6 +494,97 @@ def build_queue_item(proposal: dict, next_id: str) -> dict:
     }
 
 
+# ── Citation validation (anti-hallucination, anti-blogspam) ─────────────────
+
+# Hedge markers in a citation's `source` field that indicate the LLM
+# fabricated or speculated about the source. Case-insensitive.
+_HALLUCINATION_MARKERS = (
+    "(hypothetical)", "(fictional)", "(estimated)",
+    "(simulated)", "(illustrative)", "(example)",
+)
+
+# Source substrings that disqualify a citation from counting toward the
+# minimum-three peer-reviewed-or-SSRN bar. Case-insensitive substring
+# match on the citation's `source` field.
+_NON_QUALIFYING_SOURCES = (
+    "tradingview", "reddit", "twitter", "x.com",
+    "medium.com", "substack", "wikipedia",
+    "coindesk", "cointelegraph", "decrypt",
+)
+
+
+def validate_citations(citations: list) -> tuple[bool, str]:
+    """Return (is_valid, rejection_reason).
+
+    Three rejection rules, checked in order, return on first failure:
+      1. hallucination markers in any citation's source field
+      2. fewer than 3 qualifying citations after filtering
+      3. recalculated quality average < 3.0 (counting only crypto-
+         specific qualifying citations)
+    """
+    if not isinstance(citations, list):
+        return (False, "invalid_citations: not a list")
+
+    # Rule 1: hallucination markers
+    for c in citations:
+        if not isinstance(c, dict):
+            continue
+        source_lc = str(c.get("source", "")).lower()
+        for marker in _HALLUCINATION_MARKERS:
+            if marker in source_lc:
+                authors = c.get("authors", "unknown") or "unknown"
+                return (
+                    False,
+                    "hallucinated_citation: source field contains "
+                    "hedge marker in citation by " + str(authors),
+                )
+
+    # Rule 2: count qualifying sources
+    qualifying = []
+    for c in citations:
+        if not isinstance(c, dict):
+            continue
+        source_lc = str(c.get("source", "")).lower()
+        if any(nq in source_lc for nq in _NON_QUALIFYING_SOURCES):
+            continue
+        qualifying.append(c)
+
+    if len(qualifying) < 3:
+        return (
+            False,
+            "insufficient_peer_reviewed: only "
+            + str(len(qualifying))
+            + " qualifying citations after removing non-academic sources",
+        )
+
+    # Rule 3: quality threshold on the recalculated set
+    crypto_specific = [
+        c for c in qualifying if c.get("crypto_specific")
+    ]
+    scores: list[float] = []
+    for c in crypto_specific:
+        try:
+            scores.append(float(c.get("quality_score", 0)))
+        except (TypeError, ValueError):
+            continue
+    if not scores:
+        return (
+            False,
+            "quality_below_threshold: no parseable quality_score "
+            "values among crypto-specific qualifying citations",
+        )
+    avg = sum(scores) / len(scores)
+    if avg < MIN_CITATION_QUALITY:
+        return (
+            False,
+            "quality_below_threshold: recalculated quality "
+            + ("%.2f" % avg)
+            + " after removing non-qualifying sources",
+        )
+
+    return (True, "")
+
+
 # ── Phase 4: queue write ────────────────────────────────────────────────────
 
 def propose_and_queue(dry_run: bool) -> tuple[int, list[dict]]:
@@ -538,9 +629,31 @@ def propose_and_queue(dry_run: bool) -> tuple[int, list[dict]]:
             print(f"  -> quality bar not met for {domain}, skipping")
             continue
 
+        # Citation validation gate (anti-hallucination, anti-blogspam).
+        # Even if the LLM self-reports overall_quality >= MIN, we
+        # recompute on the qualifying-source-only subset and reject
+        # proposals that fail the structural checks.
+        is_valid, reason = validate_citations(proposal.get("citations") or [])
+        suggested_vid = (
+            str(proposal.get("variation_id_suggestion", "")).strip()
+            or "(unknown)"
+        )
+        if not is_valid:
+            print("REJECTED: " + suggested_vid + " -- " + reason)
+            history.setdefault("proposals_log", []).append({
+                "variation_id": suggested_vid,
+                "domain": domain,
+                "status": "rejected",
+                "rejection_reason": reason,
+                "logged_at": utcnow_iso(),
+            })
+            if not dry_run:
+                save_history(history)
+            continue
+
         print(
             f"  -> quality {proposal.get('overall_quality', 0.0):.1f} >= "
-            f"{MIN_CITATION_QUALITY}, queuing"
+            f"{MIN_CITATION_QUALITY}, citations validated, queuing"
         )
 
         existing_ids = [
@@ -554,6 +667,12 @@ def propose_and_queue(dry_run: bool) -> tuple[int, list[dict]]:
         history.setdefault("proposed_variations", []).append(
             item["variation_id"]
         )
+        history.setdefault("proposals_log", []).append({
+            "variation_id": item["variation_id"],
+            "domain": domain,
+            "status": "queued",
+            "logged_at": utcnow_iso(),
+        })
         if not dry_run:
             save_history(history)
 

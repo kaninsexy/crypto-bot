@@ -105,6 +105,9 @@ else:
 
 ROOT = Path(__file__).resolve().parents[1]
 QUEUE_PATH = ROOT / "backtest" / "trial_queue.json"
+# Runtime state lives in a separate gitignored file so Mac (definitions)
+# and PC (status updates) never collide on git pull.
+STATE_PATH = ROOT / "backtest" / "trial_queue_state.json"
 LOCK_PATH = QUEUE_PATH.with_suffix(".lock")
 RUN_LOG_PATH = ROOT / "backtest" / "trial_queue_run_log.jsonl"
 CACHE_DIR = ROOT / "backtest" / "cache"
@@ -117,8 +120,33 @@ EMAIL_RATE_LIMIT_SLEEP_S = 61  # >60s between calls = safe under 6/hr
 TRIAL_TIMEOUT_S = 14_400  # 4h per CLAUDE.md compute budget
 DEFAULT_MAX_WORKERS = 20  # default cap when --workers not specified
 
+# Digest cadence (Task 5): 8h between content digests, 24h heartbeat
+# fallback when nothing to report.
+DIGEST_INTERVAL_S = 8 * 3600
+HEARTBEAT_INTERVAL_S = 24 * 3600
+
+# Auto-remediation: run a fetch script with this timeout when a trial
+# emits TRIAL_ERROR_TYPE: missing_data and retry_count < 1.
+FETCH_REMEDIATION_TIMEOUT_S = 120
+
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 EMAIL_TO = os.environ.get("TRIAL_QUEUE_EMAIL_TO")
+
+# Runtime fields managed in trial_queue_state.json. Definitions in
+# trial_queue.json never carry these (after migration). Default values
+# applied during merge if state has no entry for an item.
+_RUNTIME_DEFAULTS: dict = {
+    "status": "queued",
+    "started_at": None,
+    "finished_at": None,
+    "verdict": None,
+    "trial_id": None,
+    "error": None,
+    "email_sent": False,
+    "retry_count": 0,
+    "last_fetch_attempt": None,
+    "needs_script_digested": False,
+}
 
 
 # ── Time helper ─────────────────────────────────────────────────────────────
@@ -129,43 +157,140 @@ def utcnow_iso() -> str:
 
 # ── Queue I/O ───────────────────────────────────────────────────────────────
 
-def load_queue() -> dict:
-    """Read QUEUE_PATH. Empty/absent file returns the canonical empty queue.
+def _merge_item(definition: dict, state_entry: dict | None) -> dict:
+    """Combine a definition row + its runtime-state entry into a single
+    in-memory item dict. Mac-side `drop_reason` / `defer_reason` on the
+    definition override the runtime status (human decisions cannot be
+    silently undone by the orchestrator).
+    """
+    merged = dict(definition)
+    se = state_entry or {}
+    for f, default in _RUNTIME_DEFAULTS.items():
+        merged[f] = se.get(f, default)
+    if definition.get("drop_reason"):
+        merged["status"] = "dropped"
+    elif (
+        definition.get("defer_reason")
+        and merged["status"] not in ("done", "running")
+    ):
+        merged["status"] = "deferred"
+    return merged
 
-    The `batch_alert_sent_at_position` field is defaulted to 0 when
-    absent so legacy queue files (pre-2026-05-04) keep working without
-    an explicit migration.
+
+def _load_or_migrate_state(definitions: dict) -> dict:
+    """Return the runtime-state dict.
+
+    First-run path: `trial_queue_state.json` is missing or empty, so we
+    migrate runtime fields out of `trial_queue.json` items into the new
+    state file and persist. Steady-state path: the state file is loaded
+    directly. Items that existed only in local trial_queue.json before
+    the file split (e.g. sq-009 from a hallucinated proposal) are not
+    migrated -- they were never committed to the repo.
+    """
+    if STATE_PATH.exists():
+        text = STATE_PATH.read_text(encoding="utf-8").strip()
+        if text:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"Failed to parse {STATE_PATH}: {exc}. "
+                    "Fix the JSON manually before re-running."
+                ) from exc
+
+    # First run -- migrate.
+    state: dict = {
+        "schema_version": 1,
+        "last_digest_sent_at": None,
+        "last_run_at": None,
+        "items": {},
+    }
+    legacy_runtime_fields = (
+        "status", "started_at", "finished_at", "verdict",
+        "trial_id", "error", "email_sent",
+    )
+    n = 0
+    for item in definitions.get("queue", []):
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        entry = {f: item.get(f) for f in legacy_runtime_fields}
+        # Initialise the new fields the file split introduces.
+        entry["retry_count"] = 0
+        entry["last_fetch_attempt"] = None
+        entry["needs_script_digested"] = False
+        state["items"][item_id] = entry
+        n += 1
+
+    tmp = STATE_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, STATE_PATH)
+    print(f"Migrated {n} items to trial_queue_state.json")
+    return state
+
+
+def load_queue() -> dict:
+    """Read definitions + runtime state, merge, return the queue dict.
+
+    Definitions live in QUEUE_PATH (Mac-side, committed). Runtime state
+    lives in STATE_PATH (PC-side, gitignored). The orchestrator and
+    queue_admin both go through this merged view.
     """
     if not QUEUE_PATH.exists():
         return {
             "schema_version": 1,
-            "batch_alert_sent_at_position": 0,
+            "last_digest_sent_at": None,
+            "last_run_at": None,
             "queue": [],
         }
     text = QUEUE_PATH.read_text(encoding="utf-8").strip()
     if not text:
-        return {
-            "schema_version": 1,
-            "batch_alert_sent_at_position": 0,
-            "queue": [],
-        }
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"Failed to parse {QUEUE_PATH}: {exc}. "
-            "Fix the JSON manually before re-running."
-        ) from exc
-    if "batch_alert_sent_at_position" not in data:
-        data["batch_alert_sent_at_position"] = 0
-    return data
+        definitions: dict = {"schema_version": 1, "queue": []}
+    else:
+        try:
+            definitions = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Failed to parse {QUEUE_PATH}: {exc}. "
+                "Fix the JSON manually before re-running."
+            ) from exc
+
+    state = _load_or_migrate_state(definitions)
+    state_items = state.get("items", {})
+    merged_queue = [
+        _merge_item(item, state_items.get(item.get("id")))
+        for item in definitions.get("queue", [])
+    ]
+    return {
+        "schema_version": 1,
+        "last_digest_sent_at": state.get("last_digest_sent_at"),
+        "last_run_at": state.get("last_run_at"),
+        "queue": merged_queue,
+    }
 
 
 def save_queue(data: dict) -> None:
-    """Atomic write: tmp file + os.replace."""
-    tmp = QUEUE_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, QUEUE_PATH)
+    """Atomic write to STATE_PATH only. NEVER writes to QUEUE_PATH.
+
+    Definitions are Mac-authored and committed; the orchestrator only
+    touches the gitignored runtime-state file so a `git pull` on PC
+    never produces a merge conflict on top of mid-batch state writes.
+    """
+    state = {
+        "schema_version": 1,
+        "last_digest_sent_at": data.get("last_digest_sent_at"),
+        "last_run_at": data.get("last_run_at"),
+        "items": {},
+    }
+    state_fields = tuple(_RUNTIME_DEFAULTS.keys())
+    for item in data.get("queue", []):
+        item_id = item.get("id")
+        if not item_id:
+            continue
+        state["items"][item_id] = {f: item.get(f) for f in state_fields}
+    tmp = STATE_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, STATE_PATH)
 
 
 def acquire_lock():
@@ -322,6 +447,65 @@ def parse_json_summary(stdout: str) -> dict | None:
     except json.JSONDecodeError:
         return None
     return None
+
+
+# ── Auto-remediation helpers (Task 3) ───────────────────────────────────────
+
+def parse_trial_error(stdout: str, stderr: str) -> dict | None:
+    """Pull the structured TRIAL_ERROR_TYPE / TRIAL_ERROR_FETCH /
+    TRIAL_ERROR_MSG block out of a trial script's combined output.
+
+    Returns a dict with keys 'type', 'fetch', 'msg' (any may be None
+    if the script didn't emit that line) or None if no
+    TRIAL_ERROR_TYPE line is present at all.
+    """
+    combined = (stdout or "") + "\n" + (stderr or "")
+    out: dict = {}
+    for raw in combined.splitlines():
+        line = raw.strip()
+        if line.startswith("TRIAL_ERROR_TYPE:"):
+            out["type"] = line.split(":", 1)[1].strip()
+        elif line.startswith("TRIAL_ERROR_FETCH:"):
+            out["fetch"] = line.split(":", 1)[1].strip()
+        elif line.startswith("TRIAL_ERROR_MSG:"):
+            out["msg"] = line.split(":", 1)[1].strip()
+    if "type" not in out:
+        return None
+    out.setdefault("fetch", None)
+    out.setdefault("msg", None)
+    return out
+
+
+def run_fetch_for_remediation(
+    fetch_path_rel: str,
+) -> tuple[int, str, str]:
+    """Run a fetch script with a 120s timeout and return
+    (returncode, stdout, stderr). returncode -1 = timeout, -2 = script
+    not found, -3 = unexpected exception.
+    """
+    fetch_path = ROOT / fetch_path_rel
+    if not fetch_path.exists():
+        return (-2, "", f"fetch script not found: {fetch_path}")
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(fetch_path)],
+            capture_output=True,
+            text=True,
+            timeout=FETCH_REMEDIATION_TIMEOUT_S,
+            cwd=str(ROOT),
+            env=env,
+        )
+        return (proc.returncode, proc.stdout or "", proc.stderr or "")
+    except subprocess.TimeoutExpired:
+        return (
+            -1,
+            "",
+            f"fetch script timed out after {FETCH_REMEDIATION_TIMEOUT_S}s",
+        )
+    except Exception as e:  # noqa: BLE001
+        return (-3, "", f"fetch script exception: {e}")
 
 
 def log_run(
@@ -800,18 +984,15 @@ def commit_result(item: dict, summary: dict, dry_run: bool) -> bool:
 
 
 # ── Email ───────────────────────────────────────────────────────────────────
-# Email policy (revised 2026-05-04):
-#   - KEEP verdict          → single email immediately (action required)
-#   - error / non-keep      → logged to trial_queue_run_log.jsonl only
-#   - N consecutive non-keep → one batch summary email (gated by
-#                              `batch_alert_sent_at_position`)
+# Email policy (revised 2026-05-06, file split + digest):
+#   - KEEP verdict           → single email immediately (action required)
+#   - everything else        → accumulated into an 8h digest email
+#                               (done / error / deferred_no_data /
+#                                needs_trial_script items)
+#   - 24h heartbeat fallback → minimal heartbeat-only digest if no
+#                               digestable activity for a full day
 #   - proposal-agent failure → one email with last 500 chars of stderr
-# All three Resend POSTs route through `_send_email`.
-
-
-CONSECUTIVE_FAIL_ALERT = int(
-    os.environ.get("TRIAL_QUEUE_FAIL_ALERT_EVERY", "5")
-)
+# All Resend POSTs route through `_send_email`.
 
 
 def _send_email(subject: str, body: str, dry_run: bool) -> None:
@@ -888,31 +1069,6 @@ def send_keep_email(item: dict, summary: dict, dry_run: bool) -> None:
     _send_email(subject, "\n".join(body_lines), dry_run)
 
 
-def send_batch_summary_email(
-    items: list[dict],
-    dry_run: bool,
-) -> None:
-    """One email summarising the last N consecutive non-keep results."""
-    n = len(items)
-    subject = f"trials: {n} consecutive non-keep results -- batch summary"
-    header = f"{'id':<10} {'strategy':<20} {'variation':<32} {'verdict':<14} {'sr_observed':<12}"
-    rows = [header, "-" * len(header)]
-    for item in items:
-        sr = item.get("_sr_observed", "n/a")
-        try:
-            sr_str = f"{float(sr):+.4f}"
-        except (TypeError, ValueError):
-            sr_str = str(sr)
-        rows.append(
-            f"{str(item.get('id','?'))[:10]:<10} "
-            f"{str(item.get('strategy_id','?'))[:20]:<20} "
-            f"{str(item.get('variation_id','?'))[:32]:<32} "
-            f"{str(item.get('verdict') or item.get('status') or '?')[:14]:<14} "
-            f"{sr_str:<12}"
-        )
-    _send_email(subject, "\n".join(rows), dry_run)
-
-
 def send_proposal_failure_email(stderr_tail: str, dry_run: bool) -> None:
     """Notify the human when the proposal agent exits non-zero."""
     subject = "trials: proposal agent failed -- manual research needed"
@@ -924,46 +1080,149 @@ def send_proposal_failure_email(stderr_tail: str, dry_run: bool) -> None:
     _send_email(subject, body, dry_run)
 
 
-def _completed_items(queue_data: dict) -> list[dict]:
-    """Items in `queue_data['queue']` whose status is done OR error,
-    ordered by (finished_at asc).  Items missing finished_at sort
-    last (kept stable by index)."""
-    items = [
-        it for it in queue_data.get("queue", [])
-        if it.get("status") in ("done", "error")
+# ── Digest email (Task 5) ───────────────────────────────────────────────────
+
+def _seconds_since(iso_ts: str | None) -> float | None:
+    """Return seconds elapsed since `iso_ts`, or None if unparseable."""
+    if not iso_ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso_ts)
+    except ValueError:
+        return None
+    return (datetime.now(timezone.utc) - dt).total_seconds()
+
+
+def _unreported_items(queue_data: dict) -> dict:
+    """Group items eligible for the next digest by section."""
+    completed: list[dict] = []
+    deferred: list[dict] = []
+    errors: list[dict] = []
+    needs_script: list[dict] = []
+    for it in queue_data.get("queue", []):
+        status = it.get("status")
+        email_sent = bool(it.get("email_sent"))
+        if status == "done" and not email_sent:
+            completed.append(it)
+        elif status == "deferred_no_data" and not email_sent:
+            deferred.append(it)
+        elif status == "error" and not email_sent:
+            errors.append(it)
+        elif (
+            it.get("needs_trial_script")
+            and not bool(it.get("needs_script_digested"))
+        ):
+            needs_script.append(it)
+    return {
+        "completed": completed,
+        "deferred": deferred,
+        "errors": errors,
+        "needs_script": needs_script,
+    }
+
+
+def _heartbeat_section(queue_data: dict) -> list[str]:
+    counts = {"done": 0, "deferred_no_data": 0, "error": 0, "queued": 0}
+    for it in queue_data.get("queue", []):
+        s = it.get("status", "")
+        if s in counts:
+            counts[s] += 1
+    last_run = queue_data.get("last_run_at") or "(never)"
+    return [
+        "PC HEARTBEAT",
+        "------------",
+        f"Last run: {last_run}",
+        (
+            f"Queue summary: {counts['done']} done, "
+            f"{counts['deferred_no_data']} deferred, "
+            f"{counts['error']} error, {counts['queued']} queued"
+        ),
     ]
-    return sorted(items, key=lambda it: it.get("finished_at") or "")
 
 
-def _is_non_keep(item: dict) -> bool:
-    if item.get("status") == "error":
-        return True
-    return item.get("verdict") != "keep"
+def _build_digest_body(sections: dict, queue_data: dict) -> str:
+    lines: list[str] = []
+    if sections["completed"]:
+        lines.append("COMPLETED TRIALS")
+        lines.append("----------------")
+        for it in sections["completed"]:
+            lines.append(
+                f"{it.get('id', '?')} | {it.get('strategy_id', '?')} | "
+                f"{it.get('variation_id', '?')} | "
+                f"{it.get('verdict') or '?'} | "
+                f"sr={it.get('sharpe', 'n/a')}"
+            )
+        lines.append("")
+    if sections["deferred"]:
+        lines.append("DEFERRED (data unavailable)")
+        lines.append("---------------------------")
+        for it in sections["deferred"]:
+            err = (it.get("error") or "no error message")
+            lines.append(
+                f"{it.get('id', '?')} | {it.get('strategy_id', '?')} | "
+                f"{err[:120]}"
+            )
+        lines.append("")
+    if sections["errors"]:
+        lines.append("ERRORS")
+        lines.append("------")
+        for it in sections["errors"]:
+            err = (it.get("error") or "no error message")
+            lines.append(
+                f"{it.get('id', '?')} | {it.get('strategy_id', '?')} | "
+                f"{err[:120]}"
+            )
+        lines.append("")
+    if sections["needs_script"]:
+        lines.append("NEEDS TRIAL SCRIPT (awaiting CC session)")
+        lines.append("-----------------------------------------")
+        for it in sections["needs_script"]:
+            q = it.get("overall_quality", "?")
+            lines.append(
+                f"{it.get('id', '?')} | {it.get('strategy_id', '?')} | "
+                f"{it.get('variation_id', '?')} | quality={q}"
+            )
+        lines.append("")
+    lines.extend(_heartbeat_section(queue_data))
+    return "\n".join(lines)
 
 
-def maybe_send_batch_alert(queue_data: dict, dry_run: bool) -> None:
-    """Send the batch-summary email if the LAST CONSECUTIVE_FAIL_ALERT
-    completed items are all non-keep AND we have not already alerted
-    at the current completed-count.  Updates
-    `queue_data['batch_alert_sent_at_position']` and persists."""
-    completed = _completed_items(queue_data)
-    n_completed = len(completed)
-    threshold = CONSECUTIVE_FAIL_ALERT
-    if threshold <= 0 or n_completed < threshold:
+def maybe_send_digest(queue_data: dict, dry_run: bool) -> None:
+    """Send the digest email if 8h elapsed and there is unreported
+    activity. Otherwise, send a heartbeat-only digest if 24h has
+    elapsed since the last digest. Updates `last_digest_sent_at` and
+    flips `email_sent` / `needs_script_digested` on included items.
+    """
+    sections = _unreported_items(queue_data)
+    has_content = any(sections.values())
+    elapsed = _seconds_since(queue_data.get("last_digest_sent_at"))
+    digest_due = (elapsed is None) or (elapsed >= DIGEST_INTERVAL_S)
+
+    if digest_due and has_content:
+        n = sum(len(v) for v in sections.values())
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        subject = f"trials: digest -- {n} updates [{date_str}]"
+        body = _build_digest_body(sections, queue_data)
+        _send_email(subject, body, dry_run)
+        for it in (
+            sections["completed"] + sections["deferred"] + sections["errors"]
+        ):
+            it["email_sent"] = True
+        for it in sections["needs_script"]:
+            it["needs_script_digested"] = True
+        queue_data["last_digest_sent_at"] = utcnow_iso()
+        save_queue(queue_data)
         return
-    last_n = completed[-threshold:]
-    if not all(_is_non_keep(it) for it in last_n):
-        return
 
-    last_alert_pos = int(queue_data.get("batch_alert_sent_at_position", 0))
-    if n_completed <= last_alert_pos:
-        # Already alerted at this completed-count; do not re-alert.
-        return
-
-    enriched = [{**it, "_sr_observed": it.get("sharpe", "n/a")} for it in last_n]
-    send_batch_summary_email(enriched, dry_run)
-    queue_data["batch_alert_sent_at_position"] = n_completed
-    save_queue(queue_data)
+    # 24h heartbeat fallback: previous digest exists and 24h has
+    # elapsed with nothing new to report.
+    if elapsed is not None and elapsed >= HEARTBEAT_INTERVAL_S:
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        subject = f"trials: heartbeat -- no activity [{date_str}]"
+        body = "\n".join(_heartbeat_section(queue_data))
+        _send_email(subject, body, dry_run)
+        queue_data["last_digest_sent_at"] = utcnow_iso()
+        save_queue(queue_data)
 
 
 # ── Batch runner ────────────────────────────────────────────────────────────
@@ -1073,6 +1332,80 @@ def process_batch_results(
         log_run(item, returncode, summary, stderr)
 
         if returncode != 0 or summary is None:
+            # Auto-remediation (Task 3): parse structured TRIAL_ERROR
+            # block and, if the trial is missing data, run the named
+            # fetch script once. Success → requeue for next batch.
+            err_block = parse_trial_error(stdout, stderr)
+            if err_block:
+                err_type = err_block.get("type", "")
+                if err_type == "deferred_no_data":
+                    item["status"] = "deferred_no_data"
+                    item["error"] = (err_block.get("msg") or "")[:500]
+                    item["finished_at"] = finished_at
+                    save_queue(queue_data)
+                    print(
+                        f"[queue] DEFERRED item {item_id}: "
+                        f"{(err_block.get('msg') or '')[:200]}"
+                    )
+                    continue
+                if (
+                    err_type == "missing_data"
+                    and item.get("retry_count", 0) < 1
+                ):
+                    fetch_path = err_block.get("fetch")
+                    if not fetch_path:
+                        # missing_data without TRIAL_ERROR_FETCH -> error
+                        pass
+                    elif not (ROOT / fetch_path).exists():
+                        item["status"] = "deferred_no_data"
+                        item["error"] = (
+                            f"fetch script not found: {fetch_path}"
+                        )
+                        item["finished_at"] = finished_at
+                        item["last_fetch_attempt"] = utcnow_iso()
+                        save_queue(queue_data)
+                        continue
+                    else:
+                        print(
+                            f"[queue] auto-remediation: running "
+                            f"{fetch_path} for item {item_id}"
+                        )
+                        rc, fout, ferr = run_fetch_for_remediation(
+                            fetch_path
+                        )
+                        item["last_fetch_attempt"] = utcnow_iso()
+                        if rc == 0:
+                            item["status"] = "queued"
+                            item["started_at"] = None
+                            item["finished_at"] = None
+                            item["error"] = None
+                            item["retry_count"] = (
+                                item.get("retry_count", 0) + 1
+                            )
+                            save_queue(queue_data)
+                            print(
+                                f"[queue] fetch succeeded for "
+                                f"{item_id}, requeueing for retry"
+                            )
+                            continue
+                        # Fetch failed: deferred if its output says so
+                        fetch_err = parse_trial_error(fout, ferr)
+                        if (
+                            fetch_err
+                            and fetch_err.get("type") == "deferred_no_data"
+                        ):
+                            item["status"] = "deferred_no_data"
+                        else:
+                            item["status"] = "error"
+                        item["error"] = (
+                            f"fetch ({fetch_path}) rc={rc}: "
+                            + (ferr or fout or "")[:300]
+                        )
+                        item["finished_at"] = finished_at
+                        save_queue(queue_data)
+                        continue
+
+            # Fall-through: unrecognised error type or already retried.
             reason = (
                 stderr[:500] if returncode != 0
                 else "sentinel not found in stdout"
@@ -1082,7 +1415,6 @@ def process_batch_results(
             item["finished_at"] = finished_at
             print(f"[queue] FAILED item {item_id}: {reason[:200]}")
             save_queue(queue_data)
-            maybe_send_batch_alert(queue_data, dry_run)
             continue
 
         try:
@@ -1097,7 +1429,6 @@ def process_batch_results(
                 f"[queue] doc update failed for {item_id}: {e}",
                 file=sys.stderr,
             )
-            maybe_send_batch_alert(queue_data, dry_run)
             continue
 
         # Mark done & save BEFORE commit so the commit captures done state.
@@ -1110,7 +1441,6 @@ def process_batch_results(
             item["status"] = "error"
             item["error"] = "commit failed or scope violation"
             save_queue(queue_data)
-            maybe_send_batch_alert(queue_data, dry_run)
             continue
 
         print(f"[queue] done {item_id}: verdict={item['verdict']}")
@@ -1120,8 +1450,6 @@ def process_batch_results(
             send_keep_email(item, summary, dry_run)
             item["email_sent"] = True
             save_queue(queue_data)
-
-        maybe_send_batch_alert(queue_data, dry_run)
 
         try:
             result_path.unlink(missing_ok=True)
@@ -1293,6 +1621,13 @@ def main() -> int:
 
     lock_fd = acquire_lock()
     try:
+        # Heartbeat (Task 5): record this orchestrator invocation so the
+        # digest body can show when the PC last ran. Persist immediately
+        # so a crash mid-batch still records the attempt.
+        startup_data = load_queue()
+        startup_data["last_run_at"] = utcnow_iso()
+        save_queue(startup_data)
+
         batches_run = 0
         while True:
             queue_data = load_queue()
@@ -1323,6 +1658,12 @@ def main() -> int:
 
             if args.once:
                 break
+
+        # Digest pass (Task 5): one digest email per orchestrator run
+        # if 8h has elapsed and there is unreported activity, or a
+        # heartbeat-only digest if 24h has elapsed with nothing new.
+        final_data = load_queue()
+        maybe_send_digest(final_data, args.dry_run)
     finally:
         release_lock(lock_fd)
     return 0

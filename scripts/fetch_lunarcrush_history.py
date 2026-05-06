@@ -1,23 +1,19 @@
 """scripts/fetch_lunarcrush_history.py
 
-Fetches LunarCrush historical sentiment data (Galaxy Score + price)
-for BTC and ETH and writes to data/lunarcrush_history.json.
+Fetches LunarCrush historical sentiment data (Galaxy Score + close
+price) for BTC and ETH and writes one parquet file per symbol to
+data/lunarcrush/<sym>_galaxy.parquet -- the format the trial scripts
+(scripts/run_social_sentiment_momentum_trial.py) expect.
 
 Exit codes:
   0  success
   2  LUNARCRUSH_API_KEY missing OR API error -- structured
      TRIAL_ERROR_TYPE block emitted to stdout for orchestrator parsing.
 
-Output JSON shape:
-  {
-    "fetched_at": "<utc-iso>",
-    "api_version": "v4",
-    "coins": {
-      "BTC": [{"time": <unix>, "galaxy_score": <float>,
-               "price": <float>, "sentiment": <float>}, ...],
-      "ETH": [...]
-    }
-  }
+Per-symbol parquet schema (one row per UTC day):
+    timestamp     datetime64[ns, UTC]
+    close         float64
+    galaxy_score  float64
 """
 
 from __future__ import annotations
@@ -30,18 +26,15 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8',
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8',
                               errors='replace')
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_PATH = ROOT / "data" / "lunarcrush_history.json"
+OUT_DIR = ROOT / "data" / "lunarcrush"
 COINS = ["BTC", "ETH"]
 HISTORY_DAYS = 365
 # v4 is the current LunarCrush public API; v3 was deprecated end-2023.
-# v4 still exposes Galaxy Score + price + sentiment on the time-series
-# endpoint, which is what the spec requires.
 API_BASE = "https://lunarcrush.com/api4"
 
 
@@ -58,9 +51,10 @@ def main() -> int:
         return 2
 
     try:
+        import pandas as pd
         import requests
     except ImportError as exc:
-        _emit_error("requests library not installed: " + str(exc))
+        _emit_error("required library not installed: " + str(exc))
         return 2
 
     end_ts = int(datetime.now(timezone.utc).timestamp())
@@ -68,13 +62,9 @@ def main() -> int:
         (datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)).timestamp()
     )
 
-    out = {
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "api_version": "v4",
-        "coins": {},
-    }
-
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     headers = {"Authorization": "Bearer " + api_key}
+
     for coin in COINS:
         url = API_BASE + "/public/coins/" + coin + "/time-series/v2"
         params = {"bucket": "day", "start": start_ts, "end": end_ts}
@@ -102,23 +92,31 @@ def main() -> int:
                 + ": " + str(payload)[:200]
             )
             return 2
-        out["coins"][coin] = [
+
+        df = pd.DataFrame([
             {
-                "time": r.get("time"),
-                "galaxy_score": r.get("galaxy_score"),
-                "price": r.get("close") or r.get("price"),
-                "sentiment": r.get("sentiment"),
+                "timestamp": pd.to_datetime(r.get("time"), unit="s",
+                                            utc=True),
+                "close": float(r.get("close") or r.get("price") or 0.0),
+                "galaxy_score": float(r.get("galaxy_score") or 0.0),
             }
             for r in rows
-        ]
+            if r.get("time") is not None
+        ])
+        if df.empty:
+            _emit_error("no parsable rows for " + coin)
+            return 2
+        df = df.sort_values("timestamp").reset_index(drop=True)
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = OUT_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(out, indent=2), encoding="utf-8")
-    os.replace(tmp, OUT_PATH)
+        out_path = OUT_DIR / (coin + "_galaxy.parquet")
+        tmp = out_path.with_suffix(".parquet.tmp")
+        df.to_parquet(tmp, index=False)
+        os.replace(tmp, out_path)
+        print(
+            "Saved " + str(len(df)) + " rows to data/lunarcrush/"
+            + coin + "_galaxy.parquet"
+        )
 
-    n_total = sum(len(v) for v in out["coins"].values())
-    print("Saved " + str(n_total) + " rows to data/lunarcrush_history.json")
     return 0
 
 

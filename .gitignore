@@ -56,6 +56,18 @@ scripts/phase_4b_v2_probe_output.json
 # Phase 4.A TrendFollowing smoke output (runtime artefact)
 scripts/phase_4a_tf_smoke_output.json
 
+# Trial queue orchestrator runtime artefacts
+backtest/trial_queue_run_log.jsonl
+backtest/trial_queue.lock
+backtest/trial_queue_state.json
+
+# Per-symbol cache from fetcher scripts (PC-side runtime)
+data/lunarcrush/
+data/onchain/
+
+# Auto-pull wrapper log
+logs/git_pull.log
+
 # Runtime artifacts
 dashboard/data/
 logs/

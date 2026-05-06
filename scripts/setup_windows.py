@@ -3,7 +3,9 @@
 One-time Windows PC setup for the trial-queue operator host:
   - pip install -r requirements.txt (uses sys.executable's pip)
   - powercfg: prevent sleep on AC power
-  - print Task Scheduler "wake to run" instructions
+  - print Task Scheduler instructions for \\CryptoBotTrialQueue
+    (wake-to-run + Action update to call run_scheduled.ps1)
+  - print Tailscale install + SSH-server enablement notes
   - check critical environment variables
 
 Run once per machine after cloning the repo. Idempotent.
@@ -29,6 +31,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = ROOT / "requirements.txt"
+TASK_NAME = r"\CryptoBotTrialQueue"
+RUN_SCHEDULED_PS1 = r"C:\crypto-bot\scripts\run_scheduled.ps1"
 
 # (var_name, optional, note)
 REQUIRED_VARS = [
@@ -70,20 +74,49 @@ def _set_power_plan() -> None:
 
 def _print_task_scheduler_instructions() -> None:
     print()
-    print("=== Task Scheduler: enable wake-to-run ===")
-    print("To make a scheduled task wake the PC on its trigger:")
+    print("=== Task Scheduler: update " + TASK_NAME + " action ===")
+    print("The task must call the new PowerShell wrapper (which does")
+    print("a git pull --ff-only before each run) instead of python")
+    print("directly. Steps:")
     print()
     print("1. Open Task Scheduler (run: taskschd.msc)")
-    print("2. Locate the trial-queue task in the Task Scheduler Library")
+    print("2. Locate " + TASK_NAME + " in the Task Scheduler Library")
     print("3. Right-click the task -> Properties")
-    print("4. Click the 'Conditions' tab")
-    print("5. Under the 'Power' section, check the box labelled:")
-    print("     'Wake the computer to run this task'")
-    print("6. Click OK to save")
+    print("4. Click the 'Actions' tab, select the existing action,")
+    print("   click Edit")
+    print("5. Set:")
+    print("     Program/script: powershell.exe")
+    print("     Add arguments:  -ExecutionPolicy Bypass -File "
+          + RUN_SCHEDULED_PS1)
+    print("     Start in:       C:\\crypto-bot")
+    print("6. Click OK to save the action")
     print()
-    print("Also recommended: on the 'General' tab, set 'Run whether")
-    print("user is logged on or not' so the task fires from a locked")
-    print("session over RDP / Tailscale.")
+    print("=== Task Scheduler: enable wake-to-run ===")
+    print("In the same Properties dialog:")
+    print("1. Click the 'Conditions' tab")
+    print("2. Under 'Power' check: 'Wake the computer to run this task'")
+    print("3. (Recommended) On the 'General' tab, set 'Run whether")
+    print("   user is logged on or not' so the task fires from a locked")
+    print("   session over RDP / Tailscale.")
+    print("4. Click OK to save")
+    print()
+
+
+def _print_tailscale_instructions() -> None:
+    print("=== Tailscale (remote SSH access) ===")
+    print("To reach this PC from a phone over Tailscale:")
+    print()
+    print("1. Install Tailscale for Windows:")
+    print("     https://tailscale.com/download/windows")
+    print("2. Sign in with the same Tailnet as your phone")
+    print("3. Enable SSH access. Two options:")
+    print("     (a) Tailscale SSH (preferred): in the Tailscale UI ->")
+    print("         settings, enable 'Tailscale SSH server'.")
+    print("     (b) Windows OpenSSH server: Settings -> Apps -> Optional")
+    print("         features -> 'OpenSSH Server' -> Install, then run:")
+    print("           Get-Service sshd | Set-Service -StartupType Automatic")
+    print("           Start-Service sshd")
+    print("4. Test from phone: ssh <pc-tailscale-name>")
     print()
 
 
@@ -118,6 +151,7 @@ def main() -> int:
 
     _set_power_plan()
     _print_task_scheduler_instructions()
+    _print_tailscale_instructions()
     _check_env_vars()
 
     print()
