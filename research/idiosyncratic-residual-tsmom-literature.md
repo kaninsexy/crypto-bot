@@ -31,3 +31,10 @@ generates positive risk-adjusted returns vs ETH buy-and-hold.
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
 | 1 | idio-residual-tsmom-v1 | beta=720, mom=168 | full_cpcv | TBD | TBD | TBD | first trial |
+
+## Trial outcomes
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| idio-residual-tsmom-v1 | 2026-05-06 | retire | 0.3859 | 1.0000 | 228 |
+

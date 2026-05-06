@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -532,5 +532,13 @@ prior. No edge in this window.
 #### Phase 4 outcomes
 
 - **sentiment-momentum-filter (2026-05-05):** verdict=dry-run. sr=nan, baseline_sr=nan, dsr=nan, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
+
+### IdiosyncraticResidualTSMOM
+
+#### Phase 4 outcomes
+
+- **idio-residual-tsmom-v1 (2026-05-06):** verdict=retire. sr=0.3859, baseline_sr=0.8867, dsr=1.0000, n_trades=228, mt_mean_pass=True, baseline_pass=False.
 
 ---
