@@ -139,7 +139,7 @@
         }
       ],
       "overall_quality": 3.3,
-      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \ufffd pure time-of-day filter. Test on 1H candles.",
+      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required � pure time-of-day filter. Test on 1H candles.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
       "started_at": "2026-05-04T18:05:50.281605+00:00",
@@ -152,7 +152,11 @@
     },
     {
       "id": "sq-005",
+<<<<<<< HEAD
       "status": "error",
+=======
+      "status": "retired",
+>>>>>>> origin/claude/unruffled-elbakyan-057350
       "strategy_id": "PairsTradingCointegration",
       "variation_id": "stat-arb-coint-rotation-v1",
       "script_path": "scripts/run_pairs_trading_cointegration_trial.py",
@@ -172,7 +176,7 @@
         },
         {
           "title": "Copula-Based Trading of Cointegrated Cryptocurrency Pairs",
-          "authors": "Masood Tadi, Ji\u0159\u00ed Witzany",
+          "authors": "Masood Tadi, Jiří Witzany",
           "year": 2023,
           "source": "arXiv",
           "key_finding": "A novel pairs trading strategy using copulas to model the dependency of cointegrated crypto pairs outperformed buy-and-hold strategies on both profitability and risk-adjusted returns.",
@@ -183,7 +187,7 @@
           "title": "Pairs trading : cointegration-based methods : applied to the cryptocurrency market",
           "authors": "Daniel da Silva Carvalho",
           "year": 2021,
-          "source": "Master Dissertation, Universidade Cat\u00f3lica Portuguesa",
+          "source": "Master Dissertation, Universidade Católica Portuguesa",
           "key_finding": "The Engle-Granger approach using the ADF test was the best predictor of cointegration, yielding a positive mean return, with strategies based on longer (6-month) formation periods performing better than shorter (3-month) ones.",
           "crypto_specific": true,
           "quality_score": 3
