@@ -16,8 +16,15 @@ whether a manifest entry exists yet.
 
 from __future__ import annotations
 
-import json
+import io
 import sys
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8',
+                              errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8',
+                              errors='replace')
+
+import json
 from pathlib import Path
 
 import numpy as np
@@ -137,12 +144,10 @@ def main() -> int:
 
     # ── -1. Sentiment cache pre-check (fires before manifest load) ──────────
     if not LUNARCRUSH_DIR.exists():
-        print(
-            "SENTIMENT DATA NOT FOUND: run "
-            "scripts/fetch_lunarcrush_history.py first",
-            file=sys.stderr,
-        )
-        return 2
+        print("TRIAL_ERROR_TYPE: missing_data")
+        print("TRIAL_ERROR_FETCH: scripts/fetch_lunarcrush_history.py")
+        print("TRIAL_ERROR_MSG: Sentiment history not found. Run fetch script first.")
+        sys.exit(1)
 
     # ── 0. Sanity checks on the manifest entry ──────────────────────────────
     manifest = load_manifest()
@@ -161,12 +166,10 @@ def main() -> int:
     # ── -0.5. Probe per-symbol sentiment caches ─────────────────────────────
     sentiment_by_sym = _check_sentiment_cache(symbols)
     if not sentiment_by_sym:
-        print(
-            "SENTIMENT DATA NOT FOUND: run "
-            "scripts/fetch_lunarcrush_history.py first",
-            file=sys.stderr,
-        )
-        return 2
+        print("TRIAL_ERROR_TYPE: missing_data")
+        print("TRIAL_ERROR_FETCH: scripts/fetch_lunarcrush_history.py")
+        print("TRIAL_ERROR_MSG: Sentiment history not found. Run fetch script first.")
+        sys.exit(1)
 
     # Restrict the active basket to symbols with sentiment available.
     active_symbols = [s for s in symbols if s in sentiment_by_sym]

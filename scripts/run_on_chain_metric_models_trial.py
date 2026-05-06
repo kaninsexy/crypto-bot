@@ -16,8 +16,15 @@ whether a manifest entry exists yet.
 
 from __future__ import annotations
 
-import json
+import io
 import sys
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8',
+                              errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8',
+                              errors='replace')
+
+import json
 from pathlib import Path
 
 import numpy as np
@@ -129,12 +136,10 @@ def main() -> int:
 
     # ── -1. On-chain cache pre-check (fires before manifest load) ───────────
     if not ONCHAIN_DIR.exists():
-        print(
-            "ON-CHAIN DATA NOT FOUND: run scripts/fetch_onchain_data.py "
-            "first",
-            file=sys.stderr,
-        )
-        return 2
+        print("TRIAL_ERROR_TYPE: missing_data")
+        print("TRIAL_ERROR_FETCH: scripts/fetch_onchain_data.py")
+        print("TRIAL_ERROR_MSG: On-chain history not found. Run fetch script first.")
+        sys.exit(1)
 
     # ── 0. Sanity checks on the manifest entry ──────────────────────────────
     manifest = load_manifest()
@@ -153,12 +158,10 @@ def main() -> int:
     # ── -0.5. Probe per-symbol on-chain caches ──────────────────────────────
     onchain_by_sym = _check_onchain_cache(symbols)
     if not onchain_by_sym:
-        print(
-            "ON-CHAIN DATA NOT FOUND: run scripts/fetch_onchain_data.py "
-            "first",
-            file=sys.stderr,
-        )
-        return 2
+        print("TRIAL_ERROR_TYPE: missing_data")
+        print("TRIAL_ERROR_FETCH: scripts/fetch_onchain_data.py")
+        print("TRIAL_ERROR_MSG: On-chain history not found. Run fetch script first.")
+        sys.exit(1)
 
     active_symbols = [s for s in symbols if s in onchain_by_sym]
     if len(active_symbols) < len(symbols):
