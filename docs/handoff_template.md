@@ -13,23 +13,30 @@ Before any response that asks the user to do something, run this
 - Search repomix-output.xml first for any harness file — it is
   always more current than standalone project knowledge uploads.
 
-1. Can I self-execute this with `bash_tool`, `conversation_search`,
+0. Does the user's message reference a past setup, decision, or
+   action ("I thought we already...", "we set this up", "I remember
+   doing X", "go check")? If yes — run `conversation_search` or
+   `recent_chats` IMMEDIATELY. Do not ask the user to verify
+   anything findable in chat history. Asking "can you check X"
+   when X is in a past chat is a rule violation.
+2. Can I self-execute this with `bash_tool`, `conversation_search`,
    `project_knowledge_search`, or `view`? If yes — do it; don't ask.
-2. Am I outputting 2+ bash blocks for independent commands? If yes
+3. Am I outputting 2+ bash blocks for independent commands? If yes
    — recombine into one fenced block.
-3. Is the next step predictable from current context? If yes —
+4. Is the next step predictable from current context? If yes —
    bundle it into this response.
-4. Has this chat reached a logical breakpoint (smoke clears, trial
+5. Has this chat reached a logical breakpoint (smoke clears, trial
    completes, audit completes, gate clears)? If yes — flag chat
    close and draft new-chat handoff.
-5. Is `.memory/T1_episodic/_state/session_start.txt` elapsed time
+6. Is `.memory/T1_episodic/_state/session_start.txt` elapsed time
    under the 4-hour budget? `echo $(( $(date +%s) - $(cat
    .memory/T1_episodic/_state/session_start.txt) ))` should
    return < 14400. If not, reset before launching any
    coordinator-spawning prompt.
 
 If output contains "paste the output" / "let me know" / "can you
-check" / "after that, I'll" — STOP and re-check items 1 and 3.
+check" / "after that, I'll" / "did we already" / "do you remember
+setting" — STOP. Re-check items 0 and 1.
 
 ## Logical breakpoints (replaces turn-count flag)
 
