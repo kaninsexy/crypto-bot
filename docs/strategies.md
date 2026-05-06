@@ -532,6 +532,7 @@ prior. No edge in this window.
 #### Phase 4 outcomes
 
 - **sentiment-momentum-filter (2026-05-05):** verdict=dry-run. sr=nan, baseline_sr=nan, dsr=nan, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+- **sentiment-momentum-filter (2026-05-06):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---
 

@@ -56,3 +56,10 @@ run_social_sentiment_momentum_trial.py` (import + fetch call swapped).
    substitution from LunarCrush to Fear & Greed.)
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+## Trial outcomes
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| sentiment-momentum-filter | 2026-05-06 | retire | None | None | 0 |
+
