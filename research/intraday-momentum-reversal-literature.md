@@ -125,3 +125,8 @@ returns ~= 720 1H candles per block before first signal fires).
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| intraday-conditional-momentum-reversal | 2026-05-07 | retire | -3.0496 | 0.0000 | 315 |
+
