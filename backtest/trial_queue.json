@@ -889,6 +889,159 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": true
+    },
+    {
+      "id": "sq-020",
+      "status": "queued",
+      "strategy_id": "ShortTermCrossSectionalMomentum",
+      "variation_id": "cs-short-term-mom-7d",
+      "script_path": "scripts/run_short_term_cross_sectional_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A cross-sectional strategy that buys the top-performing cryptocurrencies over a short lookback period (e.g., 1-30 days) and holds them for an equally short period (e.g., 1-7 days) will generate positive risk-adjusted returns.",
+      "source_citation": "Leigh Drogen (2023); Adam Zaremba (2021); Panagiotis Tzouvanas (2020)",
+      "literature_doc": "research/short-term-cross-sectional-momentum-literature.md",
+      "citations": [
+        {
+          "title": "Cross-sectional Momentum in Cryptocurrency Markets",
+          "authors": "Leigh Drogen, Corey Hoffstein, Kevin Otte",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Assets performing best over a 30-day period tend to continue to outperform over the subsequent 7-day period, with long-only strategies consistently delivering excess returns.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Adam Zaremba, Mehmet Huseyin Bilgin, Huaigang Long, Aleksander Mercik, Jan J. Szczygielski",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "While most cryptocurrencies exhibit daily reversal, the handful of largest and most liquid coins exhibit daily momentum, outperforming on day T+1 after a high return on day T.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Momentum trading in cryptocurrencies: Short-term returns and diversification benefits",
+          "authors": "Panagiotis Tzouvanas, Renatas Kizys, Bayasgalan Tsend-Ayush",
+          "year": 2020,
+          "source": "Economics Letters",
+          "key_finding": "The momentum effect is highly significant for short-term portfolios (e.g., 7-day formation and 7-day holding), but it disappears over longer terms.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 3.67,
+      "implementation_notes": "At each rebalancing period (e.g., weekly), rank liquid perpetual futures contracts by their return over a short lookback window (e.g., 7 or 30 days). Construct a long-only, equal-weighted portfolio of the top decile or quintile of performers. Hold the portfolio until the next rebalancing date. Based on research, a 7-day lookback with a 7-day hold is a promising configuration.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T16:43:46.942323+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-021",
+      "status": "queued",
+      "strategy_id": "VolatilityScaledTSMOM",
+      "variation_id": "volatility-scaled-tsmom",
+      "script_path": "scripts/run_volatility_scaled_tsmom_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Scaling time-series momentum signals by their recent volatility enhances risk-adjusted returns and reduces drawdowns compared to a basic TSMOM strategy in cryptocurrency perpetual futures.",
+      "source_citation": "Klaus Grobys (2025); M Pranav Kumar (2026); Catalin (2026)",
+      "literature_doc": "research/volatility-scaled-tsmom-literature.md",
+      "citations": [
+        {
+          "title": "Cryptocurrency momentum has (not) its moments",
+          "authors": "Klaus Grobys, James W. Kolari, Davide Sandretto, Syed Jawad H. Shahzad, Janne \u00c4ij\u00f6",
+          "year": 2025,
+          "source": "Financial Markets and Portfolio Management",
+          "key_finding": "Volatility management techniques applied to cryptocurrency momentum portfolios substantially increase payoffs and result in statistically significant alphas by mitigating severe crashes.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "TIME-SERIES MOMENTUM IN CRYPTOCURRENCY MARKETS: A PRE AND POST SPOT BITCOIN ETF ANALYSIS",
+          "authors": "M Pranav Kumar, Dr. B. Monica Jenefer",
+          "year": 2026,
+          "source": "Zenodo",
+          "key_finding": "A volatility-scaled Time-Series Momentum (TSMOM) portfolio generated a Sharpe ratio of 0.82 pre-ETF and 1.22 post-ETF, outperforming Buy-and-Hold in uncertain, regime-switching conditions.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "BTC Volatility Aligned Momentum Engine",
+          "authors": "Catalin",
+          "year": 2026,
+          "source": "finaur.com",
+          "key_finding": "A practitioner framework for a daily Bitcoin strategy aligns momentum signals with volatility regimes, using weekly ATR to scale risk and defining entry/exit conditions.",
+          "crypto_specific": true,
+          "quality_score": 2
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "Implement a standard time-series momentum strategy (e.g., long if past N-month return is positive). Position size is scaled inversely to the asset's forecasted volatility to target a constant level of risk contribution, as described in Barroso & Santa-Clara (2015) and tested in the crypto context by Grobys et al. (2025). Forecasted volatility can be estimated using a GARCH model or simple historical realized volatility (e.g., standard deviation of daily returns over the past 30-60 days).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T16:44:28.631162+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-022",
+      "status": "queued",
+      "strategy_id": "IntradayJumpReversal",
+      "variation_id": "intraday-jump-reversal-zscore",
+      "script_path": "scripts/run_intraday_jump_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Trading against large, statistically significant intraday price moves (jumps), as defined by a z-score relative to recent rolling volatility, generates positive risk-adjusted returns due to overreaction and transient liquidity imbalances.",
+      "source_citation": "Wen (2022); Zaremba (2021); Alexzap (2026)",
+      "literature_doc": "research/intraday-jump-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Intraday return predictability in the cryptocurrency markets: Momentum, reversal, or both",
+          "authors": "Wen, Zhuzhu; Bouri, Elie; Xu, Yahua; Zhao, Yang",
+          "year": 2022,
+          "source": "The North American Journal of Economics and Finance",
+          "key_finding": "A timing strategy based on intraday predictors, which includes reversal signals following large price jumps, produces higher economic value than a buy-and-hold benchmark in cryptocurrency markets.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Zaremba, Adam; Bilgin, Mehmet Huseyin; Long, Huaigang; Mercik, Aleksander; Szczygielski, Jan J.",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "On a daily frequency, cryptocurrencies with low last-day returns significantly outperform those with high last-day returns, with this reversal effect being strongest in illiquid coins.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Intraday Volatility Jump Mean-Reversion (JMR) Trading Strategy for BTC-USD in Python",
+          "authors": "Alexzap",
+          "year": 2026,
+          "source": "Medium / DEV Community",
+          "key_finding": "A backtest of a strategy on BTC-USD from 2022-2024 that shorts upward volatility jumps and longs downward volatility jumps, defined by a z-score threshold, generated a positive Sharpe Ratio.",
+          "crypto_specific": true,
+          "quality_score": 2
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "Calculate intraday returns (e.g., 1-hour). Compute a rolling standard deviation of returns over a lookback period (e.g., 24 hours). A jump is signaled when the absolute z-score of the current return (return / rolling_std) exceeds a threshold (e.g., 3.0). Fade the jump by taking a position opposite to the direction of the initial move and hold until the next signal. As noted in the sources, performance is regime-dependent and may degrade in strongly trending markets.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T16:45:29.258213+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
