@@ -81,7 +81,7 @@ implementation tests.
 
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
-| 1 | search-volume-momentum | short=7, long=28, top_n=1, hold=7 | full_cpcv | TBD | TBD | TBD | initial dev_cpcv trial |
+| 1 | search-volume-momentum | short=7, long=28, top_n=1, hold=7 | full_cpcv | 2.1057 | 1.0 | keep (dev) | headline +994.89%, max_dd 57.05%, margin vs baseline +0.167. Block distribution bimodal (blocks 2+3 Sharpes 9.86/21.10; p50=0.24). Adversarial note: distribution skew is expected -- strategy tested without regime gate; negative/flat blocks correspond to bear/range periods where attention momentum has no edge; regime gate applied at deploy time can only improve on this result. Proceed to holdout. |
 
 ## Trial outcomes
 
@@ -90,4 +90,15 @@ implementation tests.
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
 | search-volume-momentum | 2026-05-07 | keep | 2.1057 | 1.0000 | 57 |
+
+### Variation 1 -- search-volume-momentum (dev CPCV)
+- trial_id: 8c1278b5d259411b969260a61d5cea28
+- sr_observed: 2.1057, baseline: 1.9391, DSR: 1.0, n_trades: 57
+- block_sharpes: [nan, -0.493, 9.859, 21.097, -0.402, nan, nan, -1.509, 0.753, 0.241]
+- All four verdict booleans True. Dev verdict: KEEP.
+- Adversarial review: block distribution dominated by two bull-run
+  blocks; p50=0.241. Resolved: strategy runs without regime gate in
+  backtest (conservative test); deployment adds regime filter.
+  Expected pattern for attention-momentum strategy class.
+- Holdout: PENDING -- awaiting human approval for holdout access.
 

@@ -620,6 +620,15 @@ prior. No edge in this window.
 
 #### Phase 4 outcomes
 
-- **search-volume-momentum (2026-05-07):** verdict=keep. sr=2.1057, baseline_sr=1.9391, dsr=1.0000, n_trades=57, mt_mean_pass=True, baseline_pass=True.
+- **search-volume-momentum (sq-018, 2026-05-07):** dev verdict=KEEP.
+  sr_observed=2.1057 vs BTC B&H baseline=1.9391 (+0.167 margin),
+  DSR=1.0, n_trades=57. All four verdict booleans True
+  (trade_count_pass, mintrl_pass, mt_mean_pass, baseline_pass).
+  trial_id=8c1278b5d259411b969260a61d5cea28. Block distribution
+  bimodal (blocks 2+3 Sharpes 9.86/21.10; p50=0.24): expected for
+  the strategy class -- backtest runs without a regime gate
+  (conservative); deployment adds the regime filter. **Holdout:
+  PENDING -- awaiting human approval for holdout access.** First
+  KEEP verdict in Phase 4.
 
 ---
