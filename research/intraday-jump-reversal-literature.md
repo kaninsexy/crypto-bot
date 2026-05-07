@@ -134,3 +134,4 @@ vol_window + 2 candles accumulate) cover the warmup period.
 
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
+| intraday-jump-reversal-zscore | 2026-05-07 | retire | -1.0974 | 0.0000 | 241 |

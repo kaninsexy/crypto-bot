@@ -607,3 +607,11 @@ prior. No edge in this window.
 - **volatility-scaled-tsmom (2026-05-07):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---
+
+### IntradayJumpReversal
+
+#### Phase 4 outcomes
+
+- **intraday-jump-reversal-zscore (2026-05-07):** verdict=retire. sr=-1.0974, baseline_sr=1.9373, dsr=0.0000, n_trades=241, mt_mean_pass=False, baseline_pass=False.
+
+---
