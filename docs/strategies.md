@@ -583,3 +583,11 @@ prior. No edge in this window.
 - **cs-momentum-long-winners (2026-05-07):** verdict=retire. sr=1.6423, baseline_sr=1.9391, dsr=1.0000, n_trades=73, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### CrossSectionalSkewness
+
+#### Phase 4 outcomes
+
+- **cs-expected-idio-skewness (2026-05-07):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---

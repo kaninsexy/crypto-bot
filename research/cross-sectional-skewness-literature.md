@@ -88,3 +88,8 @@ exactly what this implementation tests.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-expected-idio-skewness | 2026-05-07 | retire | None | None | 0 |
+
