@@ -21,6 +21,7 @@ Output of this module is ASCII-only (Windows cp1252 compatible).
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -279,6 +280,12 @@ def build_strategy(
     prompt, strategy_module, strategy_class = _render_prompt(item)
 
     cmd = ["claude", "--print", prompt]
+    # Strip ANTHROPIC_API_KEY so the claude CLI uses its OAuth session
+    # (Claude Max plan) rather than billing the API key. The Machine-
+    # scope env carries ANTHROPIC_API_KEY for the proposal agent's
+    # Anthropic fallback; that key MUST NOT be visible to `claude`.
+    env = os.environ.copy()
+    env.pop("ANTHROPIC_API_KEY", None)
     try:
         proc = subprocess.run(
             cmd,
@@ -286,6 +293,7 @@ def build_strategy(
             text=True,
             timeout=CC_BUILD_TIMEOUT_S,
             cwd=str(repo_root),
+            env=env,
         )
     except subprocess.TimeoutExpired:
         return (False, f"TIMEOUT after {CC_BUILD_TIMEOUT_S}s")
