@@ -488,6 +488,57 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-012",
+      "status": "queued",
+      "strategy_id": "VolumeWeightedTSMOM",
+      "variation_id": "volume-weighted-tsmom",
+      "script_path": "scripts/run_volume_weighted_tsmom_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A time-series momentum signal that gives more weight to past returns that occurred on higher trading volume will produce superior risk-adjusted returns compared to a simple time-series momentum strategy.",
+      "source_citation": "Zih-Chun Huang (2024); D. Shen (2022); Xiaolu Li (2023)",
+      "literature_doc": "research/volume-weighted-tsmom-literature.md",
+      "citations": [
+        {
+          "title": "Cryptocurrency Volume-Weighted Time Series Momentum",
+          "authors": "Zih-Chun Huang, Ivan Sangiorgi, Andrew Urquhart",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "A volume-weighted winner-minus-loser TSMOM portfolio can gain 0.94% per day with an annualized Sharpe ratio of 2.17, outperforming other TSMOM strategies.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Bitcoin Intraday Time-Series Momentum",
+          "authors": "D. Shen, A. Urquhart, P. Wang",
+          "year": 2022,
+          "source": "Financial Review",
+          "key_finding": "Using high-volume periods to define the trading day, the first half-hour return positively predicts the last half-hour return, and trading this effect yields substantial economic gains.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Time Series Momentum Trading Strategy for Cryptocurrencies",
+          "authors": "Xiaolu Li, Xinyin Zhang",
+          "year": 2023,
+          "source": "Proceedings of the 2nd International Conference on Business and Policy Studies (Springer)",
+          "key_finding": "A daily TSMOM strategy on top cryptocurrencies with short lookback horizons generates significant positive profits and higher Sharpe ratios than passive holding, even with 0.1% transaction costs.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 3.5,
+      "implementation_notes": "For a given lookback period (e.g., 20 days), calculate the time-series momentum signal as the volume-weighted average of daily returns. The formula would be Signal = \u03a3(return_i * volume_i) / \u03a3(volume_i) over the lookback period. Go long if the signal is positive and short if the signal is negative. Rebalance daily or at the end of the holding period.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T02:02:20.566782+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": false
     }
   ]
 }
