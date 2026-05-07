@@ -48,3 +48,8 @@ the subsequent daily rebalance period.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-short-term-reversal-loser-portfolio | 2026-05-07 | retire | -0.1077 | 0.0006 | 1432 |
+

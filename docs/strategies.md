@@ -567,3 +567,11 @@ prior. No edge in this window.
 - **volume-weighted-tsmom-v1 (2026-05-07):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---
+
+### CrossSectionalReversal
+
+#### Phase 4 outcomes
+
+- **cs-short-term-reversal-loser-portfolio (2026-05-07):** verdict=retire. sr=-0.1077, baseline_sr=1.9391, dsr=0.0006, n_trades=1432, mt_mean_pass=False, baseline_pass=False.
+
+---
