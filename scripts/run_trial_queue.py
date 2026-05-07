@@ -304,13 +304,108 @@ def save_queue(data: dict) -> None:
     os.replace(tmp, STATE_PATH)
 
 
+def _pid_is_alive(pid: int) -> bool:
+    """True iff `pid` is currently a live process.
+
+    Uses psutil when importable (handles platform quirks); otherwise
+    falls back to `os.kill(pid, 0)`. On POSIX, dead pids raise
+    ProcessLookupError; PermissionError means the process exists but
+    is unsignalable by the caller (still alive). On Windows, dead
+    pids raise a generic OSError (errno 87 / ERROR_INVALID_PARAMETER).
+    """
+    if pid <= 0:
+        return False
+    try:
+        import psutil  # type: ignore[import-not-found]
+        return bool(psutil.pid_exists(pid))
+    except ImportError:
+        pass
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # POSIX: process exists, we can't signal it -> still alive.
+        return True
+    except OSError:
+        # Windows dead-pid path (and any other unexpected error).
+        # Best-effort liveness check: treat as dead.
+        return False
+
+
+def _maybe_release_stale_lock() -> None:
+    """If LOCK_PATH exists, decide whether the recorded PID is still
+    alive; if not, delete the lock file and print a one-line warning.
+
+    A force-kill (SIGKILL / Stop-Process -Force) bypasses the finally
+    block in release_lock(), leaving an orphan lock file. This helper
+    detects that case so the operator does not have to remove it by
+    hand. Live PIDs are left untouched -- the existing
+    "Another instance is running" path in acquire_lock() handles them.
+    """
+    if not LOCK_PATH.exists():
+        return
+    try:
+        raw = LOCK_PATH.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        try:
+            LOCK_PATH.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(
+            f"[lock] stale lock from unreadable file ({exc}) "
+            "-- auto-released",
+            file=sys.stderr,
+        )
+        return
+    try:
+        pid = int(raw)
+    except (TypeError, ValueError):
+        try:
+            LOCK_PATH.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(
+            f"[lock] stale lock with invalid PID {raw!r} "
+            "-- auto-released",
+            file=sys.stderr,
+        )
+        return
+    if _pid_is_alive(pid):
+        return  # Real lock; acquire_lock will surface "another instance".
+    try:
+        LOCK_PATH.unlink(missing_ok=True)
+    except OSError as exc:
+        # If unlink fails (Windows non-shared-delete on a process that
+        # JUST died but whose handle hasn't been reaped yet), let the
+        # subsequent acquire_lock attempt fall through to the standard
+        # "another instance" path. Surface for diagnosis.
+        print(
+            f"[lock] dead PID {pid} detected but unlink failed ({exc}); "
+            "leaving lock file in place",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"[lock] stale lock from dead PID {pid} -- auto-released",
+        file=sys.stderr,
+    )
+
+
 def acquire_lock():
     """Exclusive non-blocking lock; sys.exit(1) if another instance holds it.
 
     Uses msvcrt.locking on Windows (LK_NBLCK = non-blocking exclusive
     1-byte lock) and fcntl.flock on Unix (LOCK_EX | LOCK_NB). Both
     ship with Python stdlib.
+
+    Before opening the lock file, calls `_maybe_release_stale_lock()`
+    to auto-clear an orphan lock file left by a force-killed prior
+    invocation. Live-PID locks are left intact and surface via the
+    existing "Another instance is running" path.
     """
+    _maybe_release_stale_lock()
     fd = open(LOCK_PATH, "w", encoding="utf-8")
     if sys.platform == "win32":
         try:
