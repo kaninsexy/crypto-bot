@@ -93,3 +93,8 @@ BTC/USDT 1D spot candles. Manifest entry `VolumeWeightedTSMOM`:
 ## Trial outcomes
 
 <!-- Populated by the orchestrator after the trial completes. -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| volume-weighted-tsmom-v1 | 2026-05-07 | retire | None | None | 0 |
+
