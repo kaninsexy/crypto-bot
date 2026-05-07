@@ -138,6 +138,22 @@ Verifications to run after creating files:
   python -m py_compile {script_path} && echo compile_ok
   python scripts/run_trial_queue.py --status
 
+Google Trends sync (only if the trial script uses Google Trends):
+If the strategy's trial script defines a SYMBOL_TO_KEYWORD dict or
+any per-symbol keyword mapping used in data.google_trends calls,
+extract the exact keyword strings from that mapping and update
+scripts/warm_google_trends_cache.py. Update the KEYWORDS list to be
+the union of the existing keywords and the new strategy's keywords.
+Preserve existing order, append new entries at the end, no
+duplicates. The keyword strings must exactly match the strings
+passed to load_or_fetch_trends in the trial script -- the cache
+key is derived from the keyword string, so a single character
+difference is a cache miss.
+After updating warm_google_trends_cache.py, run:
+  python -m py_compile scripts/warm_google_trends_cache.py && echo warm_compile_ok
+If warm_compile_ok does not appear, print BUILD_FAILED: warm script
+compile failed and stop.
+
 If any verification fails: print 'BUILD_FAILED: <reason>' and stop.
 If all pass: run `python -c "print('BUILD_OK')"` (so the exact
      string BUILD_OK appears in stdout) and commit with heredoc message:
@@ -178,10 +194,15 @@ def _run_post_build_verifications(
 ) -> tuple[bool, str]:
     """Independent verification: do not trust CC's self-reported pass.
 
-    Three subprocesses, each gated by VERIFY_TIMEOUT_S:
+    Four subprocesses, each gated by VERIFY_TIMEOUT_S:
       1. Strategy module imports cleanly.
       2. Trial script compiles (py_compile).
       3. Orchestrator --status exits 0 and lists the queue item id.
+      4. warm_google_trends_cache.py compiles (skipped if file absent)
+         -- catches the sq-018 keyword-mismatch class of bugs where CC
+         updates the trial script's SYMBOL_TO_KEYWORD mapping but
+         leaves the warm script's KEYWORDS list stale, producing
+         silent cache misses on the next live run.
 
     Returns (ok, detail). On failure, detail names the failing step
     and includes the captured stderr tail.
@@ -250,6 +271,34 @@ def _run_post_build_verifications(
             False,
             f"verify[--status]: item {item_id} missing from queue listing",
         )
+
+    # 4. warm_google_trends_cache.py compile (only if the file exists).
+    #    If the build added a Google Trends strategy, CC was instructed
+    #    to update warm_google_trends_cache.py KEYWORDS to match the
+    #    trial script's SYMBOL_TO_KEYWORD mapping; this verification
+    #    catches a botched edit before the next pre-warm run hits
+    #    a syntax error.
+    warm_path = repo_root / "scripts" / "warm_google_trends_cache.py"
+    if warm_path.exists():
+        cmd4 = [
+            sys.executable, "-m", "py_compile", str(warm_path),
+        ]
+        try:
+            proc = subprocess.run(
+                cmd4, capture_output=True, text=True,
+                timeout=VERIFY_TIMEOUT_S, cwd=str(repo_root),
+            )
+        except subprocess.TimeoutExpired:
+            return (
+                False,
+                f"verify[warm_compile]: TIMEOUT after {VERIFY_TIMEOUT_S}s",
+            )
+        if proc.returncode != 0:
+            tail = (proc.stderr or proc.stdout or "")[-400:]
+            return (
+                False,
+                f"verify[warm_compile]: rc={proc.returncode} {tail}",
+            )
 
     return (True, "post-build verifications passed")
 
