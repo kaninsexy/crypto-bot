@@ -39,7 +39,7 @@ from data.google_trends import (
 
 # AttentionMomentum (sq-018) trades a 5-asset basket; pre-warming all
 # five keywords avoids a live fetch in the trial subprocess.
-KEYWORDS: list[str] = ["bitcoin", "ethereum", "solana", "bnb", "ripple"]
+KEYWORDS: list[str] = ["bitcoin", "ethereum", "solana", "binance coin", "xrp"]
 
 # 38 months mirrors the OHLCV cache convention (e.g.
 # BTC-USDT_1d_38mo.parquet) so the search-volume window covers the
