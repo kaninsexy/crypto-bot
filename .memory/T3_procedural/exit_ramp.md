@@ -7,10 +7,12 @@ and verified. If prior CC has issues, the pre-written next prompt
 becomes wasted tokens and a drift risk. Sequence: prior CC report →
 chat-side review → user commits → THEN draft next CC prompt.
 
-Proactive timing: when chat reaches ~20 turns or earlier context
-requires reconstruction from memory rather than from visible
-conversation, start exit ramp immediately. Do not wait for a task
-milestone. A handoff drafted after context degrades is unreliable.
+Breakpoint rule: at every logical breakpoint — including every CC
+run that completes with self-checks passing — explicitly tell the
+user this is a breakpoint and ask whether to continue in this chat
+or start fresh. Do not silently start the next task.
+The user decides, not Claude. This avoids both failure modes:
+exiting mid-task and running past the point where handoff is reliable.
 
 Every deliberation/state-change response that produces or accepts a
 state change ends with the full forward chain in ONE message. The user
