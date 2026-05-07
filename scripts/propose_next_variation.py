@@ -480,13 +480,22 @@ def research_domain(domain: str, context: str) -> dict | None:
 
 # ── Phase 3: queue-item formulation ─────────────────────────────────────────
 
+# Word cap for strategy_id derivation. Replaces the prior 30-char
+# hard truncation that produced mid-word cuts like
+# "InterExchangeVolumeFlowAnalysi". A whole-word cap leaves the
+# resulting id legible regardless of input length.
+_STRATEGY_ID_MAX_WORDS = 4
+
+
 def _to_strategy_id(domain: str) -> str:
+    if not domain or "." in domain or domain.lower().startswith("http"):
+        return "Unknown"
     cleaned = re.sub(r"[^A-Za-z0-9 ]", " ", domain)
-    parts = [p for p in cleaned.split() if p]
+    parts = [p for p in cleaned.split() if len(p) > 1]
     if not parts:
         return "Unknown"
-    out = "".join(p.capitalize() for p in parts)
-    return out[:30]
+    parts = parts[:_STRATEGY_ID_MAX_WORDS]
+    return "".join(p.capitalize() for p in parts)
 
 
 def _to_snake_case(name: str) -> str:
