@@ -1754,18 +1754,62 @@ def _print_dry_run_plan(items_to_run: list[dict], n_workers: int) -> None:
         )
 
 
+# Proposal agent timeout: 5 minutes. The agent makes network/API calls
+# with no internal timeout; this caps the wait so an unresponsive
+# upstream cannot hang the orchestrator indefinitely.
+PROPOSAL_AGENT_TIMEOUT_S = 300
+
+
 def _invoke_proposal_agent(dry_run: bool) -> None:
+    # --dry-run is contractually side-effect-free: never spawn the
+    # proposal-agent subprocess (which makes outbound network/API calls)
+    # in dry-run mode. Print the skip line and return so the caller's
+    # `break` exits the main loop cleanly.
+    if dry_run:
+        print("[dry-run] Queue exhausted. Proposal agent skipped.")
+        return
+
     print("Queue is empty. Invoking proposal agent...")
     proposal_script = ROOT / "scripts" / "propose_next_variation.py"
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
-    proc = subprocess.run(
-        [sys.executable, str(proposal_script)],
-        capture_output=True,
-        text=True,
-        cwd=str(ROOT),
-        env=env,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(proposal_script)],
+            capture_output=True,
+            text=True,
+            cwd=str(ROOT),
+            env=env,
+            timeout=PROPOSAL_AGENT_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as exc:
+        msg = (
+            f"Proposal agent TIMEOUT after {PROPOSAL_AGENT_TIMEOUT_S}s "
+            f"(no response from upstream LLM/API). Aborting cleanly; "
+            "queue unchanged. Re-invoke the orchestrator to retry."
+        )
+        print(msg, file=sys.stderr)
+        # Surface any partial output the agent emitted before the kill.
+        if isinstance(exc.stdout, (bytes, str)) and exc.stdout:
+            tail = (
+                exc.stdout.decode("utf-8", errors="replace")
+                if isinstance(exc.stdout, bytes)
+                else exc.stdout
+            )
+            print(tail[-2000:], end="")
+        if isinstance(exc.stderr, (bytes, str)) and exc.stderr:
+            tail = (
+                exc.stderr.decode("utf-8", errors="replace")
+                if isinstance(exc.stderr, bytes)
+                else exc.stderr
+            )
+            print(tail[-2000:], end="", file=sys.stderr)
+        send_proposal_failure_email(
+            f"TIMEOUT after {PROPOSAL_AGENT_TIMEOUT_S}s",
+            dry_run,
+        )
+        return
+
     if proc.stdout:
         print(proc.stdout, end="")
     if proc.stderr:
@@ -1773,6 +1817,39 @@ def _invoke_proposal_agent(dry_run: bool) -> None:
     if proc.returncode != 0:
         print("Proposal agent failed. Check output above.")
         send_proposal_failure_email(proc.stderr or "", dry_run)
+
+
+def _print_status() -> int:
+    """Print one line per queue item (id, status, verdict) and exit.
+
+    Zero-side-effect inspection path for the operator: no lock, no
+    subprocess spawn, no file write. Reads `backtest/trial_queue.json`
+    via load_queue() so the merged definitions+state view (the same
+    one the orchestrator sees) is what gets reported.
+
+    Output columns are width-padded against the actual content:
+      <id>  <status>  <verdict-or-blank>
+    """
+    queue_data = load_queue()
+    items = queue_data.get("queue", [])
+    if not items:
+        print("(queue is empty)")
+        return 0
+    id_w = max(len("id"), *(len(str(it.get("id") or "")) for it in items))
+    status_w = max(
+        len("status"),
+        *(len(str(it.get("status") or "")) for it in items),
+    )
+    for it in items:
+        item_id = str(it.get("id") or "")
+        status = str(it.get("status") or "")
+        verdict = str(it.get("verdict") or "")
+        print(
+            f"{item_id.ljust(id_w)}  "
+            f"{status.ljust(status_w)}  "
+            f"{verdict}".rstrip()
+        )
+    return 0
 
 
 def main() -> int:
@@ -1796,6 +1873,16 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--status",
+        action="store_true",
+        help=(
+            "Print one line per queue item (id, status, verdict) and "
+            "exit. Zero side effects: no lock, no subprocess spawn, no "
+            "file write. Use to inspect queue state from PowerShell "
+            "without triggering orchestrator or proposal-agent logic."
+        ),
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -1806,6 +1893,11 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+
+    # --status short-circuits before lock acquisition and the email-key
+    # check: read-only inspection, zero side effects.
+    if args.status:
+        return _print_status()
 
     # --reset-errors short-circuits before the email-key check: it
     # mutates the queue file only, no Resend POSTs are involved.
