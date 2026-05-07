@@ -47,10 +47,10 @@ the chat at any of these:
   close, new chat for next variation or next strategy.
 - Audit completes (memory, CLAUDE.md, project state) → close,
   new chat for downstream work.
-- At every logical breakpoint: explicitly tell the user this is a
-  breakpoint and ask whether to continue in this chat or start
-  fresh. Do not silently start the next task. The user decides,
-  not Claude.
+- Chat-side only. At every logical breakpoint: explicitly tell the
+  user this is a breakpoint and ask whether to continue in this
+  chat or start fresh. Do not silently start the next task.
+  The user decides, not Claude.
 
 Difficult work legitimately needs more turns. Don't fixate on a
 turn count. The signal is task completion, not turn count.
