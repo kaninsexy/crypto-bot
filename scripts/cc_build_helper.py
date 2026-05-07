@@ -139,7 +139,8 @@ Verifications to run after creating files:
   python scripts/run_trial_queue.py --status
 
 If any verification fails: print 'BUILD_FAILED: <reason>' and stop.
-If all pass: print 'BUILD_OK' and commit with heredoc message:
+If all pass: run `python -c "print('BUILD_OK')"` (so the exact
+     string BUILD_OK appears in stdout) and commit with heredoc message:
   feat: auto-build {strategy_id} {variation_id} implementation
 Then print git log -1 and stop.
 """
@@ -317,15 +318,24 @@ def build_strategy(
     stderr = proc.stderr or ""
     log = stdout + ("\n[stderr tail]\n" + stderr if stderr else "")
 
-    if proc.returncode != 0 and "BUILD_OK" not in stdout:
+    # Accept either the literal "BUILD_OK" sentinel (preferred, emitted
+    # via `python -c "print('BUILD_OK')"`) OR the prose "Build complete"
+    # which the claude CLI sometimes uses in --print stdout. The
+    # BUILD_FAILED gate and the post-build verification gate below are
+    # unchanged: the broader sentinel only widens what we consider a
+    # CC-side success claim, never what we consider a real build pass.
+    def _build_succeeded(s: str) -> bool:
+        return "BUILD_OK" in s or "Build complete" in s
+
+    if proc.returncode != 0 and not _build_succeeded(stdout):
         return (False, log[-2000:])
     if "BUILD_FAILED" in stdout:
         return (False, log[-2000:])
-    if "BUILD_OK" not in stdout:
+    if not _build_succeeded(stdout):
         return (
             False,
-            "neither BUILD_OK nor BUILD_FAILED found in CC output\n"
-            + log[-2000:],
+            "neither BUILD_OK nor 'Build complete' nor BUILD_FAILED "
+            "found in CC output\n" + log[-2000:],
         )
 
     # Independent verifications. Even if CC self-reports BUILD_OK
