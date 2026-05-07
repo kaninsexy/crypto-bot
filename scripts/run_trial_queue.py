@@ -1811,7 +1811,19 @@ def _auto_build_pass(
     # actually has work to build, so a stale `claude` CLI on PATH does
     # not break --status / --reset-errors / --dry-run with no
     # needs_trial_script items in the queue.
-    from scripts.cc_build_helper import build_strategy
+    #
+    # `scripts/` has no __init__.py and is not a package on sys.path,
+    # so `from scripts.cc_build_helper import build_strategy` fails
+    # with ModuleNotFoundError. Load by absolute file path instead --
+    # no __init__.py, no sys.path mutation.
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location(
+        "cc_build_helper",
+        Path(__file__).resolve().parent / "cc_build_helper.py",
+    )
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    build_strategy = _mod.build_strategy
 
     needs_build = [
         it for it in items_to_run if it.get("needs_trial_script")
