@@ -66,7 +66,7 @@ MAX_QUEUED_ITEMS = int(os.environ.get("TRIAL_QUEUE_MAX_QUEUED_ITEMS", "10"))
 # backlog while the orchestrator drains the existing queue. Each
 # queued item consumes future build/run capacity, so the cap counts
 # both needs_trial_script=True and build-ready items equally.
-MAX_QUEUED_BEFORE_SKIP = 3
+MAX_QUEUED_BEFORE_SKIP = 6
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")

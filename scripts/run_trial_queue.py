@@ -170,7 +170,7 @@ TRIAL_AUTO_RETRY_MAX = 1
 # 429 retry policy: backoff window before a rate-limited trial may
 # rerun, and the per-item attempt cap. After RETRY_429_MAX_ATTEMPTS
 # the item falls through to status="error" as normal.
-RETRY_429_BACKOFF_HOURS = 4
+RETRY_429_BACKOFF_HOURS = 0.5
 RETRY_429_MAX_ATTEMPTS = 3
 
 
