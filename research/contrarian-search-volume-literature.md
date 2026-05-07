@@ -34,7 +34,7 @@ buy-and-hold.
 
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
-| 1 | contrarian-search-volume-spike | window=4, threshold=1.0 | full_cpcv | TBD | TBD | TBD | first trial |
+| 1 | contrarian-search-volume-spike | window=4, threshold=1.0 | full_cpcv | None | None | retire | CPCVError; 1/10 blocks valid |
 
 ## Trial outcomes
 

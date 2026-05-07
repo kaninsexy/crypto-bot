@@ -31,7 +31,7 @@ basket.
 
 | # | id | params | trial_type | sharpe | dsr | verdict | notes |
 |---|----|--------|------------|--------|-----|---------|-------|
-| 1 | cs-illiquidity-premium-v1 | window=30, top_n=3 | full_cpcv | TBD | TBD | TBD | first trial |
+| 1 | cs-illiquidity-premium-v1 | window=30, top_n=3 | full_cpcv | None | None | retire | CPCVError; n_trades=0 |
 
 ## Trial outcomes
 

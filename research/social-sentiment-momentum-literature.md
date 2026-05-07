@@ -21,6 +21,12 @@ social_sentiment_momentum.py` (column renamed `galaxy_score` ->
 `fear_greed_value`; docstring updated), `scripts/
 run_social_sentiment_momentum_trial.py` (import + fetch call swapped).
 
+## Variation table
+
+| # | id | params | trial_type | sharpe | dsr | verdict | notes |
+|---|----|--------|------------|--------|-----|---------|-------|
+| 1 | sentiment-momentum-filter | window=7, entry=50, exit=45 | full_cpcv | None | None | retire | CPCVError; 5 trades |
+
 ## Citations
 
 1. **Zhang, J., Zhang, C. (2022).** "Do cryptocurrency markets react to
