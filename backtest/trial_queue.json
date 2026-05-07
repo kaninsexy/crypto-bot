@@ -493,7 +493,7 @@
       "id": "sq-012",
       "status": "queued",
       "strategy_id": "VolumeWeightedTSMOM",
-      "variation_id": "volume-weighted-tsmom",
+      "variation_id": "volume-weighted-tsmom-v1",
       "script_path": "scripts/run_volume_weighted_tsmom_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "A time-series momentum signal that gives more weight to past returns that occurred on higher trading volume will produce superior risk-adjusted returns compared to a simple time-series momentum strategy.",

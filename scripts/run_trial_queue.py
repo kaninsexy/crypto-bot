@@ -150,7 +150,21 @@ _RUNTIME_DEFAULTS: dict = {
     # eligible to flip back to queued. None when the item is not in
     # retry_pending.
     "retry_after": None,
+    # Auto-build / auto-retry counters. build_attempts increments on
+    # every CC auto-build invocation (success or failure). run_attempts
+    # increments on every trial-subprocess attempt; the orchestrator
+    # auto-requeues once on transient failure before falling through
+    # to status="error".
+    "build_attempts": 0,
+    "run_attempts": 0,
 }
+
+
+# Auto-retry policy for trial subprocess errors. After a non-zero
+# trial returncode (and no 429/missing-data special path triggered)
+# the orchestrator requeues the item once before the standard
+# error path fires. Keeps transient flakes from polluting the queue.
+TRIAL_AUTO_RETRY_MAX = 1
 
 
 # 429 retry policy: backoff window before a rate-limited trial may
@@ -1293,6 +1307,24 @@ def send_keep_email(item: dict, summary: dict, dry_run: bool) -> None:
     _send_email(subject, "\n".join(body_lines), dry_run)
 
 
+def _send_build_failure_email(
+    item: dict, log: str, dry_run: bool = False,
+) -> None:
+    """Notify the human when CC auto-build for a queue item fails.
+
+    Subject names the strategy + variation; body is the tail of the
+    CC build log (capped at 1500 chars to keep email size sane).
+    Routed through the existing _send_email() helper so the
+    dry-run / RESEND-not-set guards apply uniformly.
+    """
+    subject = (
+        f"build failed: {item.get('strategy_id', '?')} "
+        f"{item.get('variation_id', '?')}"
+    )
+    body = (log or "")[:1500]
+    _send_email(subject, body, dry_run)
+
+
 def send_proposal_failure_email(stderr_tail: str, dry_run: bool) -> None:
     """Notify the human when the proposal agent exits non-zero."""
     subject = "trials: proposal agent failed -- manual research needed"
@@ -1452,10 +1484,18 @@ def maybe_send_digest(queue_data: dict, dry_run: bool) -> None:
 # ── Batch runner ────────────────────────────────────────────────────────────
 
 def _select_runnable(queue_data: dict) -> list[dict]:
-    """Every queued item that does NOT need a trial script written."""
+    """Every queued item, including those whose trial script has not
+    been written yet.
+
+    needs_trial_script=true items are routed through the auto-build
+    path in run_batch() before the trial subprocess spawns: this
+    helper no longer filters them out. The build path either flips
+    needs_trial_script=False and lets the item proceed to the worker,
+    or marks it status=error with the build log.
+    """
     return [
         it for it in queue_data.get("queue", [])
-        if it.get("status") == "queued" and not it.get("needs_trial_script")
+        if it.get("status") == "queued"
     ]
 
 
@@ -1667,6 +1707,30 @@ def process_batch_results(
                 stderr[:500] if returncode != 0
                 else "sentinel not found in stdout"
             )
+
+            # Trial auto-retry: requeue once before falling through to
+            # status="error". Catches transient subprocess flakes (CI
+            # noise, transient OS errors) without polluting the queue.
+            run_attempts = int(item.get("run_attempts", 0))
+            if run_attempts < TRIAL_AUTO_RETRY_MAX:
+                item["status"] = "queued"
+                item["started_at"] = None
+                item["finished_at"] = None
+                item["run_attempts"] = run_attempts + 1
+                # Preserve the stderr tail so the digest can show the
+                # transient cause if the second attempt also fails.
+                item["error"] = (
+                    f"transient (attempt {run_attempts + 1}/"
+                    f"{TRIAL_AUTO_RETRY_MAX + 1}): {reason}"
+                )[:500]
+                save_queue(queue_data)
+                print(
+                    f"[queue] AUTO-RETRY item {item_id}: requeued "
+                    f"(attempt {run_attempts + 1}/"
+                    f"{TRIAL_AUTO_RETRY_MAX + 1}) | {reason[:160]}"
+                )
+                continue
+
             item["status"] = "error"
             item["error"] = reason[:500]
             item["finished_at"] = finished_at
@@ -1716,13 +1780,131 @@ def process_batch_results(
     return done_count
 
 
+def _auto_build_pass(
+    items_to_run: list[dict], dry_run: bool,
+) -> list[dict]:
+    """Run the CC auto-build path for every selected item flagged
+    needs_trial_script=true. Returns the filtered list of items that
+    are ready to run trials (build succeeded, or no build needed).
+
+    Build failures mark the item status=error, set
+    item["error"] = "auto-build failed: ..." (capped at 400 chars),
+    increment build_attempts, save the queue, and dispatch a build-
+    failure email. The failed item is dropped from the returned list
+    so the worker pool does not try to spawn its (still-missing)
+    trial script.
+
+    On success: needs_trial_script flips to False, build_attempts
+    increments, and the item stays in the returned list.
+
+    --dry-run does not invoke CC: cc_build_helper.build_strategy
+    short-circuits and prints "[dry-run] would build: ...". The
+    item stays needs_trial_script=true (the build did not actually
+    happen), so the orchestrator drops it from this batch's runnable
+    set to avoid spawning a missing trial script.
+    """
+    if not items_to_run:
+        return items_to_run
+
+    # Lazy import: cc_build_helper is only loaded when the orchestrator
+    # actually has work to build, so a stale `claude` CLI on PATH does
+    # not break --status / --reset-errors / --dry-run with no
+    # needs_trial_script items in the queue.
+    from scripts.cc_build_helper import build_strategy
+
+    needs_build = [
+        it for it in items_to_run if it.get("needs_trial_script")
+    ]
+    if not needs_build:
+        return items_to_run
+
+    # Reload state fresh; mutations land via save_queue and are
+    # immediately observable to the rest of run_batch().
+    queue_data = load_queue()
+    by_id = {it.get("id"): it for it in queue_data.get("queue", [])}
+
+    ready: list[dict] = []
+    for it in items_to_run:
+        if not it.get("needs_trial_script"):
+            ready.append(it)
+            continue
+
+        item_id = it.get("id")
+        live = by_id.get(item_id)
+        if live is None:
+            print(
+                f"[queue] auto-build: item {item_id} missing from "
+                "queue (definitions out of sync); skipping",
+                file=sys.stderr,
+            )
+            continue
+
+        print(
+            f"[queue] auto-build: invoking CC for {item_id} "
+            f"({live.get('strategy_id')} / {live.get('variation_id')})"
+        )
+        try:
+            success, log = build_strategy(
+                live, ROOT, dry_run=dry_run,
+            )
+        except Exception as exc:  # noqa: BLE001
+            success, log = (
+                False,
+                f"build_strategy raised {exc.__class__.__name__}: {exc}",
+            )
+
+        live["build_attempts"] = int(live.get("build_attempts", 0)) + 1
+
+        if dry_run:
+            # Build was a no-op skip; needs_trial_script stays true.
+            # Drop from this batch's runnable set so the worker pool
+            # does not attempt to spawn the (still-missing) trial.
+            save_queue(queue_data)
+            continue
+
+        if success:
+            live["needs_trial_script"] = False
+            save_queue(queue_data)
+            print(
+                f"[queue] auto-build: BUILD_OK for {item_id}; "
+                "queueing for trial"
+            )
+            ready.append(it)
+            # Reflect the freshly-cleared flag on the item the worker
+            # will see (run_batch holds its own dict reference).
+            it["needs_trial_script"] = False
+        else:
+            live["status"] = "error"
+            live["error"] = (f"auto-build failed: {log}")[:400]
+            live["finished_at"] = utcnow_iso()
+            save_queue(queue_data)
+            print(
+                f"[queue] auto-build: FAILED for {item_id} "
+                f"(build_attempts={live['build_attempts']}); "
+                "skipping trial run",
+                file=sys.stderr,
+            )
+            _send_build_failure_email(live, log, dry_run)
+
+    return ready
+
+
 def run_batch(
     items_to_run: list[dict],
     n_workers: int,
     dry_run: bool,
 ) -> int:
-    """One batch: mark running → spawn → collect → docs+commit.
+    """One batch: auto-build needs_trial_script items -> mark running
+    -> spawn -> collect -> docs+commit.
+
     Returns the number of items that reached done."""
+    if not items_to_run:
+        return 0
+
+    # Auto-build pass: any items with needs_trial_script=true get
+    # routed through cc_build_helper.build_strategy before workers
+    # spawn. Returns the filtered list of items actually ready to run.
+    items_to_run = _auto_build_pass(items_to_run, dry_run)
     if not items_to_run:
         return 0
 
