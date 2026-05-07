@@ -575,3 +575,11 @@ prior. No edge in this window.
 - **cs-short-term-reversal-loser-portfolio (2026-05-07):** verdict=retire. sr=-0.1077, baseline_sr=1.9391, dsr=0.0006, n_trades=1432, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### CrossSectionalMomentum
+
+#### Phase 4 outcomes
+
+- **cs-momentum-long-winners (2026-05-07):** verdict=retire. sr=1.6423, baseline_sr=1.9391, dsr=1.0000, n_trades=73, mt_mean_pass=True, baseline_pass=False.
+
+---

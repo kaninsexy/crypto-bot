@@ -55,3 +55,8 @@ configuration.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-momentum-long-winners | 2026-05-07 | retire | 1.6423 | 1.0000 | 73 |
+
