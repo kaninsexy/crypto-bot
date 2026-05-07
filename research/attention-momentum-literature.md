@@ -86,3 +86,8 @@ implementation tests.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| search-volume-momentum | 2026-05-07 | keep | 2.1057 | 1.0000 | 57 |
+

@@ -615,3 +615,11 @@ prior. No edge in this window.
 - **intraday-jump-reversal-zscore (2026-05-07):** verdict=retire. sr=-1.0974, baseline_sr=1.9373, dsr=0.0000, n_trades=241, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### AttentionMomentum
+
+#### Phase 4 outcomes
+
+- **search-volume-momentum (2026-05-07):** verdict=keep. sr=2.1057, baseline_sr=1.9391, dsr=1.0000, n_trades=57, mt_mean_pass=True, baseline_pass=True.
+
+---
