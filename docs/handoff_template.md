@@ -10,8 +10,11 @@ a chat-close handoff for a fresh chat.
 Before any response that asks the user to do something, run this
 5-line check:
 
-- Search repomix-output.xml first for any harness file — it is
-  always more current than standalone project knowledge uploads.
+- First tool call: bash_tool on repomix-output.xml. Not
+  project_knowledge_search. Always more current than standalone uploads.
+- Never run individual trial scripts. Always use
+  run_trial_queue.py. Run warm_google_trends_cache.py first when
+  any Google Trends strategy is queued.
 
 1. Can I self-execute this with `bash_tool`, `conversation_search`,
    `project_knowledge_search`, or `view`? If yes — do it; don't ask.
@@ -43,6 +46,9 @@ the chat at any of these:
   close, new chat for next variation or next strategy.
 - Audit completes (memory, CLAUDE.md, project state) → close,
   new chat for downstream work.
+- Chat reaches ~20 turns OR reconstructing earlier context from
+  memory rather than from visible conversation — start exit ramp
+  now, before degradation worsens. Do not wait for a task milestone.
 
 Difficult work legitimately needs more turns. Don't fixate on a
 turn count. The signal is task completion, not turn count.
@@ -66,6 +72,11 @@ Every chat-close handoff MUST end with three blocks:
    landed, plus `ls -la <repo>/repomix-output.xml` and an
    enumerated list of files to re-upload. Prose like
    "repomix-output.xml current" fails the runnable-artifacts rule.
+   Re-upload list must cover ALL standalone PK files (files outside
+   repomix include patterns), not only files touched this session.
+   Standalone files include: research/**, docs/strategies.md, and any
+   scripts/ files uploaded separately. Check each against current repo
+   state before listing as current.
 
 Self-check before sending: each of the three blocks present.
 

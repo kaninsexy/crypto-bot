@@ -1,4 +1,5 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
+FIRST ACTION EVERY CHAT: bash_tool on repomix-output.xml. Not project_knowledge_search.
 
 Last updated: 2026-05-06
 

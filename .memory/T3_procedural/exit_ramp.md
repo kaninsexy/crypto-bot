@@ -1,6 +1,17 @@
 # Exit-ramp — Mandate X
 
 ## Rule
+Bundling-by-default does NOT extend across Claude Code turns. Do not
+pre-write the next CC prompt before the prior CC turn's output is in
+and verified. If prior CC has issues, the pre-written next prompt
+becomes wasted tokens and a drift risk. Sequence: prior CC report →
+chat-side review → user commits → THEN draft next CC prompt.
+
+Proactive timing: when chat reaches ~20 turns or earlier context
+requires reconstruction from memory rather than from visible
+conversation, start exit ramp immediately. Do not wait for a task
+milestone. A handoff drafted after context degrades is unreliable.
+
 Every deliberation/state-change response that produces or accepts a
 state change ends with the full forward chain in ONE message. The user
 should never finish a deliberation wondering "now what do I do?"
@@ -28,11 +39,8 @@ Bundle all N known actions for a single goal in one response. Multiple
 code blocks per response are fine. Independent actions bundle; only
 hard sequential dependencies split across turns.
 
-Bundling-by-default does NOT extend across Claude Code turns. Do not
-pre-write the next CC prompt before the prior CC turn's output is in
-and verified. If prior CC has issues, the pre-written next prompt
-becomes wasted tokens and a drift risk. Sequence: prior CC report →
-chat-side review → user commits → THEN draft next CC prompt.
+(See ## Rule above for the no-pre-write-CC-prompt invariant — moved
+to the top of the file because it gets violated when buried mid-file.)
 
 ## Don't pre-write downstream content
 After Claude Code reports completion, deliver verification (tests

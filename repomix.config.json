@@ -20,7 +20,10 @@
     ".claude/agents/**/*.md",
     "research/**",
     "docs/strategies.md",
-    "strategies/pairs_trading_cointegration.py"
+    "strategies/pairs_trading_cointegration.py",
+    "scripts/run_trial_queue.py",
+    "scripts/warm_google_trends_cache.py",
+    "scripts/cc_build_helper.py"
   ],
   "ignore": {
     "useGitignore": true,

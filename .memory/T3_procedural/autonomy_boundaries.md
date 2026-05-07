@@ -52,6 +52,7 @@ dispatch pattern, manifest field shape, module location, naming) are
 agent calls when the evidence answers them.
 
 ## Mandate A — read-before-respond
+Chat start: bash_tool on repomix-output.xml first. Not project_knowledge_search.
 Before claiming knowledge of a file's content, Read it this turn. This
 applies in chat and in Claude Code. Pattern-matching from chat memory or
 variation names is the recurring drift failure mode. Past chats are
