@@ -1258,6 +1258,7 @@ def _send_email(subject: str, body: str, dry_run: bool) -> None:
             headers={
                 "Authorization": f"Bearer {RESEND_API_KEY}",
                 "Content-Type": "application/json",
+                "User-Agent": "crypto-bot/1.0",
             },
             json=payload,
             timeout=15,
