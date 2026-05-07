@@ -60,6 +60,14 @@ ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 MIN_CITATION_QUALITY = 3.0
 MAX_QUEUED_ITEMS = int(os.environ.get("TRIAL_QUEUE_MAX_QUEUED_ITEMS", "10"))
 
+# Backlog cap: if the merged queue already has this many items in
+# `status="queued"` (whether they need a trial script or are
+# build-ready), skip proposal research entirely to avoid further
+# backlog while the orchestrator drains the existing queue. Each
+# queued item consumes future build/run capacity, so the cap counts
+# both needs_trial_script=True and build-ready items equally.
+MAX_QUEUED_BEFORE_SKIP = 3
+
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
@@ -405,10 +413,16 @@ def discover_candidate_domains(context: str) -> list[str]:
         "3. Are implementable as a systematic rule-based strategy on "
         "crypto perpetual futures (OKX USDT-M)\n"
         "4. Do not require order book depth or sub-second execution\n\n"
-        "Return ONLY a JSON array of 8-12 strategy category names.\n"
-        "Example: [\"on-chain flow momentum\", \"volatility risk premium "
-        "harvesting\", \"cross-exchange basis arbitrage\", ...]\n"
-        "No explanation, just the JSON array."
+        "Return ONLY a JSON array of 8-12 strategy category names "
+        "as compact CamelCase identifiers (2-4 words concatenated, no "
+        "spaces, no punctuation, no URLs, no paper titles). Each name "
+        "must match the regex ^[A-Z][A-Za-z0-9]+$ -- it will be used "
+        "directly as a Python class name prefix.\n"
+        "Example: [\"CrossSectionalReversal\", \"AttentionMomentum\", "
+        "\"VolatilityRiskPremium\", \"ExchangeNetflowReversal\", "
+        "\"FundingRateCarry\", ...]\n"
+        "No explanation, just the JSON array. Do NOT return URL "
+        "hostnames (e.g. papers.ssrn.com) or paper titles as names."
     )
     raw = call_llm(user, _SYSTEM)
     if raw is None:
@@ -438,6 +452,9 @@ def research_domain(domain: str, context: str) -> dict | None:
         "Return a JSON object with this exact structure:\n"
         "{\n"
         "  \"domain\": \"<domain name>\",\n"
+        "  \"strategy_id\": \"<CamelCase 2-4 word strategy class name; "
+        "no URLs, no punctuation, no spaces; must match "
+        "^[A-Z][A-Za-z0-9]+$>\",\n"
         "  \"citations\": [\n"
         "    {\n"
         "      \"title\": \"...\",\n"
@@ -454,6 +471,12 @@ def research_domain(domain: str, context: str) -> dict | None:
         "  \"variation_id_suggestion\": \"kebab-case-slug\",\n"
         "  \"overall_quality\": 3.5\n"
         "}\n\n"
+        "strategy_id rules: must match ^[A-Z][A-Za-z0-9]+$. Do NOT use "
+        "URLs (e.g. papers.ssrn.com), paper hostnames, or paper titles. "
+        "Examples of GOOD strategy_id: \"CrossSectionalReversal\", "
+        "\"AttentionMomentum\", \"VolatilityRiskPremium\". Examples of "
+        "BAD strategy_id: \"PapersSsrnCom\" (URL hostname), "
+        "\"TheSystematicChangeIn\" (prose paper title).\n"
         "quality_score per citation: 1=blog/opinion, 2=practitioner without "
         "rigorous backtest, 3=SSRN working paper with backtest, "
         "4=peer-reviewed journal, 5=top-tier journal (JF/RFS/JFE/RFS).\n"
@@ -498,9 +521,27 @@ def _to_strategy_id(domain: str) -> str:
     return "".join(p.capitalize() for p in parts)
 
 
+# Acronym-aware CamelCase -> snake_case: first pass splits before a
+# capital that is followed by a lowercase, second pass splits between
+# a lowercase/digit and any capital. Keeps acronym runs together so
+# "VolumeWeightedTSMOM" -> "volume_weighted_tsmom" rather than the
+# old single-pass result "volume_weighted_t_s_m_o_m".
+_SNAKE_CASE_RE_1 = re.compile(r"(.)([A-Z][a-z]+)")
+_SNAKE_CASE_RE_2 = re.compile(r"([a-z0-9])([A-Z])")
+
+
 def _to_snake_case(name: str) -> str:
-    s = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    s = _SNAKE_CASE_RE_1.sub(r"\1_\2", name)
+    s = _SNAKE_CASE_RE_2.sub(r"\1_\2", s)
+    s = s.lower()
     return re.sub(r"[^a-z0-9_]", "", s)
+
+
+# CamelCase identifier sanity check: matches strategy_id values the
+# LLM is allowed to return directly. URL hostnames, paper titles, and
+# punctuation-bearing inputs all fail this check and force a fallback
+# through _to_strategy_id (which strips dots, http-prefix etc).
+_CAMEL_CASE_RE = re.compile(r"^[A-Z][A-Za-z0-9]+$")
 
 
 def _summarise_top_citations(citations: list) -> str:
@@ -516,12 +557,24 @@ def _summarise_top_citations(citations: list) -> str:
 
 
 def build_queue_item(proposal: dict, next_id: str) -> dict:
-    domain = str(proposal.get("domain", "")).strip() or "unknown-domain"
-    strategy_id = _to_strategy_id(domain)
+    # Prefer the LLM's explicit strategy_id when it matches the
+    # CamelCase contract; otherwise derive from the (possibly prose
+    # or URL-shaped) domain via the hardened _to_strategy_id which
+    # rejects URLs and caps at 4 words. Either way, every downstream
+    # path (script_path, literature_doc, snake) is derived from the
+    # final strategy_id -- never from the raw domain string -- so a
+    # malformed domain can no longer leak into filenames.
+    raw_strategy_id = str(proposal.get("strategy_id", "")).strip()
+    if _CAMEL_CASE_RE.match(raw_strategy_id):
+        strategy_id = raw_strategy_id
+    else:
+        domain = str(proposal.get("domain", "")).strip() or "unknown-domain"
+        strategy_id = _to_strategy_id(domain)
     snake = _to_snake_case(strategy_id) or "unknown"
+    kebab = snake.replace("_", "-")
     variation_id = (
         str(proposal.get("variation_id_suggestion", "")).strip()
-        or f"{snake}-v1"
+        or f"{kebab}-v1"
     )
     citations = proposal.get("citations") or []
     return {
@@ -533,10 +586,11 @@ def build_queue_item(proposal: dict, next_id: str) -> dict:
         "trial_type": "full_cpcv",
         "hypothesis_one_line": str(proposal.get("hypothesis", "")).strip(),
         "source_citation": _summarise_top_citations(citations),
-        "literature_doc": (
-            f"research/{re.sub(r'[^a-z0-9-]', '-', domain.lower()).strip('-')}"
-            "-literature.md"
-        ),
+        # Derive literature_doc from strategy_id (kebab-case), NOT
+        # from the raw domain string. Prevents URL-hostname-shaped
+        # values like "research/papers-ssrn-com-literature.md" or
+        # "research/github-com-literature.md" from ever being written.
+        "literature_doc": f"research/{kebab}-literature.md",
         "citations": citations,
         "overall_quality": float(proposal.get("overall_quality", 0.0)),
         "implementation_notes": str(
@@ -761,13 +815,31 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Backlog cap (must run BEFORE any LLM call or web search). Counts
+    # items with effective status == "queued" via the merged-view
+    # helper, so newly-proposed items the orchestrator has not yet
+    # touched are counted alongside items mid-build. >= the cap means
+    # the queue already has enough work for the next orchestrator
+    # cycle; skip research and exit cleanly.
+    queue_data = load_queue()
+    state_statuses = _load_state_statuses()
+    queued_for_cap = sum(
+        1 for i in queue_data.get("queue", [])
+        if _effective_status(i, state_statuses) == "queued"
+    )
+    if queued_for_cap >= MAX_QUEUED_BEFORE_SKIP:
+        print(
+            f"Queue has {queued_for_cap} queued item(s) "
+            f"(cap: MAX_QUEUED_BEFORE_SKIP). "
+            "Skipping proposal research to avoid backlog."
+        )
+        return 0
+
     if not args.dry_run:
         if not os.environ.get("OPENROUTER_API_KEY"):
             print("ERROR: OPENROUTER_API_KEY not set", file=sys.stderr)
             return 1
 
-    queue_data = load_queue()
-    state_statuses = _load_state_statuses()
     queued = [
         i
         for i in queue_data.get("queue", [])

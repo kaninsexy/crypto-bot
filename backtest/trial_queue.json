@@ -532,6 +532,363 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T02:02:20.566782+00:00",
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-013",
+      "status": "queued",
+      "strategy_id": "CrossSectionalReversal",
+      "variation_id": "cs-short-term-reversal-loser-portfolio",
+      "script_path": "scripts/run_cross_sectional_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A cross-sectional portfolio of cryptocurrencies that performed the worst over a short-term lookback period (e.g., 1-day) will generate positive risk-adjusted returns over the subsequent holding period.",
+      "source_citation": "Zaremba (2021); Kei Nakagawa (2024); Chulwoo Han (2023)",
+      "literature_doc": "research/cross-sectional-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Zaremba, Adam; Bilgin, Mehmet Huseyin; Long, Huaigang; Mercik, Aleksander; Szczygielski, Jan J.",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "Cryptocurrencies with low returns on the previous day significantly outperform those with high returns, especially among less liquid coins.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Cross-sectional reversal portfolios in the cryptocurrency market and market uncertainty",
+          "authors": "Kei Nakagawa, Ryuta Sakemoto",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "Cross-sectional reversal portfolios, particularly when using highest/lowest prices as anchors, generate higher returns than conventional momentum and reversal strategies.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "While analyzing momentum strategies, the authors note that loser cryptocurrencies often rebound and inflict significant losses on short positions, implying a reversal effect for the loser portfolio.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "Define a liquid universe of perpetual futures. At each rebalance period (e.g., daily), rank all assets by their prior 1-day return. Construct a long-only portfolio of the assets in the lowest decile or quintile (the 'losers'). Hold this portfolio until the next rebalance period. The effect is reportedly stronger among less-liquid but still tradeable coins.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T06:23:07.983350+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-014",
+      "status": "queued",
+      "strategy_id": "CrossSectionalMomentum",
+      "variation_id": "cs-momentum-long-winners",
+      "script_path": "scripts/run_cross_sectional_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A cross-sectional momentum strategy that systematically goes long a portfolio of the best-performing crypto assets (e.g., top quintile over the past 30 days) while avoiding short positions in the worst-performers will generate positive excess returns.",
+      "source_citation": "Leigh Drogen (2023); Chulwoo Han (2024); Oliver Borgards (2021)",
+      "literature_doc": "research/cross-sectional-momentum-literature.md",
+      "citations": [
+        {
+          "title": "Cross-sectional Momentum in Cryptocurrency Markets",
+          "authors": "Leigh Drogen, Corey Hoffstein, Kevin Otte",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "A long-only strategy buying the top quintile of crypto assets based on 30-day returns and holding for 7 days consistently delivered excess returns relative to Bitcoin from 2018-2022.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "The momentum effect in cryptocurrencies is concentrated among winners, while losers often rebound and inflict significant losses, suggesting a long-only approach is superior to a traditional long-short portfolio.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Dynamic time series momentum of cryptocurrencies",
+          "authors": "Oliver Borgards",
+          "year": 2021,
+          "source": "The North American Journal of Economics and Finance",
+          "key_finding": "A dynamic time-series momentum trading strategy significantly outperforms a buy-and-hold strategy for cryptocurrencies, yielding higher risk-adjusted returns and lower downside risk.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "On a weekly basis, construct a universe of liquid perpetual futures and rank them by their prior 30-day return. Take equal-weighted long positions in the top quintile (the 'winners') for a 7-day holding period. This is a long-only strategy; no positions are taken in underperforming assets, mitigating risks from loser-reversals as noted by Han et al. (2024).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T06:23:42.271411+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-015",
+      "status": "queued",
+      "strategy_id": "Unknown",
+      "variation_id": "vrp-harvesting-regime-filtered",
+      "script_path": "scripts/run_unknown_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "The variance risk premium (implied volatility minus realized volatility) in crypto options markets is persistently positive on average, allowing for profitable, systematic selling of volatility outside of tail-risk regimes.",
+      "source_citation": "Daniel Requejo (2024); Anthony Makarewicz (2024); Zura Kakushadze (2019)",
+      "literature_doc": "research/github-com-literature.md",
+      "citations": [
+        {
+          "title": "Exploiting Overestimated Volatility Risk Premium: A Contrarian ETF Trading Strategy",
+          "authors": "Daniel Requejo",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "A strategy based on buying or selling ETFs based on VRP conditions yielded an average annual return of 20.79% and a Sharpe ratio of 1.4 on traditional equity index ETFs.",
+          "crypto_specific": false,
+          "quality_score": 3
+        },
+        {
+          "title": "Variance Risk Premium Harvesting (Jupyter Notebook)",
+          "authors": "Anthony Makarewicz",
+          "year": 2024,
+          "source": "GitHub",
+          "key_finding": "Provides a full implementation framework for selectively harvesting the VRP in SPX options by using regime filters (VIX levels) and tail-risk signals to avoid large drawdowns.",
+          "crypto_specific": false,
+          "quality_score": 2
+        },
+        {
+          "title": "Altcoin-Bitcoin Arbitrage",
+          "authors": "Zura Kakushadze, Willie Yu",
+          "year": 2019,
+          "source": "arXiv",
+          "key_finding": "A short-term mean-reversion strategy (short BTC futures, long altcoins with negative momentum) is profitable, but the paper identifies this as a 'low-liquidity premium', not directly a volatility risk premium.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "Sell delta-hedged, near-the-money straddles or strangles on BTC/ETH options with a fixed tenor (e.g., 30 DTE). The position's delta is neutralized using perpetual futures. This short-volatility exposure is only taken when a crypto volatility index (like Deribit's DVOL) is in a historically favorable regime (e.g., elevated but not extreme panic) and deactivated during periods of extreme IV spikes or an inverted volatility term structure.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T06:26:10.737553+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-016",
+      "status": "queued",
+      "strategy_id": "CrossSectionalSkewness",
+      "variation_id": "cs-expected-idio-skewness",
+      "script_path": "scripts/run_cross_sectional_skewness_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A cross-sectional strategy that systematically shorts cryptocurrencies with high expected idiosyncratic skewness and longs those with low expected idiosyncratic skewness will generate positive risk-adjusted returns.",
+      "source_citation": "Liu (2024); Tekulova (2022); Boyer B (2009)",
+      "literature_doc": "research/cross-sectional-skewness-literature.md",
+      "citations": [
+        {
+          "title": "Skewness risk and the cross-section of cryptocurrency returns",
+          "authors": "Liu, Yakun; Chen, Yan",
+          "year": 2024,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "The paper finds a negative cross-sectional relationship between asymmetry risk (skewness) and future returns in the cryptocurrency market, driven by idiosyncratic risk.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Skewness/Lottery Trading Strategy in Cryptocurrencies",
+          "authors": "Tekulova, Paula",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "A strategy forming portfolios based on skewness calculated over a long (360-day) lookback period demonstrated positive performance, even during crisis periods.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Expected Idiosyncratic Skewness",
+          "authors": "Boyer B, Mitton T, Vorkink K. (via QuantConnect implementation)",
+          "year": 2009,
+          "source": "The Review of Financial Studies (implementation on QuantConnect)",
+          "key_finding": "In equities, a strategy longing stocks with the lowest 5% of expected idiosyncratic skewness achieved a Sharpe ratio of 0.947.",
+          "crypto_specific": false,
+          "quality_score": 5
+        }
+      ],
+      "overall_quality": 3.5,
+      "implementation_notes": "The strategy involves calculating expected idiosyncratic skewness, as historical skewness is a poor predictor. At each rebalance period (e.g., monthly): 1. Define a universe of liquid perpetuals. 2. For each asset, obtain daily idiosyncratic returns by taking the residuals of a regression against a market factor (e.g., BTC or a universe index) over a lookback period. 3. From these residuals, calculate historical idiosyncratic skewness (is_t) and volatility (iv_t). 4. Run a cross-sectional regression: `is_{i,t} = \u03b30 + \u03b31*is_{i,t-1} + \u03b32*iv_{i,t-1} + e_i`. 5. Use the fitted coefficients to predict next month's skewness: `E[is_{i,t+1}] = \u03b30 + \u03b31*is_{i,t} + \u03b32*iv_{i,t}`. 6. Form an equal-weighted portfolio by longing the bottom quintile and shorting the top quintile of assets ranked by `E[is_{i,t+1}]`.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T07:56:15.199861+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-017",
+      "status": "queued",
+      "strategy_id": "Unknown",
+      "variation_id": "xgboost-pca-technical-indicators",
+      "script_path": "scripts/run_unknown_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "An XGBoost classifier trained on a high-dimensional, stationary set of technical indicators with PCA for dimensionality reduction can predict daily price direction with sufficient accuracy to generate positive risk-adjusted returns.",
+      "source_citation": "Rza Hasanli (2025); Darya Lapitskaya (2025); Jos\u00e9 \u00c1ngel Islas Anguiano (2025)",
+      "literature_doc": "research/mdpi-res-com-literature.md",
+      "citations": [
+        {
+          "title": "Integrating High-Dimensional Technical Indicators into Machine Learning Models for Predicting Cryptocurrency Price Movements and Trading Performance: Evidence from Bitcoin, Ethereum, and Ripple",
+          "authors": "Rza Hasanli, Mahir Dursun",
+          "year": 2025,
+          "source": "FinTech",
+          "key_finding": "An XGBoost model trained on technical indicators achieved a 141.4% cumulative return with a Sharpe ratio of 1.78 in a trading simulation on Bitcoin.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Prediction of Cryptocurrency Prices with the Momentum Indicators and Machine Learning",
+          "authors": "Darya Lapitskaya, M. Hakan Eratalay, Rajesh Sharma",
+          "year": 2025,
+          "source": "Computational Economics",
+          "key_finding": "An XGBoost model combined with momentum indicators (MACD, CCI, RSI) demonstrates high accuracy and predictive power for daily cryptocurrency price estimation.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Technical Analysis Meets Machine Learning: Bitcoin Evidence",
+          "authors": "Jos\u00e9 \u00c1ngel Islas Anguiano, Andr\u00e9s Garc\u00eda-Medina",
+          "year": 2025,
+          "source": "arXiv",
+          "key_finding": "An LSTM model achieved a cumulative return of approximately 65.23% in under a year, significantly outperforming a buy-and-hold strategy for Bitcoin.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.7,
+      "implementation_notes": "On a daily basis: 1) compute a large set of technical indicators (e.g., momentum, trend, volatility families) from OHLCV data. 2) Transform features to ensure stationarity (e.g., percentage changes). 3) Apply PCA to the feature set. 4) Use the principal components to feed a trained XGBoost classifier that predicts the next day's direction (Up/Down). 5) If prediction is 'Up', take a long position; if 'Down', take a short position.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T07:57:26.175328+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-018",
+      "status": "queued",
+      "strategy_id": "AttentionMomentum",
+      "variation_id": "search-volume-momentum",
+      "script_path": "scripts/run_attention_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A momentum strategy that goes long on cryptocurrencies with a significant recent increase in their Google search volume will generate positive risk-adjusted returns.",
+      "source_citation": "I-Hsin Lin (2022); Michail Bampinas (2022); Wenlan You (2020)",
+      "literature_doc": "research/attention-momentum-literature.md",
+      "citations": [
+        {
+          "title": "The role of investor attention in the cryptocurrency markets",
+          "authors": "I-Hsin Lin, Yi-Chiun Chiu",
+          "year": 2022,
+          "source": "The North American Journal of Economics and Finance",
+          "key_finding": "A long-short strategy based on an investor attention index from Google Trends yields a significant average monthly return of 2.11%.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Forecasting cryptocurrency returns with Google Trends",
+          "authors": "Michail Bampinas, Panagiotis K. Gkillas, Christoforos K. Loizos, Antony C. N. Main",
+          "year": 2022,
+          "source": "Forecasting",
+          "key_finding": "A trading strategy for Bitcoin using a forecasting model augmented with Google Trends data generates an annualized Sharpe ratio of 1.25.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Investor Attention and Cryptocurrency Performance",
+          "authors": "Wenlan You, Jialin Yang",
+          "year": 2020,
+          "source": "SSRN",
+          "key_finding": "A trading strategy based on weekly changes in the Google Search Volume Index (SVI) generates an annualized Sharpe ratio of 1.12.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.7,
+      "implementation_notes": "Collect daily Google Trends data for a universe of cryptocurrencies. Calculate a search volume momentum score for each asset (e.g., 1-week vs 4-week average). Form a portfolio by going long the top quintile of assets ranked by this momentum score and shorting the bottom quintile, rebalancing weekly. The position sizes can be equal-weighted within the portfolio. The strategy can be implemented using perpetual futures to take both long and short positions.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T07:58:38.300256+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-019",
+      "status": "queued",
+      "strategy_id": "IntradayMomentumReversal",
+      "variation_id": "intraday-conditional-momentum-reversal",
+      "script_path": "scripts/run_intraday_momentum_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Intraday cryptocurrency returns exhibit both momentum and reversal, where the return in the first part of a defined trading session predicts the return in the last part, with the direction (momentum or reversal) being conditional on factors like asset liquidity or market volatility.",
+      "source_citation": "Zhuzhu Wen (2022); D. Shen (2022); Adam Zaremba (2021)",
+      "literature_doc": "research/intraday-momentum-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Intraday return predictability in the cryptocurrency markets: Momentum, reversal, or both",
+          "authors": "Zhuzhu Wen, Elie Bouri, Yahua Xu, Yang Zhao",
+          "year": 2022,
+          "source": "The North American Journal of Economics and Finance",
+          "key_finding": "A timing strategy based on intraday momentum and reversal predictors produces higher economic value than buy-and-hold or always-long benchmarks.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Bitcoin Intraday Time-Series Momentum",
+          "authors": "D. Shen, A. Urquhart, P. Wang",
+          "year": 2022,
+          "source": "Financial Review",
+          "key_finding": "The first half-hour return of a defined trading session positively predicts the last half-hour return, yielding substantial economic gains, especially in market downturns.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Adam Zaremba, Mehmet Huseyin Bilgin, Huaigang Long, Aleksander Mercik, Jan J. Szczygielski",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "While based on daily data, it finds that the largest, most liquid cryptocurrencies exhibit momentum while smaller, illiquid ones exhibit reversal, providing a rationale for conditional intraday strategies.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "1. Define a fixed daily 'session' (e.g., 08:00-16:00 UTC). 2. Measure the return of an 'opening' period (e.g., first 30-60 mins). 3. Use this return as a predictive signal for the 'closing' period (e.g., last 30-60 mins). 4. A baseline model follows momentum (long on positive open, short on negative). 5. A conditional model could invert this logic to reversal on days with high volatility or for less liquid assets, as suggested by the literature.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-07T08:00:23.939037+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
