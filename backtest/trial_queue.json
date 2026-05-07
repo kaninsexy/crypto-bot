@@ -491,7 +491,6 @@
     },
     {
       "id": "sq-012",
-      "status": "queued",
       "strategy_id": "VolumeWeightedTSMOM",
       "variation_id": "volume-weighted-tsmom-v1",
       "script_path": "scripts/run_volume_weighted_tsmom_trial.py",
@@ -532,12 +531,6 @@
       "implementation_notes": "For a given lookback period (e.g., 20 days), calculate the time-series momentum signal as the volume-weighted average of daily returns. The formula would be Signal = \u03a3(return_i * volume_i) / \u03a3(volume_i) over the lookback period. Go long if the signal is positive and short if the signal is negative. Rebalance daily or at the end of the holding period.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T02:02:20.566782+00:00",
-      "started_at": null,
-      "finished_at": null,
-      "verdict": null,
-      "trial_id": null,
-      "error": null,
-      "email_sent": false,
       "needs_trial_script": false
     }
   ]

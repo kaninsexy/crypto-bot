@@ -41,6 +41,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 QUEUE_PATH = ROOT / "backtest" / "trial_queue.json"
+# Runtime-state file written by the orchestrator (file-split design,
+# 2026-05-06): trial_queue.json is definitions-only, runtime status
+# lives in the gitignored state file. Proposal agent reads it for
+# the pending-count check so it does not double-count items the
+# orchestrator has already moved off "queued".
+STATE_PATH = ROOT / "backtest" / "trial_queue_state.json"
 HISTORY_PATH = ROOT / "backtest" / "proposal_history.json"
 TRIALS_LOG_PATH = ROOT / "backtest" / "trials.log"
 STRATEGIES_MD_PATH = ROOT / "docs" / "strategies.md"
@@ -79,6 +85,51 @@ def save_queue(data: dict) -> None:
     tmp = QUEUE_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     os.replace(tmp, QUEUE_PATH)
+
+
+def _load_state_statuses() -> dict[str, str]:
+    """Return {item_id: status} from trial_queue_state.json.
+
+    Empty dict if the file is absent or unreadable. The orchestrator
+    is the authoritative writer of runtime status (file-split design,
+    2026-05-06): definitions-file `status` is set once by
+    build_queue_item to "queued" and never updated thereafter, so
+    consulting state.json is the only way to see the true current
+    status for items the orchestrator has touched.
+    """
+    if not STATE_PATH.exists():
+        return {}
+    try:
+        text = STATE_PATH.read_text(encoding="utf-8").strip()
+        if not text:
+            return {}
+        data = json.loads(text)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    items = data.get("items", {})
+    if not isinstance(items, dict):
+        return {}
+    out: dict[str, str] = {}
+    for item_id, entry in items.items():
+        if isinstance(entry, dict) and isinstance(entry.get("status"), str):
+            out[str(item_id)] = entry["status"]
+    return out
+
+
+def _effective_status(
+    item: dict, state_statuses: dict[str, str],
+) -> str | None:
+    """Return the runtime-authoritative status for a queue item.
+
+    State file wins when present; otherwise falls back to the
+    definitions-file status. Returns None if neither source carries
+    a string.
+    """
+    item_id = item.get("id")
+    if isinstance(item_id, str) and item_id in state_statuses:
+        return state_statuses[item_id]
+    s = item.get("status")
+    return s if isinstance(s, str) else None
 
 
 def load_history() -> dict:
@@ -589,9 +640,10 @@ def validate_citations(citations: list) -> tuple[bool, str]:
 
 def propose_and_queue(dry_run: bool) -> tuple[int, list[dict]]:
     queue_data = load_queue()
+    state_statuses = _load_state_statuses()
     queued_count = sum(
         1 for item in queue_data.get("queue", [])
-        if item.get("status") in ("queued", "running")
+        if _effective_status(item, state_statuses) in ("queued", "running")
     )
     if queued_count >= MAX_QUEUED_ITEMS and not dry_run:
         print(
@@ -706,10 +758,11 @@ def main() -> int:
             return 1
 
     queue_data = load_queue()
+    state_statuses = _load_state_statuses()
     queued = [
         i
         for i in queue_data.get("queue", [])
-        if i.get("status") in ("queued", "running")
+        if _effective_status(i, state_statuses) in ("queued", "running")
     ]
     if queued and not args.force and not args.dry_run:
         print(
