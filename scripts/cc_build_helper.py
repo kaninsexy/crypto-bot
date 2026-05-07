@@ -279,7 +279,14 @@ def build_strategy(
 
     prompt, strategy_module, strategy_class = _render_prompt(item)
 
-    cmd = ["claude", "--print", prompt]
+    # --dangerously-skip-permissions: required for non-interactive
+    # subprocess context. Without it, the claude CLI prompts for
+    # explicit permission on every file write and the build hangs
+    # forever (no TTY to answer). This is the documented CI/automation
+    # mechanism. Combined with the ANTHROPIC_API_KEY strip above, the
+    # subprocess uses the OAuth (Max) session under controlled write
+    # scope.
+    cmd = ["claude", "--dangerously-skip-permissions", "--print", prompt]
     # Strip ANTHROPIC_API_KEY so the claude CLI uses its OAuth session
     # (Claude Max plan) rather than billing the API key. The Machine-
     # scope env carries ANTHROPIC_API_KEY for the proposal agent's

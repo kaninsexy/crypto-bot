@@ -585,7 +585,7 @@
       "needs_trial_script": true
     },
     {
-      "id": "sq-014",
+      "id": "sq-020",
       "status": "queued",
       "strategy_id": "CrossSectionalMomentum",
       "variation_id": "cs-momentum-long-winners",

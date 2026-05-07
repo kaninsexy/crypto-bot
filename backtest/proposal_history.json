@@ -10,13 +10,132 @@
     "Volatility-Filtered Mean Reversion",
     "Adaptive Trend Following (Regime-Filtered)",
     "Oscillator-Based Mean Reversion (RSI)",
-    "Volatility Spike Reversal"
+    "Volatility Spike Reversal",
+    "Contrarian Funding Rate Mean Reversion",
+    "Volume-Weighted Time Series Momentum",
+    "Intraday Time-Series Momentum",
+    "Cross-Sectional Reversal (Loser Portfolio)",
+    "Asymmetric Momentum (Long Winners Only)",
+    "Cross-Sectional Carry Trade",
+    "Contrarian Open Interest Squeeze",
+    "Liquidation Cascade Reversal",
+    "Volatility Risk Premium Harvesting",
+    "Cross-Sectional Idiosyncratic Skewness",
+    "Futures-Perpetual Basis Arbitrage",
+    "Machine Learning Price Forecaster",
+    "Cross-Sectional Idiosyncratic Volatility",
+    "Search Volume Momentum",
+    "Crypto Flight-to-Quality",
+    "Intraday Session Momentum Reversal",
+    "Open Interest Weighted Momentum",
+    "On-Chain Volume Momentum",
+    "Network Growth Factor (Active Addresses)"
   ],
   "proposed_variations": [
     "onchain-macro-cycle-filter",
     "sentiment-momentum-filter",
     "intraday-hourly-long-21-23utc",
     "stat-arb-coint-engle-granger",
-    "us-hours-close-momentum"
+    "us-hours-close-momentum",
+    "volume-weighted-tsmom",
+    "cs-short-term-reversal-loser-portfolio",
+    "cs-momentum-long-winners",
+    "vrp-harvesting-regime-filtered",
+    "cs-expected-idio-skewness",
+    "xgboost-pca-technical-indicators",
+    "search-volume-momentum",
+    "intraday-conditional-momentum-reversal"
+  ],
+  "proposals_log": [
+    {
+      "variation_id": "volume-weighted-tsmom",
+      "domain": "Volume-Weighted Time Series Momentum",
+      "status": "queued",
+      "logged_at": "2026-05-07T02:02:20.566782+00:00"
+    },
+    {
+      "variation_id": "intraday-tsmom-us-session",
+      "domain": "Intraday Time-Series Momentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T02:02:58.599067+00:00"
+    },
+    {
+      "variation_id": "cs-short-term-reversal-loser-portfolio",
+      "domain": "Cross-Sectional Reversal (Loser Portfolio)",
+      "status": "queued",
+      "logged_at": "2026-05-07T06:23:07.983350+00:00"
+    },
+    {
+      "variation_id": "cs-momentum-long-winners",
+      "domain": "Asymmetric Momentum (Long Winners Only)",
+      "status": "queued",
+      "logged_at": "2026-05-07T06:23:42.271411+00:00"
+    },
+    {
+      "variation_id": "cross-sectional-funding-carry",
+      "domain": "Cross-Sectional Carry Trade",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T06:24:05.134394+00:00"
+    },
+    {
+      "variation_id": "vrp-harvesting-regime-filtered",
+      "domain": "Volatility Risk Premium Harvesting",
+      "status": "queued",
+      "logged_at": "2026-05-07T06:26:10.737553+00:00"
+    },
+    {
+      "variation_id": "cs-expected-idio-skewness",
+      "domain": "Cross-Sectional Idiosyncratic Skewness",
+      "status": "queued",
+      "logged_at": "2026-05-07T07:56:15.199861+00:00"
+    },
+    {
+      "variation_id": "xgboost-pca-technical-indicators",
+      "domain": "Machine Learning Price Forecaster",
+      "status": "queued",
+      "logged_at": "2026-05-07T07:57:26.175328+00:00"
+    },
+    {
+      "variation_id": "cs-ivol-premium",
+      "domain": "Cross-Sectional Idiosyncratic Volatility",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T07:57:51.855340+00:00"
+    },
+    {
+      "variation_id": "search-volume-momentum",
+      "domain": "Search Volume Momentum",
+      "status": "queued",
+      "logged_at": "2026-05-07T07:58:38.300256+00:00"
+    },
+    {
+      "variation_id": "adaptive-intraday-reversal",
+      "domain": "Crypto Flight-to-Quality",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T07:59:40.104350+00:00"
+    },
+    {
+      "variation_id": "intraday-conditional-momentum-reversal",
+      "domain": "Intraday Session Momentum Reversal",
+      "status": "queued",
+      "logged_at": "2026-05-07T08:00:23.939037+00:00"
+    },
+    {
+      "variation_id": "stablecoin-inflow-momentum",
+      "domain": "On-Chain Volume Momentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T08:01:32.489519+00:00"
+    },
+    {
+      "variation_id": "cs-network-value-factor",
+      "domain": "Network Growth Factor (Active Addresses)",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T08:02:03.869574+00:00"
+    }
   ]
 }
