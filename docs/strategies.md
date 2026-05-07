@@ -599,3 +599,11 @@ prior. No edge in this window.
 - **intraday-conditional-momentum-reversal (2026-05-07):** verdict=retire. sr=-3.0496, baseline_sr=1.9373, dsr=0.0000, n_trades=315, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### VolatilityScaledTSMOM
+
+#### Phase 4 outcomes
+
+- **volatility-scaled-tsmom (2026-05-07):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
+
+---
