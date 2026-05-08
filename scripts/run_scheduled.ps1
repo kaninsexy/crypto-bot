@@ -22,6 +22,7 @@ if (-not (Test-Path $LogDir)) {
 }
 
 $GitPullLog  = Join-Path $LogDir "git_pull.log"
+$WarmLog     = Join-Path $LogDir "warm_trends.log"
 $QueueLog    = Join-Path $LogDir "trial_queue.log"
 $Timestamp   = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
 
@@ -42,7 +43,21 @@ try {
 # --- 2. Force UTF-8 in the python subprocess so cp1252 doesn't crash --
 $env:PYTHONIOENCODING = "utf-8"
 
-# --- 3. Trial queue (one batch then exit) ---------------------------
+# --- 3. Pre-warm Google Trends cache before the orchestrator runs ---
+# Any Google Trends strategy in the queue (e.g. AttentionMomentum,
+# ContrarianSearchVolume) hits Trends 429 immediately if the parquet
+# cache is cold. Warm step is non-fatal: failures log and continue
+# so a Trends outage does not block non-GT strategies.
+"=== warm_trends at $Timestamp ===" | Out-File -Append -FilePath $WarmLog -Encoding utf8
+$WarmScript = Join-Path $RepoRoot "scripts\warm_google_trends_cache.py"
+python $WarmScript 2>&1 | Out-File -Append -FilePath $WarmLog -Encoding utf8
+$WarmExit = $LASTEXITCODE
+if ($WarmExit -ne 0) {
+    "warm_google_trends_cache exited $WarmExit -- continuing to run queue anyway" |
+        Out-File -Append -FilePath $WarmLog -Encoding utf8
+}
+
+# --- 4. Trial queue (one batch then exit) ---------------------------
 "=== trial_queue at $Timestamp ===" | Out-File -Append -FilePath $QueueLog -Encoding utf8
 $QueueScript = Join-Path $RepoRoot "scripts\run_trial_queue.py"
 python $QueueScript --once 2>&1 | Out-File -Append -FilePath $QueueLog -Encoding utf8
