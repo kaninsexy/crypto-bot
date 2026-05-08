@@ -1162,7 +1162,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     }
   ]
 }
