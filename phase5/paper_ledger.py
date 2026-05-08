@@ -72,7 +72,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from data.polymarket import fetch_market_by_id
+from data.polymarket import fetch_market_by_id, walk_asks_for_buy
 
 
 DEFAULT_LEDGER_PATH: Path = (
@@ -129,6 +129,8 @@ def record_recommendation(
     rationale: Optional[str] = None,
     research_confidence: Optional[str] = None,
     ledger_path: Optional[Path] = None,
+    walk_orderbook: bool = True,
+    clob_token_ids: Optional[list] = None,
 ) -> dict:
     """Append one paper-traded recommendation to the ledger.
 
@@ -162,11 +164,41 @@ def record_recommendation(
             f"entry_price must be in (0, 1); got {entry_price!r}"
         )
 
+    # Orderbook walk: take the top-of-book entry_price as the QUOTED
+    # price, but compute the realistic book-walked average fill price
+    # for the recommended size. The book-walk overrides entry_price
+    # for P&L purposes -- a $500 order doesn't all fill at the top
+    # ask in thin markets, and we want paper P&L to reflect what a
+    # real order would actually pay. The original quoted entry_price
+    # is preserved on the entry as `quoted_entry_price` for audit.
+    quoted_entry_price = float(entry_price)
+    book_walk: Optional[dict] = None
+    fill_price = float(entry_price)
+    if walk_orderbook and clob_token_ids:
+        try:
+            # action=BUY_YES -> walk YES asks (clobTokenIds[0])
+            # action=BUY_NO  -> walk NO  asks (clobTokenIds[1])
+            token_idx = 0 if action == "BUY_YES" else 1
+            if token_idx < len(clob_token_ids):
+                walk = walk_asks_for_buy(
+                    clob_token_ids[token_idx], size_usd,
+                )
+                book_walk = walk
+                if walk.get("fully_filled") and walk.get("avg_price"):
+                    fill_price = float(walk["avg_price"])
+        except Exception as exc:  # noqa: BLE001
+            book_walk = {"error": f"{exc.__class__.__name__}: {exc}"}
+
     if edge is None:
+        # Edge is computed against the QUOTED top-of-book price (the
+        # researcher's frame of reference). Fill slippage is captured
+        # separately as the difference between fill_price and
+        # quoted_entry_price.
         if action == "BUY_YES":
-            edge = p_research - entry_price
+            edge = p_research - quoted_entry_price
         else:
-            edge = (1.0 - p_research) - entry_price
+            edge = (1.0 - p_research) - quoted_entry_price
+    slippage_pp = (fill_price - quoted_entry_price) * 100.0
 
     entry = {
         "ts_recorded": _utcnow(),
@@ -178,7 +210,10 @@ def record_recommendation(
         ),
         "action": action,
         "size_usd": float(size_usd),
-        "entry_price": float(entry_price),
+        "quoted_entry_price": quoted_entry_price,
+        "entry_price": fill_price,            # book-walked realistic fill
+        "slippage_pp_vs_top": slippage_pp,
+        "book_walk": book_walk,
         "p_research": float(p_research),
         "edge": float(edge),
         "rationale": rationale,

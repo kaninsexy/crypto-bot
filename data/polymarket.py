@@ -201,6 +201,95 @@ def fetch_market_by_id(market_id: str) -> dict:
     return response.json()
 
 
+def walk_asks_for_buy(
+    token_id: str, size_usd: float,
+) -> dict:
+    """Walk the asks of `token_id`'s orderbook to compute the realistic
+    average fill price for a BUY of `size_usd` notional.
+
+    Polymarket asks are SELL-side resting orders -- to BUY a token you
+    take liquidity from the asks, lowest price first. Each level
+    contributes `price * size_units` USD of cost; we accumulate until
+    `size_usd` is filled or the book is exhausted.
+
+    Returns:
+        {
+            "avg_price":       float (size-weighted average),
+            "filled_usd":      float (<= size_usd; equal if filled),
+            "filled_units":    float,
+            "levels_consumed": int,
+            "top_ask":         float,
+            "fully_filled":    bool,
+            "depth_usd_top5":  float (top-5 ask USD depth, for context)
+        }
+
+    Used by the paper-ledger record path: instead of recording the
+    top-of-book ask as entry_price, we record the realistic
+    book-walked avg fill -- which is what a real BUY order at
+    `size_usd` notional would actually pay (modulo timing).
+    """
+    if size_usd <= 0:
+        raise ValueError(f"size_usd must be positive; got {size_usd!r}")
+    book = fetch_orderbook(token_id)
+    asks = book.get("asks", []) or []
+    # Polymarket returns asks in unspecified order; sort ascending price.
+    asks_sorted = sorted(
+        asks, key=lambda x: float(x.get("price", 1e9))
+    )
+    if not asks_sorted:
+        return {
+            "avg_price": float("nan"), "filled_usd": 0.0,
+            "filled_units": 0.0, "levels_consumed": 0,
+            "top_ask": float("nan"), "fully_filled": False,
+            "depth_usd_top5": 0.0,
+        }
+
+    top_ask = float(asks_sorted[0].get("price"))
+    # Top-5 USD depth for forensics.
+    depth_top5 = sum(
+        float(a.get("price")) * float(a.get("size"))
+        for a in asks_sorted[:5]
+    )
+
+    filled_usd = 0.0
+    filled_units = 0.0
+    cost_usd = 0.0
+    levels_consumed = 0
+    for level in asks_sorted:
+        p = float(level.get("price"))
+        s_avail = float(level.get("size"))
+        avail_usd = p * s_avail
+        if filled_usd + avail_usd <= size_usd:
+            # Take whole level.
+            filled_usd += avail_usd
+            filled_units += s_avail
+            cost_usd += avail_usd
+            levels_consumed += 1
+            if filled_usd >= size_usd:
+                break
+        else:
+            # Partial fill of this level.
+            remaining_usd = size_usd - filled_usd
+            units_taken = remaining_usd / p
+            filled_usd += remaining_usd
+            filled_units += units_taken
+            cost_usd += remaining_usd
+            levels_consumed += 1
+            break
+
+    avg_price = cost_usd / filled_units if filled_units > 0 else float("nan")
+    fully_filled = filled_usd >= size_usd - 1e-9
+    return {
+        "avg_price": avg_price,
+        "filled_usd": filled_usd,
+        "filled_units": filled_units,
+        "levels_consumed": levels_consumed,
+        "top_ask": top_ask,
+        "fully_filled": fully_filled,
+        "depth_usd_top5": depth_top5,
+    }
+
+
 def fetch_orderbook(token_id: str) -> dict:
     """CLOB /book for one outcome token. No cache (volatile data).
 
