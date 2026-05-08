@@ -44,7 +44,12 @@
     "OpenCloseIntradayMomentum",
     "DeveloperActivityFactor",
     "NetworkValueSignalReversal",
-    "DayOfWeekSeasonality"
+    "DayOfWeekSeasonality",
+    "AnchoredPriceReversal",
+    "HurstExponentRegimeSwitch",
+    "KalmanFilterPairsTrading",
+    "LiquidityGrabReversal",
+    "OptionsSkewSignal"
   ],
   "proposed_variations": [
     "onchain-macro-cycle-filter",
@@ -64,7 +69,10 @@
     "volatility-scaled-tsmom",
     "intraday-jump-reversal-zscore",
     "us-session-overnight-reversal",
-    "cross-sectional-weekday-effect"
+    "cross-sectional-weekday-effect",
+    "cs-daily-reversal",
+    "hurst-regime-trend-mr-switch",
+    "cs-residual-reversal-daily"
   ],
   "proposals_log": [
     {
@@ -249,6 +257,31 @@
       "domain": "DayOfWeekSeasonality",
       "status": "queued",
       "logged_at": "2026-05-08T06:03:41.297132+00:00"
+    },
+    {
+      "variation_id": "cs-daily-reversal",
+      "domain": "AnchoredPriceReversal",
+      "status": "queued",
+      "logged_at": "2026-05-08T08:01:55.878404+00:00"
+    },
+    {
+      "variation_id": "hurst-regime-trend-mr-switch",
+      "domain": "HurstExponentRegimeSwitch",
+      "status": "queued",
+      "logged_at": "2026-05-08T08:02:43.539421+00:00"
+    },
+    {
+      "variation_id": "kalman-filter-hierarchical-pairs",
+      "domain": "KalmanFilterPairsTrading",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T08:03:07.869790+00:00"
+    },
+    {
+      "variation_id": "cs-residual-reversal-daily",
+      "domain": "LiquidityGrabReversal",
+      "status": "queued",
+      "logged_at": "2026-05-08T08:03:58.138962+00:00"
     }
   ]
 }

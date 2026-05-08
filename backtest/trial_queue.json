@@ -1163,6 +1163,159 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-026",
+      "status": "queued",
+      "strategy_id": "DailyCrossSectionalReversal",
+      "variation_id": "cs-daily-reversal",
+      "script_path": "scripts/run_daily_cross_sectional_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A strategy buying cryptocurrencies with the lowest 1-day returns and selling those with the highest 1-day returns will yield positive risk-adjusted returns, particularly when applied to less liquid assets.",
+      "source_citation": "Zaremba (2021); Guglielmo Maria Caporale; Alex Plastun (2019); Milan Fi\u010dura (2023)",
+      "literature_doc": "research/daily-cross-sectional-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Zaremba, Adam; Bilgin, Mehmet Huseyin; Long, Huaigang; Mercik, Aleksander; Szczygielski, Jan J.",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "A cross-sectional portfolio of cryptocurrencies with low last day's returns significantly outperforms a portfolio with high last day's returns, an effect driven by illiquid coins.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Price overreactions in the cryptocurrency market",
+          "authors": "Guglielmo Maria Caporale; Alex Plastun",
+          "year": 2019,
+          "source": "Journal of Economic Studies",
+          "key_finding": "The cryptocurrency market exhibits significant price overreactions, consistent with behavioral biases, which lead to subsequent price corrections (reversals).",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Impact of size and volume on cryptocurrency momentum and reversal",
+          "authors": "Milan Fi\u010dura",
+          "year": 2023,
+          "source": "FFA Working Papers",
+          "key_finding": "This paper confirms that size and volume are critical factors determining the direction of return predictability, with reversal effects prominent in smaller, less-traded coins.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.67,
+      "implementation_notes": "On a daily basis, rank tradable perpetual futures by their prior 24-hour return. Construct a portfolio by going long the instruments in the bottom quintile (losers) and shorting the instruments in the top quintile (winners). Rebalance daily. The effect is documented to be stronger in illiquid assets and may reverse to momentum for the most liquid assets like BTC.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T08:01:55.878404+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-027",
+      "status": "queued",
+      "strategy_id": "HurstExponentRegimeSwitch",
+      "variation_id": "hurst-regime-trend-mr-switch",
+      "script_path": "scripts/run_hurst_exponent_regime_switch_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Calculating the Hurst exponent over a rolling window can identify market regimes (trending/persistent vs. mean-reverting/anti-persistent); applying a trend-following strategy in persistent regimes (H > 0.5) and a mean-reverting strategy in anti-persistent regimes (H < 0.5) generates positive risk-adjusted returns.",
+      "source_citation": "Andrea Calef (2021); Sandra Begu\u0161i\u0107 (2022); Nikolaos A. Kyriazis (2020)",
+      "literature_doc": "research/hurst-exponent-regime-switch-literature.md",
+      "citations": [
+        {
+          "title": "Switching approach for Cryptocurrency trading using the Hurst exponent",
+          "authors": "Andrea Calef, Marco Kucinic",
+          "year": 2021,
+          "source": "SSRN",
+          "key_finding": "A strategy switching between trend-following (for H>0.5) and mean-reversion (for H<0.5) on Bitcoin yields a Sharpe ratio of 0.69, outperforming both standalone strategies and buy-and-hold.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Deep Reinforcement Learning in Cryptocurrency Trading: A Review and Case Study on the Hurst Exponent",
+          "authors": "Sandra Begu\u0161i\u0107, Petar Veli\u010dkovi\u0107, Pietro Li\u00f2",
+          "year": 2022,
+          "source": "Applied Sciences",
+          "key_finding": "Adding the time-varying Hurst exponent as a state feature to a deep reinforcement learning trading agent increased its Sharpe ratio on a BTC/USD backtest from 1.05 to 1.77.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "The adaptive market hypothesis in the cryptocurrency markets",
+          "authors": "Nikolaos A. Kyriazis",
+          "year": 2020,
+          "source": "Eurasian Economic Review",
+          "key_finding": "Provides evidence that 15 major cryptocurrencies exhibit time-varying Hurst exponents, supporting the Adaptive Market Hypothesis and the potential for regime-based trading strategies.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 3.7,
+      "implementation_notes": "Calculate the Hurst exponent on a rolling window of returns (e.g., 100-250 periods). If the estimated H is greater than a threshold (e.g., 0.55), deploy a trend-following strategy. If H is less than a threshold (e.g., 0.45), deploy a mean-reversion strategy. A neutral zone between the thresholds can be used to avoid trading in random-walk conditions.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T08:02:43.539421+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-028",
+      "status": "queued",
+      "strategy_id": "CrossSectionalResidualReversal",
+      "variation_id": "cs-residual-reversal-daily",
+      "script_path": "scripts/run_cross_sectional_residual_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A cross-sectional strategy buying cryptocurrencies with the lowest recent residual returns and selling those with the highest recent residual returns will yield positive risk-adjusted returns by isolating and capitalizing on temporary, liquidity-driven price dislocations.",
+      "source_citation": "Zaremba (2021); David Blitz (2013); Jonathan Brogaard (2024)",
+      "literature_doc": "research/cross-sectional-residual-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Zaremba, Adam; Bilgin, Mehmet Huseyin; Long, Huaigang; Mercik, Aleksander; Szczygielski, Jan J.",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "Cryptocurrencies with low last day's returns significantly outperform those with high last day's returns, an effect attributed to the illiquidity of most coins.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Short-term residual reversal",
+          "authors": "David Blitz, Joop Huij, Simon Lansdorp, Marno Verbeek",
+          "year": 2013,
+          "source": "Journal of Financial Markets",
+          "key_finding": "A reversal strategy based on residual stock returns (orthogonal to market factors) earns risk-adjusted returns twice as large as a conventional reversal strategy.",
+          "crypto_specific": false,
+          "quality_score": 4
+        },
+        {
+          "title": "Intraday Residual Reversal in the U.S. Stock Market",
+          "authors": "Jonathan Brogaard, Jaehee Han, Hanjun Kim",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "A strategy buying stocks with negative residual returns and selling those with positive residual returns captures the returns to liquidity provision on transitory price movements, yielding high annualized returns.",
+          "crypto_specific": false,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "On a daily basis, calculate residual returns for a universe of cryptocurrencies by regressing their 24-hour total returns against common crypto market factors (e.g., BTC return). Form an equal-weighted, dollar-neutral portfolio by longing the bottom quintile of assets ranked by these residuals and shorting the top quintile. Hold positions for one day before rebalancing.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T08:03:58.138962+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
