@@ -721,3 +721,11 @@ prior. No edge in this window.
 - **tsmom-filter-cs-rotation (2026-05-08):** verdict=under_tested. sr=1.9006, baseline_sr=1.9391, dsr=1.0000, n_trades=15, mt_mean_pass=None, baseline_pass=None.
 
 ---
+
+### LiquidityConditionedReversal
+
+#### Phase 4 outcomes
+
+- **liquidity-conditioned-reversal-daily (2026-05-08):** verdict=retire. sr=0.1288, baseline_sr=1.9391, dsr=1.0000, n_trades=325, mt_mean_pass=True, baseline_pass=False.
+
+---

@@ -1523,7 +1523,7 @@
     },
     {
       "id": "sq-033",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "LiquidityConditionedReversal",
       "variation_id": "liquidity-conditioned-reversal-daily",
       "script_path": "scripts/run_liquidity_conditioned_reversal_trial.py",
@@ -1565,12 +1565,12 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T13:03:19.805979+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T14:11:13.867231+00:00",
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     }
   ]
 }

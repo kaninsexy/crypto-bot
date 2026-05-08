@@ -60,3 +60,8 @@ window.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| liquidity-conditioned-reversal-daily | 2026-05-08 | retire | 0.1288 | 1.0000 | 325 |
+
