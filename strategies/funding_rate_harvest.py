@@ -67,6 +67,19 @@ class FundingRateHarvestStrategy(BaseStrategy):
     below exit threshold while a position is open).  Both default
     to 0.0 so V1 behaviour is preserved bit-for-bit.
 
+    V2b extension (added 2026-05-08): the optional
+    `vol_regime_threshold` parameter activates a volatility-regime
+    gate sourced from Almeida, Grith, Miftachov, Wang (2024) arXiv
+    2410.15195v2.  When non-zero, the strategy looks up the most
+    recent realized-vol value against an internally-held vol
+    history (set via `set_vol_history`) and either emits BUY when
+    the latest vol is below the threshold (LV regime, harvest) or
+    SELL when the latest vol is at or above the threshold (HV
+    regime, flat).  Default 0.0 preserves V1 behaviour.  The V2
+    funding-rate gate and the V2b vol-regime gate compose
+    cleanly: when both are active the position must clear BOTH
+    gates to enter, and either gate alone is sufficient to exit.
+
     The engine's warm-up window (`engine_perp.run_perp` skips the
     first `warm_up_candles` bars before invoking the strategy)
     handles "skip until enough data" upstream; the strategy itself
@@ -79,6 +92,7 @@ class FundingRateHarvestStrategy(BaseStrategy):
         timeframe: str = "1h",
         min_funding_rate_entry: float = 0.0,
         exit_funding_rate_threshold: float = 0.0,
+        vol_regime_threshold: float = 0.0,
     ):
         super().__init__(
             name="FundingRateHarvest",
@@ -87,7 +101,9 @@ class FundingRateHarvestStrategy(BaseStrategy):
         )
         self._min_funding_rate_entry = float(min_funding_rate_entry)
         self._exit_funding_rate_threshold = float(exit_funding_rate_threshold)
+        self._vol_regime_threshold = float(vol_regime_threshold)
         self._funding_history: Optional[pd.DataFrame] = None
+        self._vol_history: Optional[pd.DataFrame] = None
 
     def set_funding_history(self, funding_history: pd.DataFrame) -> None:
         """Provide the strategy with the funding-rate series it should
@@ -118,6 +134,39 @@ class FundingRateHarvestStrategy(BaseStrategy):
             return None
         return float(self._funding_history.iloc[idx]["funding_rate"])
 
+    def set_vol_history(self, vol_history: pd.DataFrame) -> None:
+        """Provide the strategy with the realized-vol time series it
+        should consult when applying the V2b regime gate.
+
+        Required only when `vol_regime_threshold` is non-zero; in V1
+        and V2 modes (vol_regime_threshold == 0.0) the lookup is
+        skipped and the vol history is irrelevant.
+
+        Expected schema: DatetimeIndex (UTC), at least one column
+        named `realized_vol_annualized` carrying the annualised
+        realized volatility (NOT the per-bar standard deviation).
+        Mirrors the format produced by
+        `scripts/phase_4b_v2b_volregime_probe.py`.
+        """
+        self._vol_history = vol_history
+
+    def _latest_realized_vol(
+        self, ts: pd.Timestamp,
+    ) -> Optional[float]:
+        """Return the most recent annualized-realized-vol value at-or-
+        before `ts`, or None when no vol observation has yet been
+        recorded.
+        """
+        if self._vol_history is None or self._vol_history.empty:
+            return None
+        idx = self._vol_history.index.searchsorted(ts, side="right") - 1
+        if idx < 0:
+            return None
+        v = float(self._vol_history.iloc[idx]["realized_vol_annualized"])
+        if v != v:  # NaN guard (rolling-window leading NaNs)
+            return None
+        return v
+
     def generate_signal(self, df: pd.DataFrame) -> Signal:
         price = float(df["close"].iloc[-1])
 
@@ -125,7 +174,8 @@ class FundingRateHarvestStrategy(BaseStrategy):
             self._min_funding_rate_entry > 0.0
             or self._exit_funding_rate_threshold > 0.0
         )
-        if not v2_mode:
+        v2b_mode = self._vol_regime_threshold > 0.0
+        if not (v2_mode or v2b_mode):
             return Signal(
                 action="BUY",
                 strategy=self.name,
@@ -136,50 +186,80 @@ class FundingRateHarvestStrategy(BaseStrategy):
             )
 
         ts = df.index[-1]
-        rate_per_8h = self._latest_funding_rate_per_8h(ts)
-        rate_annual = (
-            rate_per_8h * _FUNDING_ANNUALISATION
-            if rate_per_8h is not None else None
-        )
 
-        # Pre-first-settlement: V2 holds rather than opening blind.
-        if rate_annual is None:
-            return Signal(
-                action="HOLD",
-                strategy=self.name,
-                price=price,
-                reason="v2_no_funding_observed_yet",
+        # V2b vol-regime gate runs first when active.  HV regime
+        # (vol >= threshold) is a hard exit (force SELL even if a
+        # position is already open); LV regime falls through to the
+        # rest of the gate stack.  Pre-first-vol-observation HOLDs
+        # rather than opening blind, mirroring V2's pre-first-funding
+        # branch.
+        if v2b_mode:
+            vol = self._latest_realized_vol(ts)
+            if vol is None:
+                return Signal(
+                    action="HOLD",
+                    strategy=self.name,
+                    price=price,
+                    reason="v2b_no_vol_observed_yet",
+                )
+            if vol >= self._vol_regime_threshold:
+                return Signal(
+                    action="SELL",
+                    strategy=self.name,
+                    price=price,
+                    reason="vol_regime_hv_flat",
+                    order_type="market",
+                    quantity_pct=1.0,
+                )
+
+        # V2 funding-rate gate.
+        if v2_mode:
+            rate_per_8h = self._latest_funding_rate_per_8h(ts)
+            rate_annual = (
+                rate_per_8h * _FUNDING_ANNUALISATION
+                if rate_per_8h is not None else None
             )
 
-        # Hysteresis exit: rate fell below exit threshold.
-        # Strategy emits SELL unconditionally; PerpSimulator silently
-        # ignores SELL when flat (mirrors the BUY-already-open pattern).
-        if (
-            self._exit_funding_rate_threshold > 0.0
-            and rate_annual < self._exit_funding_rate_threshold
-        ):
-            return Signal(
-                action="SELL",
-                strategy=self.name,
-                price=price,
-                reason="rate_below_exit_threshold",
-                order_type="market",
-                quantity_pct=1.0,
-            )
+            # Pre-first-settlement: V2 holds rather than opening blind.
+            if rate_annual is None:
+                return Signal(
+                    action="HOLD",
+                    strategy=self.name,
+                    price=price,
+                    reason="v2_no_funding_observed_yet",
+                )
 
-        # Entry gate: rate below entry threshold blocks new positions
-        # but does not force-close an open one (the dead band between
-        # exit and entry thresholds is the hysteresis hold zone).
-        if (
-            self._min_funding_rate_entry > 0.0
-            and rate_annual < self._min_funding_rate_entry
-        ):
-            return Signal(
-                action="HOLD",
-                strategy=self.name,
-                price=price,
-                reason="rate_below_entry_threshold",
-            )
+            # Hysteresis exit: rate fell below exit threshold.
+            # Strategy emits SELL unconditionally; PerpSimulator
+            # silently ignores SELL when flat (mirrors the BUY-
+            # already-open pattern).
+            if (
+                self._exit_funding_rate_threshold > 0.0
+                and rate_annual < self._exit_funding_rate_threshold
+            ):
+                return Signal(
+                    action="SELL",
+                    strategy=self.name,
+                    price=price,
+                    reason="rate_below_exit_threshold",
+                    order_type="market",
+                    quantity_pct=1.0,
+                )
+
+            # Entry gate: rate below entry threshold blocks new
+            # positions but does not force-close an open one (the
+            # dead band between exit and entry thresholds is the
+            # hysteresis hold zone).
+            if (
+                self._min_funding_rate_entry > 0.0
+                and rate_annual < self._min_funding_rate_entry
+            ):
+                return Signal(
+                    action="HOLD",
+                    strategy=self.name,
+                    price=price,
+                    reason="rate_below_entry_threshold",
+                )
 
         return Signal(
             action="BUY",
