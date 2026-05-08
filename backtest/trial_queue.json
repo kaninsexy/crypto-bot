@@ -1316,6 +1316,108 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-029",
+      "status": "queued",
+      "strategy_id": "CryptoSectorRotation",
+      "variation_id": "crypto-sector-rotation-long-only",
+      "script_path": "scripts/run_crypto_sector_rotation_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A strategy that rotates a long-only portfolio into the top-performing 'sector' of cryptocurrencies (e.g., Layer-1s, DeFi, Gaming) based on recent performance will generate positive risk-adjusted returns.",
+      "source_citation": "Leigh Drogen (2023); Klaus Grobys (2025); Chulwoo Han (2024)",
+      "literature_doc": "research/crypto-sector-rotation-literature.md",
+      "citations": [
+        {
+          "title": "Cross-sectional Momentum in Cryptocurrency Markets",
+          "authors": "Leigh Drogen, Corey Hoffstein, Kevin Otte",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Significant excess returns were found for long-only momentum strategies that buy the best performing assets over a 30-day period and hold for the subsequent 7-day period.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Cryptocurrency momentum has (not) its moments",
+          "authors": "Klaus Grobys",
+          "year": 2025,
+          "source": "Financial Markets and Portfolio Management",
+          "key_finding": "Cryptocurrency momentum profits are subject to severe crashes and the phenomenon appears to be more associated with large-cap cryptocurrencies, though even single outliers can cause insignificant returns.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "Evidence for time-series momentum is strong, whereas it is weak for cross-sectional momentum, with the effect being concentrated among winner portfolios as loser portfolios often rebound.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "First, create predefined baskets of cryptocurrencies representing distinct 'sectors' (e.g., L1s, DeFi, Oracles, Memecoins). Second, calculate the average return of each sector over a lookback period (e.g., 30 days, as suggested by Drogen et al., 2023). Third, at each rebalance period (e.g., weekly), go long an equally-weighted portfolio of the perpetual futures contracts corresponding to the coins in the top-ranked sector. A long-only approach is suggested by Han et al. (2024), who find the momentum effect is concentrated in winners.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T11:02:49.175927+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-030",
+      "status": "queued",
+      "strategy_id": "AltcoinSeasonRotation",
+      "variation_id": "altcoin-season-benchmark-rotation",
+      "script_path": "scripts/run_altcoin_season_rotation_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Defining an 'altcoin season' as a period where a basket of top-performing altcoins outperforms Bitcoin allows for a rotation strategy that generates alpha by selectively allocating to this basket and reverting to a Bitcoin benchmark in other regimes.",
+      "source_citation": "Leigh Drogen (2023); Chulwoo Han (2024); Zura Kakushadze (2019)",
+      "literature_doc": "research/altcoin-season-rotation-literature.md",
+      "citations": [
+        {
+          "title": "Cross-sectional Momentum in Cryptocurrency Markets",
+          "authors": "Leigh Drogen, Corey Hoffstein, Kevin Otte",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Long-only momentum strategies based on a 30-day ranking period and 7-day holding period consistently delivered excess returns relative to a Bitcoin benchmark.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "Finds that momentum effects are strongly concentrated among past winners, while past losers often rebound, suggesting a long-only approach to momentum is more robust after costs and liquidation risk.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Altcoin-Bitcoin Arbitrage",
+          "authors": "Zura Kakushadze, Willie Yu",
+          "year": 2019,
+          "source": "Bulletin of Applied Economics / SSRN",
+          "key_finding": "Identifies a significant statistical arbitrage alpha based on a mean-reversion effect in altcoin-Bitcoin pairs, which is driven by a leading momentum factor in cryptoasset returns.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "At each rebalance period (e.g., weekly), rank a universe of liquid altcoins by their 30-day return. If the average return of the top quintile exceeds Bitcoin's return over the same period, go long the top quintile portfolio. Otherwise, hold a benchmark asset like Bitcoin. This uses relative cross-sectional momentum as a market-timing signal.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T11:04:45.878475+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
