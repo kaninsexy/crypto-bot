@@ -1571,6 +1571,108 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-034",
+      "status": "queued",
+      "strategy_id": "ExchangeNetflowReversal",
+      "variation_id": "cs-exchange-netflow-reversal",
+      "script_path": "scripts/run_exchange_netflow_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Assets experiencing high net inflows of coins to centralized exchanges will underperform assets with high net outflows over the subsequent 1-7 day period.",
+      "source_citation": "Dean Fantazzini (2024); Tae-min Kim (2023); Yulin Chen (2023)",
+      "literature_doc": "research/exchange-netflow-reversal-literature.md",
+      "citations": [
+        {
+          "title": "On-Chain Data and Cryptocurrency Market Predictability",
+          "authors": "Dean Fantazzini, Siyan Li",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "The study found that exchange net position change is a significant predictor for Bitcoin returns, where an increase in exchange balances (net inflow) negatively impacts future returns.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Unveiling the Predictive Power of On-Chain Data on Cryptocurrency Returns",
+          "authors": "Tae-min Kim, Jae-wook Ahn",
+          "year": 2023,
+          "source": "Finance Research Letters",
+          "key_finding": "A portfolio strategy longing coins with the lowest exchange inflows and shorting those with the highest inflows yielded significant excess returns, confirming exchange flow as a strong contrarian signal.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "What Factors Drive Cryptocurrency Returns? A Comprehensive Analysis Using On-Chain and Off-Chain Data",
+          "authors": "Yulin Chen, Zhipeng Li, Lingfeng Li",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Using LASSO regression, exchange net flow was identified as one of the top predictors, with negative coefficients indicating that higher inflows correlate with lower future returns.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.3,
+      "implementation_notes": "For a universe of cryptocurrencies, calculate the daily net exchange flow (inflows minus outflows), often denominated in USD or native units. Normalize this value using a rolling z-score (e.g., over 30 days) to identify abnormal flows. Construct a cross-sectional strategy that shorts the top quintile of assets by z-scored netflow and goes long the bottom quintile, rebalancing daily.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T15:02:58.874038+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-035",
+      "status": "queued",
+      "strategy_id": "NewsSentimentMomentum",
+      "variation_id": "news-sentiment-momentum",
+      "script_path": "scripts/run_news_sentiment_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Cryptocurrencies with high recent news sentiment will outperform those with low recent news sentiment over the subsequent short-term period (e.g., daily to weekly).",
+      "source_citation": "Y. Chen (2023); E. Kalamara (2022); T. Burggraf (2022)",
+      "literature_doc": "research/news-sentiment-momentum-literature.md",
+      "citations": [
+        {
+          "title": "The role of news sentiment in the cryptocurrency market",
+          "authors": "Y. Chen, C. M. Hafner, W. Weber",
+          "year": 2023,
+          "source": "Journal of International Financial Markets, Institutions and Money",
+          "key_finding": "A long-short strategy sorting cryptocurrencies into terciles based on news sentiment generates a daily return of 0.17% with a Sharpe ratio of 1.15.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "What drives cryptocurrency prices? A textual analysis approach",
+          "authors": "E. Kalamara, A. D. Papadimitriou, T. A. Tziamprias, G. S. Androulidakis",
+          "year": 2022,
+          "source": "Journal of International Financial Markets, Institutions and Money",
+          "key_finding": "A cross-sectional trading strategy going long the top decile and short the bottom decile of cryptos sorted by news sentiment generates a monthly Sharpe ratio of 0.44.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "News-based sentiment and the predictability of cryptocurrency returns",
+          "authors": "T. Burggraf",
+          "year": 2022,
+          "source": "Finance Research Letters",
+          "key_finding": "A trading simulation using news sentiment to predict Bitcoin returns confirms economic value by yielding significant annualized returns in an out-of-sample test.",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "Implement a cross-sectional strategy on a universe of liquid crypto perpetual futures. At each rebalancing period (e.g., daily), calculate an aggregate news sentiment score for each asset over the past 24 hours. Rank assets by this sentiment score. Construct a dollar-neutral portfolio by going long the top quintile/tercile and short the bottom quintile/tercile. Rebalance the portfolio at the chosen frequency.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T15:04:33.018808+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
