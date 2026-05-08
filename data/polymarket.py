@@ -183,6 +183,24 @@ def fetch_markets_paginated(
     return out
 
 
+def fetch_market_by_id(market_id: str) -> dict:
+    """Single-market fetch via Gamma /markets/{id}. No cache (used by
+    the paper-ledger resolution updater, where freshness matters).
+
+    Returns the raw Gamma market dict (same schema as one element of
+    `fetch_markets_page`). Resolved markets carry:
+      - closed: true
+      - outcomePrices: e.g., '["1.0", "0.0"]' for YES resolved,
+        '["0.0", "1.0"]' for NO resolved.
+    """
+    response = requests.get(
+        f"{GAMMA_BASE_URL}/markets/{market_id}",
+        timeout=DEFAULT_REQUEST_TIMEOUT_S,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_orderbook(token_id: str) -> dict:
     """CLOB /book for one outcome token. No cache (volatile data).
 
