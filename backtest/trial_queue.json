@@ -582,7 +582,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-020",
@@ -633,18 +633,18 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-015",
       "status": "queued",
-      "strategy_id": "Unknown",
+      "strategy_id": "VRPHarvesting",
       "variation_id": "vrp-harvesting-regime-filtered",
-      "script_path": "scripts/run_unknown_trial.py",
+      "script_path": "scripts/run_vrp_harvesting_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "The variance risk premium (implied volatility minus realized volatility) in crypto options markets is persistently positive on average, allowing for profitable, systematic selling of volatility outside of tail-risk regimes.",
       "source_citation": "Daniel Requejo (2024); Anthony Makarewicz (2024); Zura Kakushadze (2019)",
-      "literature_doc": "research/github-com-literature.md",
+      "literature_doc": "research/vrp-harvesting-literature.md",
       "citations": [
         {
           "title": "Exploiting Overestimated Volatility Risk Premium: A Contrarian ETF Trading Strategy",
@@ -735,18 +735,18 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-017",
       "status": "queued",
-      "strategy_id": "Unknown",
+      "strategy_id": "XGBoostPCA",
       "variation_id": "xgboost-pca-technical-indicators",
-      "script_path": "scripts/run_unknown_trial.py",
+      "script_path": "scripts/run_xgboost_pca_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "An XGBoost classifier trained on a high-dimensional, stationary set of technical indicators with PCA for dimensionality reduction can predict daily price direction with sufficient accuracy to generate positive risk-adjusted returns.",
       "source_citation": "Rza Hasanli (2025); Darya Lapitskaya (2025); Jos\u00e9 \u00c1ngel Islas Anguiano (2025)",
-      "literature_doc": "research/mdpi-res-com-literature.md",
+      "literature_doc": "research/xgboost-pca-literature.md",
       "citations": [
         {
           "title": "Integrating High-Dimensional Technical Indicators into Machine Learning Models for Predicting Cryptocurrency Price Movements and Trading Performance: Evidence from Bitcoin, Ethereum, and Ripple",
@@ -888,7 +888,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-024",
@@ -939,7 +939,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-021",
@@ -990,7 +990,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-022",
@@ -1041,7 +1041,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-023",
@@ -1101,7 +1101,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     }
   ]
 }

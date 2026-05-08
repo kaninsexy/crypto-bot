@@ -716,6 +716,55 @@ def _worker_run_trial(
         else:
             env = _os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
+
+            # Task 2: pre-run structural gate. When the manifest's
+            # strategy_warmup_candles is significantly smaller than
+            # the cpcv harness's _ENGINE_WARM_UP_CANDLES default (50)
+            # AND the resulting per-block tradeable budget would
+            # collapse below the 30-trade verdict-tree floor, inject
+            # TRIAL_WARM_UP_CANDLES into the subprocess env so the
+            # trial script's run_cpcv call uses the manifest warmup
+            # instead of the harness default. This unblocks short-
+            # window strategies (e.g. sq-012 VolumeWeightedTSMOM with
+            # warmup=22) without changing any callers' default.
+            try:
+                import json as _json2
+                manifest_path = root / "backtest" / "holdout_manifest.json"
+                manifest = _json2.loads(manifest_path.read_text(encoding="utf-8"))
+                strategy_id = item.get("strategy_id") or ""
+                entry = manifest.get(strategy_id) or {}
+                strategy_warmup = int(entry.get(
+                    "strategy_warmup_candles", 50,
+                ))
+                # Estimate dev bars from manifest dates + timeframe.
+                ds = entry.get("data_start"); de = entry.get("dev_end")
+                tf = (entry.get("timeframe") or "1d").lower()
+                tf_hours = {"1h": 1, "4h": 4, "1d": 24}.get(tf, 24)
+                dev_bars = 0
+                if ds and de:
+                    import datetime as _dt2
+                    ds_dt = _dt2.datetime.fromisoformat(ds)
+                    de_dt = _dt2.datetime.fromisoformat(de)
+                    span_h = (de_dt - ds_dt).total_seconds() / 3600.0
+                    dev_bars = int(span_h / tf_hours)
+                n_blocks = int(item.get("n_blocks", 10))
+                if dev_bars > 0 and n_blocks > 0:
+                    block_size = dev_bars // n_blocks
+                    tradeable_global = block_size - 50
+                    tradeable_safe = block_size - strategy_warmup
+                    if tradeable_global < 30 and tradeable_safe >= 30:
+                        env["TRIAL_WARM_UP_CANDLES"] = str(strategy_warmup)
+                        _emit(
+                            f"[pre-run gate] {item_id}: block={block_size} "
+                            f"global_tradeable={tradeable_global} "
+                            f"manifest_tradeable={tradeable_safe} "
+                            f"-> inject TRIAL_WARM_UP_CANDLES={strategy_warmup}"
+                        )
+            except Exception as _gate_exc:  # noqa: BLE001
+                _emit(
+                    f"[pre-run gate] {item_id}: skipped ({_gate_exc.__class__.__name__}: {_gate_exc})",
+                )
+
             _emit(f"starting trial subprocess: {script}")
             try:
                 proc = _sp.run(
@@ -1485,19 +1534,80 @@ def maybe_send_digest(queue_data: dict, dry_run: bool) -> None:
 # ── Batch runner ────────────────────────────────────────────────────────────
 
 def _select_runnable(queue_data: dict) -> list[dict]:
-    """Every queued item, including those whose trial script has not
-    been written yet.
+    """Every queued or needs-rerun item.
+
+    `queued`     — fresh or auto-build-flipped items.
+    `needs_rerun` — items the post-trial classifier flagged as
+                    structural CPCVError (warmup-vs-block mismatch);
+                    the pre-run gate will inject TRIAL_WARM_UP_CANDLES
+                    on the next pass before the trial subprocess
+                    spawns, then this status reverts to running.
 
     needs_trial_script=true items are routed through the auto-build
-    path in run_batch() before the trial subprocess spawns: this
-    helper no longer filters them out. The build path either flips
-    needs_trial_script=False and lets the item proceed to the worker,
-    or marks it status=error with the build log.
+    path in run_batch() before the trial subprocess spawns.
     """
     return [
         it for it in queue_data.get("queue", [])
-        if it.get("status") == "queued"
+        if it.get("status") in ("queued", "needs_rerun")
     ]
+
+
+# Task 3: post-trial CPCVError classifier. Reads keywords from the
+# error message; cross-checks the manifest's strategy_warmup_candles
+# against the harness's _ENGINE_WARM_UP_CANDLES (50) to decide whether
+# a manifest-aware re-run with TRIAL_WARM_UP_CANDLES would have
+# cleared the tradeable-bar floor.
+_CPCV_STRUCTURAL_KEYWORDS = ("warm", "block", "candle")
+
+
+def _classify_cpcv_error(
+    item: dict, summary: dict, cpcv_err_msg: str,
+) -> str:
+    """Return one of "structural" / "sparse" / "unknown".
+
+      - "structural": message names a block-size / warmup / candle
+        constraint AND the manifest's strategy_warmup_candles would
+        leave the per-block tradeable budget at >= 30 trades. The
+        next pass should requeue the item under the pre-run gate.
+      - "sparse":     headline-run trade count was 0 (genuinely no
+        signal to backtest), OR n_trades_total == 0 in the summary.
+      - "unknown":    everything else; caller falls through to the
+        standard retire row.
+    """
+    msg_lc = (cpcv_err_msg or "").lower()
+    has_struct_kw = any(k in msg_lc for k in _CPCV_STRUCTURAL_KEYWORDS)
+
+    n_trades_headline = int(summary.get("n_trades_headline") or 0)
+    n_trades_total = int(summary.get("n_trades_total") or 0)
+    if n_trades_headline == 0 and n_trades_total == 0 and not has_struct_kw:
+        return "sparse"
+
+    if has_struct_kw:
+        try:
+            import json as _json
+            with open(QUEUE_PATH.parent / "holdout_manifest.json", "r", encoding="utf-8") as f:
+                manifest = _json.load(f)
+            entry = manifest.get(str(item.get("strategy_id") or ""), {})
+            strategy_warmup = int(entry.get("strategy_warmup_candles", 50))
+            ds = entry.get("data_start"); de = entry.get("dev_end")
+            tf = (entry.get("timeframe") or "1d").lower()
+            tf_hours = {"1h": 1, "4h": 4, "1d": 24}.get(tf, 24)
+            if ds and de:
+                from datetime import datetime as _dt
+                span_h = (
+                    _dt.fromisoformat(de) - _dt.fromisoformat(ds)
+                ).total_seconds() / 3600.0
+                dev_bars = int(span_h / tf_hours)
+                n_blocks = int(item.get("n_blocks", 10))
+                if n_blocks > 0:
+                    block_size = dev_bars // n_blocks
+                    tradeable_safe = block_size - strategy_warmup
+                    if tradeable_safe >= 30:
+                        return "structural"
+        except Exception:  # noqa: BLE001
+            pass
+
+    return "unknown"
 
 
 def _clear_stale_result_files(items: list[dict]) -> None:
@@ -1595,6 +1705,32 @@ def process_batch_results(
         finished_at = result.get("finished_at") or utcnow_iso()
         summary = parse_json_summary(stdout) if stdout else None
         log_run(item, returncode, summary, stderr)
+
+        # Task 3: post-trial CPCVError classifier. Trial scripts that
+        # catch CPCVError emit a sentinel-bearing retire row with
+        # "cpcv_error": "<message>" inside the TRIAL SUMMARY JSON.
+        # Classify before the standard error-path so a structural
+        # warmup-vs-block mismatch can be requeued for the pre-run
+        # gate to handle on the next pass instead of being recorded
+        # as a strategy-side retire.
+        if summary is not None and isinstance(summary.get("cpcv_error"), str):
+            cpcv_err_msg = str(summary.get("cpcv_error") or "")
+            cls = _classify_cpcv_error(item, summary, cpcv_err_msg)
+            if cls == "structural":
+                item["status"] = "needs_rerun"
+                item["error"] = (
+                    f"CPCV structural mismatch (warmup vs block size); "
+                    f"will rerun via pre-run gate. {cpcv_err_msg}"
+                )[:500]
+                item["finished_at"] = finished_at
+                save_queue(queue_data)
+                print(
+                    f"[queue] STRUCTURAL CPCVError {item_id}: "
+                    "queued for rerun (status=needs_rerun)"
+                )
+                continue
+            # "sparse" or "unknown" -> fall through to the standard
+            # full_cpcv retire row already recorded by the trial.
 
         if returncode != 0 or summary is None:
             # Auto-remediation (Task 3): parse structured TRIAL_ERROR

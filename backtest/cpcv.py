@@ -123,6 +123,7 @@ def _run_engine_per_block(
     blocks: list,
     primary_symbol: Optional[str],
     is_multi_symbol: bool,
+    warm_up_candles: int = _ENGINE_WARM_UP_CANDLES,
 ) -> list[BacktestResult]:
     """Run `BacktestEngine.run` once per block.
 
@@ -138,7 +139,7 @@ def _run_engine_per_block(
     """
     engine = BacktestEngine(
         initial_balance=_ENGINE_INITIAL_BALANCE,
-        warm_up_candles=_ENGINE_WARM_UP_CANDLES,
+        warm_up_candles=warm_up_candles,
         verbose=False,
     )
     results: list[BacktestResult] = []
@@ -185,6 +186,7 @@ def run_cpcv(
     params: dict,
     config: CPCVConfig,
     strategy_factory: Callable[[], BaseStrategy],
+    warm_up_candles: int = _ENGINE_WARM_UP_CANDLES,
 ) -> CPCVResult:
     """Run the block-Sharpe distribution on a strategy's dev window.
 
@@ -283,6 +285,7 @@ def run_cpcv(
             blocks=blocks_multi,
             primary_symbol=primary_symbol,
             is_multi_symbol=True,
+            warm_up_candles=warm_up_candles,
         )
     else:
         blocks_single = _split_blocks(dev_df, config.n_blocks)
@@ -293,6 +296,7 @@ def run_cpcv(
             blocks=blocks_single,
             primary_symbol=None,
             is_multi_symbol=False,
+            warm_up_candles=warm_up_candles,
         )
 
     # 2. Per-block Sharpe, trade count, and post-trim returns.

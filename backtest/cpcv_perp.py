@@ -64,6 +64,7 @@ def run_cpcv_perp(
     params: dict,
     config: CPCVConfig,
     strategy_factory: Callable[[], BaseStrategy],
+    warm_up_candles: Optional[int] = None,
 ) -> CPCVResult:
     """Block-Sharpe CPCV for a two-leg (perp + spot) manifest entry.
 
@@ -183,9 +184,16 @@ def run_cpcv_perp(
     initial_balance = float(
         params.get("initial_balance", DEFAULT_INITIAL_BALANCE)
     )
-    warm_up_candles = int(
-        params.get("warm_up_candles", DEFAULT_WARM_UP_CANDLES)
-    )
+    # Resolution order: explicit kwarg > params dict > module default.
+    # Kwarg path is the orchestrator's TRIAL_WARM_UP_CANDLES injection
+    # for warmup-vs-block-size mismatches; params path preserves
+    # existing callers that thread warmup through their PARAMS dict.
+    if warm_up_candles is None:
+        warm_up_candles = int(
+            params.get("warm_up_candles", DEFAULT_WARM_UP_CANDLES)
+        )
+    else:
+        warm_up_candles = int(warm_up_candles)
 
     candle_duration_h = _infer_candle_hours(df_perp)
 

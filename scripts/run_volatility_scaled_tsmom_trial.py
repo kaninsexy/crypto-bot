@@ -15,6 +15,7 @@ Output is ASCII-only (Windows cp1252 terminal compatibility).
 
 from __future__ import annotations
 
+import os
 import json
 import sys
 from pathlib import Path
@@ -142,12 +143,17 @@ def main() -> int:
     config = CPCVConfig(
         n_blocks=10, k_held_out=2, purge_periods=0, embargo_periods=0,
     )
+    # TRIAL_WARM_UP_CANDLES env var: orchestrator pre-run gate
+    # injects this when manifest strategy_warmup_candles is
+    # significantly smaller than cpcv harness default (50).
+    _warm = int(os.environ.get("TRIAL_WARM_UP_CANDLES", 50))
     try:
         cpcv_result = run_cpcv(
             strategy_id=STRATEGY_ID,
             params=PARAMS,
             config=config,
             strategy_factory=make_strategy,
+            warm_up_candles=_warm,
         )
     except CPCVError as exc:
         # CPCVError handler -- mandatory per CLAUDE.md "Pre-justified
