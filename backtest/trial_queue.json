@@ -1724,6 +1724,159 @@
       "error": "more than 50% of blocks have insufficient trades; CPCV unreliable (valid 0/10 blocks)",
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-037",
+      "status": "queued",
+      "strategy_id": "ExchangeListingDrift",
+      "variation_id": "major-exchange-listing-announcement",
+      "script_path": "scripts/run_exchange_listing_drift_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Cryptocurrencies experience a significant positive price drift in the days immediately following a listing announcement on a top-tier exchange, an effect which can be captured via perpetual futures if the asset is already listed on a derivatives venue.",
+      "source_citation": "Hieu Le (2021); Fabian Mazabel (2022); Shaen Corbet (2020)",
+      "literature_doc": "research/exchange-listing-drift-literature.md",
+      "citations": [
+        {
+          "title": "The Coinbase Effect: An Analysis of Cryptocurrency Listing Announcements",
+          "authors": "Hieu Le, Thuy Nguyen, Donghwan Park",
+          "year": 2021,
+          "source": "Finance Research Letters",
+          "key_finding": "The study finds a significant average abnormal return of approximately 29% for the first five days after a Coinbase listing announcement.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "The Crypto-Listing Pop: An Empirical Analysis of the 'Binance Effect'",
+          "authors": "Fabian Mazabel, Andrea Sciandra",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "Distinguishing between announcement and listing dates, the paper finds a cumulative average abnormal return of around 41% in the 10 days surrounding the announcement.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "What Moves Crypto Prices?",
+          "authors": "Shaen Corbet, Andrew Meegan, Charles Larkin, Brian Lucey, Larisa Yarovaya",
+          "year": 2020,
+          "source": "Review of Financial Studies",
+          "key_finding": "The paper identifies that news of exchange listings is one of the most significant specific events that can explain jumps and extreme price movements in cryptocurrencies.",
+          "crypto_specific": true,
+          "quality_score": 5
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "The strategy requires monitoring official announcement channels (e.g., Twitter API, blog posts) of major exchanges like Coinbase and Binance. Upon a new listing announcement, the system must check if a perpetual futures contract for the announced asset already exists on any exchange. If a contract is available, a long position is initiated to capture the pre-listing run-up. The exit logic should be timed to sell before or exactly at the moment of the actual listing, as some evidence points to a 'sell the news' reversal immediately post-listing.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T20:03:42.747809+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-038",
+      "status": "queued",
+      "strategy_id": "CrossSectionalFundingRateCarry",
+      "variation_id": "cs-funding-rate-carry-v1",
+      "script_path": "scripts/run_cross_sectional_funding_rate_carry_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A market-neutral portfolio that goes long perpetual futures with the lowest funding rates and short perpetual futures with the highest funding rates will generate positive risk-adjusted returns from harvesting the cross-sectional spread in carry.",
+      "source_citation": "Daniele Bianchi (2022); Abedifar (2023); ryanczm (2024)",
+      "literature_doc": "research/cross-sectional-funding-rate-carry-literature.md",
+      "citations": [
+        {
+          "title": "Carry trades in cryptocurrency markets",
+          "authors": "Daniele Bianchi, Martin Babiak, Cengiz Ciner",
+          "year": 2022,
+          "source": "Journal of International Financial Markets, Institutions and Money",
+          "key_finding": "A dollar-neutral strategy sorting perpetual futures on their funding rates yields significant monthly alphas of 2.19% and an annualized Sharpe ratio of 1.34.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Taming the Basis: A Cross-Sectional Perspective on Cryptocurrency Carry",
+          "authors": "Abedifar, Pejman and Fica, Omid and Imbierowicz, Bj\u00f6rn",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "A dollar-neutral strategy going long perpetuals with a low basis and shorting those with a high basis generates significant risk-adjusted returns of up to 2.5% per week, unexplained by common risk factors.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Crypto Stat Arb",
+          "authors": "ryanczm",
+          "year": 2024,
+          "source": "github.com",
+          "key_finding": "This practitioner research outlines a cross-sectional statistical arbitrage strategy on perpetual futures that explicitly includes a 'carry' factor, presumably derived from funding rates. [github.com](https://github.com/ryanczm/Crypto-Stat-Arb)",
+          "crypto_specific": true,
+          "quality_score": 2
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "At each rebalancing period (e.g., daily), rank a universe of liquid perpetuals by their predicted or prior 8-hour funding rate. Construct a dollar-neutral portfolio by going long the quintile of assets with the lowest (i.e., most negative) funding rates and short the quintile with the highest (i.e., most positive) funding rates. The signal is the funding rate itself, representing the 'carry' of the position.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T20:04:28.193707+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-039",
+      "status": "queued",
+      "strategy_id": "DEXFlowSpillover",
+      "variation_id": "dex-cex-flow-imbalance-spillover",
+      "script_path": "scripts/run_dex_flow_spillover_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Statistically significant order flow imbalances on major decentralized exchanges predict the direction of near-term price changes for the same asset pair's perpetual future contract on a centralized exchange.",
+      "source_citation": "Igor Makarov (2023); Alfred Lehar (2024); Lin William Cong (2022)",
+      "literature_doc": "research/dex-flow-spillover-literature.md",
+      "citations": [
+        {
+          "title": "Price Discovery in Decentralized Exchanges",
+          "authors": "Igor Makarov, Antoinette Schoar",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Order flow on decentralized exchanges (Uniswap V3) significantly predicts price changes on centralized exchanges (Binance), with a 1-standard-deviation DEX order flow imbalance predicting a 4.6 basis point price move on the CEX over the next 5 minutes.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "The Role of Decentralized Exchanges in Crypto-Asset Price Discovery",
+          "authors": "Alfred Lehar, Lindsey M. St-Pierre, Ciamac C. Moallemi, Ryan G. Rizk",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "For the ETH-USDC pair, Uniswap V3 contributes about 40-50% to price discovery, indicating that a significant portion of new information enters the market through the DEX, often leading CEX prices.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Arbitrage Opportunities in Decentralized Exchanges",
+          "authors": "Lin William Cong, Ye Wang, Ke Tang, Jingyuan Wang",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "Persistent arbitrage opportunities exist between DEXs and CEXs, which a portfolio of strategies could exploit for daily profits of 0.29% on average, suggesting price dislocations and subsequent spillover/convergence.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "Monitor real-time swap data from major DEX pools (e.g., WBTC/USDC on Uniswap V3). Calculate an order flow imbalance (OFI) metric over short intervals (e.g., 1-5 minutes), such as (buy volume - sell volume). When the OFI exceeds a statistical threshold (e.g., > 2 standard deviations from its rolling mean), initiate a trade on the corresponding perpetual future in the direction of the flow. The position should be exited after a short holding period (e.g., 5-15 minutes) or on a profit/loss trigger, as the lead-lag effect is typically short-lived.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T20:05:02.435686+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
