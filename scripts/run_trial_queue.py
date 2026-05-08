@@ -120,12 +120,16 @@ EMAIL_RATE_LIMIT_SLEEP_S = 61  # >60s between calls = safe under 6/hr
 TRIAL_TIMEOUT_S = 14_400  # 4h per CLAUDE.md compute budget
 DEFAULT_MAX_WORKERS = 20  # default cap when --workers not specified
 
-# Digest cadence: always send a per-run digest when there is unreported
-# activity (DIGEST_INTERVAL_S = 0); 24h heartbeat fallback when nothing
-# to report. The cron schedule throttles max-frequency to hourly which
-# keeps us under the Resend 6/hr ceiling. Set to non-zero to throttle
-# digests to a longer interval.
-DIGEST_INTERVAL_S = 0
+# Digest cadence: send a digest at most twice per day (every 12h)
+# when there is unreported activity. 24h heartbeat fallback when
+# nothing to report. The 12h interval is a Kanin preference set
+# 2026-05-08 -- per-run digests under --continuous + hourly cron
+# produced ~24 emails/day which was unreadable; twice/day bundles
+# 12 runs of completed trials into a single digest the operator
+# actually reads. Items that need attention (KEEPs, errors that
+# the agent could not auto-fix) are surfaced in the digest body
+# alongside the pass results so a single email covers both.
+DIGEST_INTERVAL_S = 12 * 3600
 HEARTBEAT_INTERVAL_S = 24 * 3600
 
 # Auto-remediation: run a fetch script with this timeout when a trial
