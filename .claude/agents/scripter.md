@@ -23,9 +23,6 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/no-claude-cli.sh"
-          timeout: 5
-        - type: command
           command: "$HOME/dev/crypto-bot/.claude/hooks/no-deploy.sh"
           timeout: 5
         - type: command
