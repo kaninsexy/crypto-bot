@@ -447,6 +447,96 @@ reads the probe output file to set the parameters.
 ("FundingRateHarvest")` will increment from 1 to 2 when the
 first trial row is appended.
 
+## Variation #2 candidate (b) -- `phase4b-volregime-conditional-singlepair-btc-v2b`
+
+**Date:** 2026-05-08
+**Status:** Hypothesis-of-record. Not yet queued. Pending
+chat-side selection between this candidate and the threshold-
+entry V2 (above), or both. Spec sourced from the deep-researcher
+2026-05-08 pass; full alternatives + 4-candidate analysis in
+`research/funding-rate-variation-2-candidates.md`.
+
+**Structural failure mode addressed.** Same as the threshold-
+entry V2: V1's always-on logic forced exposure during the 2025
+declining-carry regime that drove the dev-vs-holdout sharpe gap.
+This candidate addresses the failure mode through a different
+structural lever: an exogenous volatility-regime gate.
+
+**Hypothesis.** Same legs as V1 (delta-neutral BTC single-pair
+spot + perp on OKX). Harvest only when realized 30-day BTC
+volatility is below the dev-window median (LV regime); flat in
+HV regime. Per Almeida, Grith, Miftachov, Wang (2024) Bitcoin
+risk-premia decompose distinctly across two volatility regimes
+(LV BVRP=0.17, HV BVRP=0.12), with the LV regime carrying the
+larger upside-return premium share. The structural claim is
+that the carry-pool collapse Schmeling et al. document in 2025
+coincides with HV-regime-dominant funding (long-side leverage
+unwinds, longs no longer overpay shorts). A regime-gated
+construction would have stayed flat through the holdout-killing
+HV sub-window.
+
+**Why structurally different from V1 and from threshold-entry V2.**
+V1's exposure was a function of funding-rate level only.
+Threshold-entry V2's exposure is also a function of funding-rate
+level (via the percentile gate). This V2b candidate gates exposure
+on an *exogenous* variable (realized BTC vol) that is uncorrelated
+with the funding signal -- the regime-gated construction's
+information set is structurally different, not a parameter
+perturbation of V1's funding-rate filter.
+
+**Threshold calibration rule.** Realized 30d BTC return
+volatility computed at each 8h boundary on a rolling window;
+threshold = dev-window median, held fixed for holdout (no
+in-holdout recalibration). Calibration probe runs on dev only
+and writes the threshold to a probe-output JSON.
+
+**All other parameters unchanged from V1:** leverage 5.0x
+cross-margin, equal notional legs, flip_exit_n=4,
+exit_mr_ratio_threshold=0.01.
+
+**Source citations.**
+
+PRIMARY:
+- Almeida, C., Grith, M., Miftachov, R., Wang, Z. (2024).
+  "Risk Premia in the Bitcoin Market." arXiv 2410.15195v2.
+  Documents two distinct option-implied volatility regimes
+  with materially different risk-premium decomposition
+  (LV BVRP 0.17 vs HV BVRP 0.12).
+
+SUPPORTING:
+- Schmeling, Schrimpf & Todorov "Crypto Carry" (BIS WP 1087)
+  -- the time-varying-carry empirical anchor the regime
+  filter operationalises.
+- Ruan & Streltsov (SSRN 4218907) -- spot-market spreads
+  widen at funding settlement; provides exit-timing input
+  if needed.
+
+Verbatim per-citation provenance is at
+`.memory/T2_semantic/_pending_review/citations/almeida-grith-miftachov-wang-2024.md`,
+`.memory/T2_semantic/_pending_review/citations/ruan-streltsov-2022.md`,
+and the Schmeling citation file already in T2 from V1.
+
+**Harness changes required.** None to sacred-harness files.
+`FundingRateHarvestStrategy` gains a `regime_gate` callback
+parameter (default returns True for V1-compatibility). New
+files:
+- `scripts/phase_4b_v2b_volregime_probe.py` (mirror of
+  phase_4b_v2_threshold_probe.py shape but on realized vol).
+- `scripts/phase_4b_v2b_full_cpcv.py` (mirror of
+  phase_4b_v2_full_cpcv.py with regime_gate wired through).
+
+**Open gaps (deep-researcher pass 2026-05-08).** No published
+out-of-sample regime-switching forecasting model maps cleanly
+to Almeida et al.'s LV/HV partition; the realized-vol proxy
+must be validated by a dev-only probe (sanity-check proxy
+regime membership against an option-implied baseline if
+Deribit options data are available for the dev window).
+
+**Variation slot.** Same slot as the threshold-entry V2 if both
+are run; the no-p-hacking rule allows variations with distinct
+structural hypotheses to count as distinct variation slots,
+both contributing to `count_trials_for_dsr("FundingRateHarvest")`.
+
 ## Variation #2 — `phase4b-delta-neutral-top-N-funding-v1` (STUB, NOT QUEUED)
 
 Multi-pair selection layer: rank OKX USDT-M perps by current
