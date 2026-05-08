@@ -705,3 +705,11 @@ prior. No edge in this window.
 - **crypto-sector-rotation-long-only (2026-05-08):** verdict=retire. sr=0.7741, baseline_sr=1.9391, dsr=1.0000, n_trades=123, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### AltcoinSeasonRotation
+
+#### Phase 4 outcomes
+
+- **altcoin-season-benchmark-rotation (2026-05-08):** verdict=retire. sr=1.6767, baseline_sr=1.9391, dsr=1.0000, n_trades=77, mt_mean_pass=True, baseline_pass=False.
+
+---

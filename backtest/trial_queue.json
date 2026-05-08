@@ -1370,7 +1370,7 @@
     },
     {
       "id": "sq-030",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "AltcoinSeasonRotation",
       "variation_id": "altcoin-season-benchmark-rotation",
       "script_path": "scripts/run_altcoin_season_rotation_trial.py",
@@ -1412,12 +1412,12 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T11:04:45.878475+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T12:13:28.195264+00:00",
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     }
   ]
 }
