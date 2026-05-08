@@ -29,7 +29,22 @@
     "Intraday Session Momentum Reversal",
     "Open Interest Weighted Momentum",
     "On-Chain Volume Momentum",
-    "Network Growth Factor (Active Addresses)"
+    "Network Growth Factor (Active Addresses)",
+    "AsymmetricTimeSeriesMomentum",
+    "ShortTermCrossSectionalMomentum",
+    "VolatilityScaledTSMOM",
+    "FOMCPostAnnouncementDrift",
+    "IntradayJumpReversal",
+    "FundingRateMomentum",
+    "OvernightSessionReversal",
+    "InformationShockMomentum",
+    "VolatilityTermStructure",
+    "BasisMomentum",
+    "IntermarketSpilloverMomentum",
+    "OpenCloseIntradayMomentum",
+    "DeveloperActivityFactor",
+    "NetworkValueSignalReversal",
+    "DayOfWeekSeasonality"
   ],
   "proposed_variations": [
     "onchain-macro-cycle-filter",
@@ -44,7 +59,12 @@
     "cs-expected-idio-skewness",
     "xgboost-pca-technical-indicators",
     "search-volume-momentum",
-    "intraday-conditional-momentum-reversal"
+    "intraday-conditional-momentum-reversal",
+    "cs-short-term-mom-7d",
+    "volatility-scaled-tsmom",
+    "intraday-jump-reversal-zscore",
+    "us-session-overnight-reversal",
+    "cross-sectional-weekday-effect"
   ],
   "proposals_log": [
     {
@@ -136,6 +156,99 @@
       "status": "rejected",
       "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
       "logged_at": "2026-05-07T08:02:03.869574+00:00"
+    },
+    {
+      "variation_id": "tsmom-long-winners-only",
+      "domain": "AsymmetricTimeSeriesMomentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T16:42:45.440069+00:00"
+    },
+    {
+      "variation_id": "cs-short-term-mom-7d",
+      "domain": "ShortTermCrossSectionalMomentum",
+      "status": "queued",
+      "logged_at": "2026-05-07T16:43:46.942323+00:00"
+    },
+    {
+      "variation_id": "volatility-scaled-tsmom",
+      "domain": "VolatilityScaledTSMOM",
+      "status": "queued",
+      "logged_at": "2026-05-07T16:44:28.631162+00:00"
+    },
+    {
+      "variation_id": "fomc-post-announcement-drift",
+      "domain": "FOMCPostAnnouncementDrift",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-07T16:44:52.160888+00:00"
+    },
+    {
+      "variation_id": "intraday-jump-reversal-zscore",
+      "domain": "IntradayJumpReversal",
+      "status": "queued",
+      "logged_at": "2026-05-07T16:45:29.258213+00:00"
+    },
+    {
+      "variation_id": "us-session-overnight-reversal",
+      "domain": "OvernightSessionReversal",
+      "status": "queued",
+      "logged_at": "2026-05-08T03:02:51.735178+00:00"
+    },
+    {
+      "variation_id": "macro-announcement-drift",
+      "domain": "InformationShockMomentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T03:03:23.504596+00:00"
+    },
+    {
+      "variation_id": "iv-term-structure-slope",
+      "domain": "VolatilityTermStructure",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T03:04:02.377890+00:00"
+    },
+    {
+      "variation_id": "basis-momentum-30d-change",
+      "domain": "BasisMomentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T03:04:55.602829+00:00"
+    },
+    {
+      "variation_id": "intermarket-safe-haven-momentum",
+      "domain": "IntermarketSpilloverMomentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T03:05:38.590233+00:00"
+    },
+    {
+      "variation_id": "open-close-intraday-momentum",
+      "domain": "OpenCloseIntradayMomentum",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T06:00:54.165680+00:00"
+    },
+    {
+      "variation_id": "developer-activity-momentum",
+      "domain": "DeveloperActivityFactor",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 2 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T06:02:07.498617+00:00"
+    },
+    {
+      "variation_id": "behavioral-anchored-reversal",
+      "domain": "NetworkValueSignalReversal",
+      "status": "rejected",
+      "rejection_reason": "insufficient_peer_reviewed: only 1 qualifying citations after removing non-academic sources",
+      "logged_at": "2026-05-08T06:03:05.049117+00:00"
+    },
+    {
+      "variation_id": "cross-sectional-weekday-effect",
+      "domain": "DayOfWeekSeasonality",
+      "status": "queued",
+      "logged_at": "2026-05-08T06:03:41.297132+00:00"
     }
   ]
 }
