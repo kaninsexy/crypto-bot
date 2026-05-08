@@ -1217,7 +1217,7 @@
     },
     {
       "id": "sq-027",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "HurstExponentRegimeSwitch",
       "variation_id": "hurst-regime-trend-mr-switch",
       "script_path": "scripts/run_hurst_exponent_regime_switch_trial.py",
@@ -1259,12 +1259,12 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T08:02:43.539421+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T10:21:44.353740+00:00",
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-028",

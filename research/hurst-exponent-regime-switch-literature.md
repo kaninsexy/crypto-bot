@@ -160,3 +160,8 @@ BTC/USDT 4H spot candles. Manifest entry
 ## Trial outcomes
 
 <!-- Populated by the orchestrator after the trial completes. -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| hurst-regime-trend-mr-switch | 2026-05-08 | retire | -0.6100 | 0.0000 | 88 |
+

@@ -681,3 +681,11 @@ prior. No edge in this window.
 - **cs-daily-reversal (2026-05-08):** verdict=under_tested. sr=-0.0166, baseline_sr=0.8010, dsr=0.3074, n_trades=1393, mt_mean_pass=None, baseline_pass=None.
 
 ---
+
+### HurstExponentRegimeSwitch
+
+#### Phase 4 outcomes
+
+- **hurst-regime-trend-mr-switch (2026-05-08):** verdict=retire. sr=-0.6100, baseline_sr=1.9676, dsr=0.0000, n_trades=88, mt_mean_pass=False, baseline_pass=False.
+
+---
