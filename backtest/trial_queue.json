@@ -1676,7 +1676,7 @@
     },
     {
       "id": "sq-036",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "PutCallRatioContrarian",
       "variation_id": "pcr-contrarian-zscore-reversal",
       "script_path": "scripts/run_put_call_ratio_contrarian_trial.py",
@@ -1718,10 +1718,10 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T17:06:22.778006+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T18:08:06.223280+00:00",
+      "verdict": "retire",
       "trial_id": null,
-      "error": null,
+      "error": "more than 50% of blocks have insufficient trades; CPCV unreliable (valid 0/10 blocks)",
       "email_sent": false,
       "needs_trial_script": false
     }

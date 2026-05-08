@@ -69,3 +69,8 @@ PCR z-scores on BTC/USDT 1D.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| pcr-contrarian-zscore-reversal | 2026-05-08 | retire | None | None | 0 |
+
