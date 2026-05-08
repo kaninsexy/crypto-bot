@@ -57,3 +57,8 @@ subsequent daily rebalance period.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cross-sectional-weekday-effect | 2026-05-08 | retire | 0.7567 | 1.0000 | 550 |
+

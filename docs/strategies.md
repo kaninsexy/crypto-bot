@@ -665,3 +665,11 @@ prior. No edge in this window.
 - **us-session-overnight-reversal (2026-05-08):** verdict=retire. sr=-1.8769, baseline_sr=1.9373, dsr=0.0000, n_trades=413, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### DayOfWeekSeasonality
+
+#### Phase 4 outcomes
+
+- **cross-sectional-weekday-effect (2026-05-08):** verdict=retire. sr=0.7567, baseline_sr=1.9391, dsr=1.0000, n_trades=550, mt_mean_pass=True, baseline_pass=False.
+
+---
