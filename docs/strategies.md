@@ -689,3 +689,11 @@ prior. No edge in this window.
 - **hurst-regime-trend-mr-switch (2026-05-08):** verdict=retire. sr=-0.6100, baseline_sr=1.9676, dsr=0.0000, n_trades=88, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### CrossSectionalResidualReversal
+
+#### Phase 4 outcomes
+
+- **cs-residual-reversal-daily (2026-05-08):** verdict=retire. sr=-0.3544, baseline_sr=0.8010, dsr=0.0000, n_trades=935, mt_mean_pass=False, baseline_pass=False.
+
+---

@@ -97,3 +97,4 @@ This mirrors the MeanReversion_BTC_Residual (Phase 4.A) construction.
 
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
+| cs-residual-reversal-daily | 2026-05-08 | retire | -0.3544 | 0.0000 | 935 |
