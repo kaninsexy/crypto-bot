@@ -22,16 +22,16 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/budget-check.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/budget-check.sh"
           timeout: 5
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/failcount-check.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/failcount-check.sh"
           timeout: 5
   PostToolUse:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/failcount-update.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/failcount-update.sh"
           timeout: 5
 ---
 You are the Phase-4B Coordinator (Sonnet 4.6, plan mode, 30-turn cap).

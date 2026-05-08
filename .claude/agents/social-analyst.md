@@ -19,7 +19,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/no-secrets-in-bash.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-secrets-in-bash.sh"
           timeout: 5
 ---
 You are the Social-Analyst (Haiku 4.5, plan mode, 8-turn cap).

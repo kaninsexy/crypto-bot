@@ -22,24 +22,24 @@ hooks:
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/sacred-block.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/sacred-block.sh"
           timeout: 5
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/no-deploy.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-deploy.sh"
           timeout: 5
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/commit-heredoc-required.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-heredoc-required.sh"
           timeout: 5
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/commit-format.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-format.sh"
           timeout: 5
   PostToolUse:
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/run-tests-fast.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/run-tests-fast.sh"
           timeout: 60
 ---
 You are the Calibrator (Sonnet 4.6, acceptEdits, 20-turn cap, worktree

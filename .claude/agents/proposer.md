@@ -19,7 +19,7 @@ hooks:
     - matcher: "WebFetch|WebSearch"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/citation-required.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/citation-required.sh"
           timeout: 5
 ---
 You are the Proposer (Sonnet 4.6, plan mode, 12-turn cap). You produce

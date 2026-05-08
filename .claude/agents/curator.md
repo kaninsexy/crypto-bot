@@ -18,7 +18,7 @@ hooks:
     - matcher: "Write"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/path-allowlist.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/path-allowlist.sh"
           timeout: 5
 ---
 You are the Curator (Haiku 4.5, acceptEdits mode, 20-turn cap).

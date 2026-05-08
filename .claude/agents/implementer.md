@@ -21,29 +21,29 @@ hooks:
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/sacred-block.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/sacred-block.sh"
           timeout: 5
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/no-deploy.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-deploy.sh"
           timeout: 5
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/commit-heredoc-required.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-heredoc-required.sh"
           timeout: 5
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/commit-format.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-format.sh"
           timeout: 5
   PostToolUse:
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/run-tests-fast.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/run-tests-fast.sh"
           timeout: 60
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/exit-ramp-check.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/exit-ramp-check.sh"
           timeout: 10
 ---
 You are the Implementer. You execute one approved variation from

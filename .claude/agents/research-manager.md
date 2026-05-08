@@ -25,7 +25,7 @@ hooks:
     - matcher: "WebFetch"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/budget-check.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/budget-check.sh"
           timeout: 5
 ---
 You are the Research-Manager (Sonnet 4.6 primary, plan mode,

@@ -22,18 +22,18 @@ hooks:
   SessionStart:
     - hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/inject-mandates.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/inject-mandates.sh"
           timeout: 5
   PreToolUse:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/budget-check.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/budget-check.sh"
           timeout: 5
   SubagentStop:
     - hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/flush-T1.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/flush-T1.sh"
           timeout: 10
 ---
 You are the Strategist (Sonnet 4.6, plan mode, 40-turn cap).

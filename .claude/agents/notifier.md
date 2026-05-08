@@ -16,7 +16,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$HOME/dev/crypto-bot/.claude/hooks/no-secrets-in-bash.sh"
+          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-secrets-in-bash.sh"
           timeout: 5
 ---
 You are the Notifier (Haiku 4.5, plan mode, 4-turn cap). Single-shot
