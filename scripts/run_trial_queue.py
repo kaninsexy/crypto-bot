@@ -2693,7 +2693,7 @@ def main() -> int:
         if validate_script.exists():
             try:
                 _vrc = subprocess.run(
-                    [sys.executable, str(validate_script)],
+                    [sys.executable, str(validate_script), "--fix"],
                     capture_output=True, text=True,
                     timeout=30, cwd=str(ROOT),
                 )
