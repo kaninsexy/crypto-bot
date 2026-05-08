@@ -729,3 +729,11 @@ prior. No edge in this window.
 - **liquidity-conditioned-reversal-daily (2026-05-08):** verdict=retire. sr=0.1288, baseline_sr=1.9391, dsr=1.0000, n_trades=325, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### NewsSentimentMomentum
+
+#### Phase 4 outcomes
+
+- **news-sentiment-momentum (2026-05-08):** verdict=retire. sr=1.4838, baseline_sr=1.9391, dsr=1.0000, n_trades=1189, mt_mean_pass=True, baseline_pass=False.
+
+---
