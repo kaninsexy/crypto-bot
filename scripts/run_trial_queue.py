@@ -205,6 +205,20 @@ SCRIPTER_AGENT_TIMEOUT_S = 600
 # so the outer loop exits cleanly.
 MAX_SCRIPTER_AGENT_ATTEMPTS = 1
 
+# Parallelism caps for the scripter and build passes.  Reserved for
+# upcoming parallel-pass work: both invocations are I/O-bound
+# (subprocess.run waiting on a `claude` CLI) so threads suffice.
+# Capped at 4 to stay polite with the Anthropic API tier and to
+# leave headroom for the ProcessPool-based trial workers that come
+# after the build pass.  Not currently consumed -- the existing
+# scripter+build passes are still sequential as of 2026-05-08; the
+# 2026-05-08 hook-path fix to .claude/agents/*.md should eliminate
+# most rc=1 fall-throughs so the sequential path is fast enough for
+# typical batches of 3 items.  See the next-session handoff for the
+# parallel rewrite plan.
+SCRIPTER_PASS_MAX_PARALLEL = 4
+BUILD_PASS_MAX_PARALLEL = 4
+
 # Phase-1 unsupervised-run guardrails (2026-05-08).  These bound a
 # single orchestrator invocation in three independent ways so that
 # any future unforeseen failure cannot recur the runaway pattern.
