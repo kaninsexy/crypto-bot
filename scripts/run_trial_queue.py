@@ -166,6 +166,25 @@ _RUNTIME_DEFAULTS: dict = {
 # error path fires. Keeps transient flakes from polluting the queue.
 TRIAL_AUTO_RETRY_MAX = 1
 
+# Data-layer blocker keywords. The auto-scripter pass skips items
+# whose `error` field references unavailable data infrastructure
+# (e.g. Glassnode on-chain feeds, Deribit options) so the agent
+# does not waste a build attempt on a strategy that cannot actually
+# run regardless of script quality.
+_DATA_BLOCKER_KEYWORDS: tuple[str, ...] = (
+    "glassnode",
+    "deribit",
+    "options data",
+    "cryptoquant",
+    "netflow data",
+    "data dependency",
+)
+
+# Scripter agent timeout: 10 minutes is the same budget the
+# cc_build_helper invocation uses; the agent is invoked once per
+# needs_trial_script item via `claude -p .claude/agents/scripter.md`.
+SCRIPTER_AGENT_TIMEOUT_S = 600
+
 
 # 429 retry policy: backoff window before a rate-limited trial may
 # rerun, and the per-item attempt cap. After RETRY_429_MAX_ATTEMPTS
@@ -1210,6 +1229,100 @@ def _commit_status_update(items: list[dict], label: str, dry_run: bool = False) 
         )
 
 
+# ── Queue write-back (Task 2) ──────────────────────────────────────────────
+#
+# update_queue_item atomically reads backtest/trial_queue.json, patches
+# the matching entry's runtime fields (status, verdict, trial_id,
+# finished_at, error), and writes back via tmp+os.replace. This closes
+# the gap where the orchestrator was previously only writing to
+# trial_queue_state.json (gitignored) -- the definitions file would
+# drift, surfacing as the status_drift violations validate_queue.py
+# now flags.
+#
+# verdict_to_status maps verdict-tree outputs to the queue-level status
+# enum. CPCVError shortcuts go through the post-trial classifier
+# (_classify_cpcv_error) which sets status="needs_rerun" directly when
+# structural; this mapping handles only the success and ordinary-retire
+# paths.
+
+_VERDICT_TO_STATUS = {
+    "keep": "done",
+    "retire": "retired",
+    "under_tested": "under_tested",
+    "dry-run": "done",
+}
+
+
+def verdict_to_status(verdict: str | None) -> str:
+    """Map verdict-tree output to the trial_queue.json status enum.
+
+    Unknown / null verdicts fall back to "done" so the queue is never
+    left at "running" after a parsed summary; the verdict field carries
+    the actual outcome regardless of mapping.
+    """
+    if not isinstance(verdict, str):
+        return "done"
+    return _VERDICT_TO_STATUS.get(verdict, "done")
+
+
+def update_queue_item(sq_id: str, fields: dict) -> bool:
+    """Atomically patch trial_queue.json's entry matching `sq_id`.
+
+    Reads the definitions JSON, finds the entry, applies `fields`
+    (only keys present in the patch are written), serialises with
+    indent=2, and writes back via tmp+os.replace. Skipped silently
+    when sq_id is not found (returns False).
+
+    This is the prospective fix for status_drift -- the validate_queue
+    check that surfaced 8 retroactive cases. After this lands, every
+    completed trial writes back to definitions in lockstep with the
+    state file.
+
+    Returns True on a successful write, False on missing id or any
+    JSON / IO failure.
+    """
+    if not isinstance(sq_id, str) or not sq_id:
+        return False
+    try:
+        text = QUEUE_PATH.read_text(encoding="utf-8")
+        data = json.loads(text)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            f"[queue] update_queue_item({sq_id}): read failed: "
+            f"{exc.__class__.__name__}: {exc}",
+            file=sys.stderr,
+        )
+        return False
+    queue = data.get("queue") if isinstance(data, dict) else None
+    if not isinstance(queue, list):
+        return False
+    target = None
+    for it in queue:
+        if isinstance(it, dict) and it.get("id") == sq_id:
+            target = it
+            break
+    if target is None:
+        return False
+    # Apply patch -- only the keys explicitly present in `fields`.
+    for k, v in fields.items():
+        target[k] = v
+    tmp = QUEUE_PATH.with_suffix(".json.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, QUEUE_PATH)
+        return True
+    except OSError as exc:
+        print(
+            f"[queue] update_queue_item({sq_id}): write failed: {exc}",
+            file=sys.stderr,
+        )
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+
 def commit_result(item: dict, summary: dict, dry_run: bool) -> bool:
     if dry_run:
         print(f"[dry-run] would commit for item {item['id']}")
@@ -1890,10 +2003,25 @@ def process_batch_results(
             continue
 
         # Mark done & save BEFORE commit so the commit captures done state.
+        # State file (gitignored) gets the runtime row; trial_queue.json
+        # (definitions, committed) gets the prospective write-back via
+        # update_queue_item -- closes the status_drift gap that
+        # validate_queue.py flagged retroactively for 8 prior trials.
         item["status"] = "done"
         item["verdict"] = summary.get("verdict")
         item["finished_at"] = finished_at
         save_queue(queue_data)
+        update_queue_item(
+            item_id,
+            {
+                "status": verdict_to_status(summary.get("verdict")),
+                "verdict": summary.get("verdict"),
+                "trial_id": summary.get("trial_id"),
+                "finished_at": finished_at,
+                "error": summary.get("cpcv_error"),
+                "needs_trial_script": False,
+            },
+        )
 
         if not commit_result(item, summary, dry_run):
             item["status"] = "error"
@@ -1915,6 +2043,204 @@ def process_batch_results(
             pass
 
     return done_count
+
+
+def _has_data_blocker(item: dict) -> bool:
+    """True if the item's `error` field references unavailable data
+    infrastructure. The auto-scripter pass skips these.
+    """
+    err = item.get("error")
+    if not isinstance(err, str) or not err:
+        return False
+    err_lc = err.lower()
+    return any(kw in err_lc for kw in _DATA_BLOCKER_KEYWORDS)
+
+
+def _select_peer_script(
+    item: dict, queue: list[dict], manifest: dict,
+) -> str | None:
+    """Pick the nearest peer trial script as a template for the
+    scripter agent.
+
+    Match priority:
+      1. Same engine path (single-symbol vs multi-symbol per manifest
+         shape: `symbol` vs `symbols`).
+      2. Same timeframe.
+      3. status in {done, retired} AND needs_trial_script=false (real
+         working scripts only).
+
+    Returns repo-relative script_path or None if no peer found.
+    """
+    sid = item.get("strategy_id") or ""
+    entry = manifest.get(sid) or {}
+    is_multi = "symbols" in entry
+    target_tf = entry.get("timeframe")
+    candidates: list[tuple[int, str]] = []
+    for peer in queue:
+        if not isinstance(peer, dict):
+            continue
+        if peer.get("id") == item.get("id"):
+            continue
+        if peer.get("status") not in ("done", "retired"):
+            continue
+        if peer.get("needs_trial_script"):
+            continue
+        peer_sid = peer.get("strategy_id") or ""
+        peer_entry = manifest.get(peer_sid) or {}
+        peer_is_multi = "symbols" in peer_entry
+        if peer_is_multi != is_multi:
+            continue
+        score = 1
+        if peer_entry.get("timeframe") == target_tf:
+            score += 10
+        sp = peer.get("script_path")
+        if isinstance(sp, str) and (ROOT / sp).exists():
+            candidates.append((score, sp))
+    if not candidates:
+        return None
+    candidates.sort(reverse=True)
+    return candidates[0][1]
+
+
+def _auto_scripter_pass(
+    items_to_run: list[dict], dry_run: bool,
+) -> list[dict]:
+    """Invoke the scripter agent on items whose trial script has not
+    been written and whose error field carries no data-layer blocker
+    keyword. Runs BEFORE _auto_build_pass so the agent-defined path
+    is preferred when available; _auto_build_pass remains as the
+    cc_build_helper-based fallback for legacy invocation contexts.
+
+    Per-item behaviour:
+      - Item passes the data-blocker filter and has needs_trial_script
+        true: invoke `claude -p .claude/agents/scripter.md --input <json>`
+        with sq_id, queue_entry, peer_script. After the agent exits,
+        re-read trial_queue.json to verify needs_trial_script flipped
+        to False; if so, the item is kept in the runnable set so the
+        normal trial subprocess path runs it. If not, the item is
+        dropped from this batch's runnable set (failure surfaces in
+        the agent log; manual intervention or cc_build_helper fallback
+        on the next pass).
+      - dry_run=True: print the would-build line, do not invoke the
+        agent, drop the still-needs-build item from the runnable set.
+
+    The agent invocation pattern matches the prompt's spec:
+      claude -p ".claude/agents/scripter.md" --input '<json>'
+
+    Returns the (potentially shrunk) list of items ready for the
+    trial subprocess pool.
+    """
+    if not items_to_run:
+        return items_to_run
+    needs_build = [
+        it for it in items_to_run if it.get("needs_trial_script")
+    ]
+    if not needs_build:
+        return items_to_run
+
+    queue_data = load_queue()
+    queue_full = queue_data.get("queue", [])
+    try:
+        manifest_text = (ROOT / "backtest" / "holdout_manifest.json").read_text(encoding="utf-8")
+        manifest = json.loads(manifest_text)
+    except (OSError, json.JSONDecodeError):
+        manifest = {}
+
+    ready: list[dict] = []
+    for it in items_to_run:
+        if not it.get("needs_trial_script"):
+            ready.append(it)
+            continue
+        item_id = it.get("id")
+        if _has_data_blocker(it):
+            print(
+                f"[queue] auto-scripter: SKIP {item_id} -- data-layer "
+                f"blocker in error field; cc_build_helper fallback "
+                "(_auto_build_pass) will handle if applicable",
+            )
+            continue
+        if dry_run:
+            print(
+                f"[dry-run] auto-scripter would invoke for {item_id} "
+                f"({it.get('strategy_id')!r} / "
+                f"{it.get('variation_id')!r})",
+            )
+            continue
+        peer_script = _select_peer_script(it, queue_full, manifest)
+        if not peer_script:
+            print(
+                f"[queue] auto-scripter: SKIP {item_id} -- no peer "
+                "script available as template; cc_build_helper "
+                "fallback will handle",
+            )
+            continue
+        agent_input = json.dumps({
+            "sq_id": item_id,
+            "queue_entry": it,
+            "peer_script": peer_script,
+        })
+        cmd = [
+            "claude", "-p", ".claude/agents/scripter.md",
+            "--input", agent_input,
+        ]
+        print(
+            f"[queue] auto-scripter: invoking for {item_id} "
+            f"(peer={peer_script})",
+        )
+        env = os.environ.copy()
+        env.pop("ANTHROPIC_API_KEY", None)  # use OAuth, not API key
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=SCRIPTER_AGENT_TIMEOUT_S,
+                cwd=str(ROOT), env=env,
+            )
+        except subprocess.TimeoutExpired:
+            print(
+                f"[queue] auto-scripter: {item_id} TIMEOUT after "
+                f"{SCRIPTER_AGENT_TIMEOUT_S}s",
+                file=sys.stderr,
+            )
+            continue
+        except FileNotFoundError:
+            print(
+                f"[queue] auto-scripter: claude CLI not found on PATH; "
+                "cc_build_helper fallback (_auto_build_pass) will run",
+                file=sys.stderr,
+            )
+            return items_to_run
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[queue] auto-scripter: {item_id} exception "
+                f"{exc.__class__.__name__}: {exc}",
+                file=sys.stderr,
+            )
+            continue
+
+        # Re-read trial_queue.json: success means needs_trial_script
+        # flipped to False for this id.
+        try:
+            verify = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
+            verify_item = next(
+                (q for q in verify.get("queue", []) if q.get("id") == item_id),
+                None,
+            )
+            still_needs = bool(verify_item and verify_item.get("needs_trial_script"))
+        except (OSError, json.JSONDecodeError):
+            still_needs = True
+
+        if not still_needs:
+            print(f"[queue] auto-scripter: BUILD_OK for {item_id}")
+            it["needs_trial_script"] = False
+            ready.append(it)
+        else:
+            print(
+                f"[queue] auto-scripter: {item_id} agent did not flip "
+                f"needs_trial_script; rc={proc.returncode}; cc_build_helper "
+                "fallback may pick it up",
+                file=sys.stderr,
+            )
+    return ready
 
 
 def _auto_build_pass(
@@ -2053,6 +2379,14 @@ def run_batch(
     # Auto-build pass: any items with needs_trial_script=true get
     # routed through cc_build_helper.build_strategy before workers
     # spawn. Returns the filtered list of items actually ready to run.
+    # Agent-defined scripter pass (Task 3) runs first: invokes the
+    # `.claude/agents/scripter.md` agent on needs_trial_script items
+    # that pass the data-blocker filter. Items the scripter handles
+    # successfully proceed; items it skips fall through to the
+    # cc_build_helper-based _auto_build_pass below as a fallback.
+    items_to_run = _auto_scripter_pass(items_to_run, dry_run)
+    if not items_to_run:
+        return 0
     items_to_run = _auto_build_pass(items_to_run, dry_run)
     if not items_to_run:
         return 0
@@ -2348,6 +2682,48 @@ def main() -> int:
 
     lock_fd = acquire_lock()
     try:
+        # Queue health gate (Task 4 hook): run scripts/validate_queue.py
+        # at startup so a malformed queue blocks the run before any
+        # subprocess spawns. Non-zero exit prints violations and aborts
+        # the orchestrator; this matches the pre-commit hook semantics
+        # but at runtime, catching mid-session corruption that lands
+        # via direct file edits. Best-effort: a missing validator
+        # script is logged and skipped rather than blocking the run.
+        validate_script = ROOT / "scripts" / "validate_queue.py"
+        if validate_script.exists():
+            try:
+                _vrc = subprocess.run(
+                    [sys.executable, str(validate_script)],
+                    capture_output=True, text=True,
+                    timeout=30, cwd=str(ROOT),
+                )
+                if _vrc.returncode != 0:
+                    print(
+                        "[queue] validate_queue.py reported violations:",
+                        file=sys.stderr,
+                    )
+                    if _vrc.stdout:
+                        print(_vrc.stdout, end="", file=sys.stderr)
+                    print(
+                        "[queue] aborting orchestrator startup; fix "
+                        "queue before re-running",
+                        file=sys.stderr,
+                    )
+                    return 1
+            except subprocess.TimeoutExpired:
+                print(
+                    "[queue] validate_queue.py TIMEOUT; proceeding "
+                    "without queue-health gate",
+                    file=sys.stderr,
+                )
+            except Exception as _vexc:  # noqa: BLE001
+                print(
+                    f"[queue] validate_queue.py exception "
+                    f"({_vexc.__class__.__name__}: {_vexc}); proceeding "
+                    "without queue-health gate",
+                    file=sys.stderr,
+                )
+
         # Heartbeat (Task 5): record this orchestrator invocation so the
         # digest body can show when the PC last ran. Persist immediately
         # so a crash mid-batch still records the attempt.
