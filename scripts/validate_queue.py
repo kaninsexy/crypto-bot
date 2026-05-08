@@ -318,10 +318,17 @@ def _run_checks(verbose_emit: bool = True) -> tuple[int, list[dict]]:
             if verbose_emit: _emit(v)
 
     # 4. manifest_entry -- effective status = "queued"
+    # Skip items with needs_trial_script=True: the manifest entry is
+    # created BY the auto-build path AFTER the queue entry exists
+    # (that's the proposal-agent -> auto-build lifecycle). Flagging
+    # these would block the orchestrator's startup gate every time
+    # the proposal agent queues a fresh candidate.
     for it in queue:
         if not isinstance(it, dict):
             continue
         if _effective_status(it, state_items) != "queued":
+            continue
+        if it.get("needs_trial_script"):
             continue
         sid = it.get("strategy_id")
         if not isinstance(sid, str) or not sid:

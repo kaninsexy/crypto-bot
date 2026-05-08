@@ -1102,6 +1102,66 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-025",
+      "status": "queued",
+      "strategy_id": "DayOfWeekSeasonality",
+      "variation_id": "cross-sectional-weekday-effect",
+      "script_path": "scripts/run_day_of_week_seasonality_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Cryptocurrency returns are not uniform across the days of the week, allowing for profitable strategies that are long assets on historically high-return days (e.g., Monday) or long a cross-section of assets with strong past performance on that specific weekday.",
+      "source_citation": "Long (2020); Caporale (2019); Shanaev (2022)",
+      "literature_doc": "research/day-of-week-seasonality-literature.md",
+      "citations": [
+        {
+          "title": "Seasonality in the Cross-Section of Cryptocurrency Returns",
+          "authors": "Long, Huaigang; Zaremba, Adam; Demir, Ender; Szczygielski, Jan Jakub; Vasenin, Mikhail",
+          "year": 2020,
+          "source": "Finance Research Letters",
+          "key_finding": "A significant seasonal pattern exists where average past same-weekday returns positively predict future cryptocurrency performance in the cross-section.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "The day of the week effect in the cryptocurrency market",
+          "authors": "Caporale, Guglielmo Maria; Plastun, Alex",
+          "year": 2019,
+          "source": "Finance Research Letters",
+          "key_finding": "Evidence suggests cryptocurrency returns tend to be higher on Mondays, and a simple trading strategy exploiting this anomaly generates substantial profits.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "A generalised seasonality test and applications for cryptocurrency and stock market seasonality",
+          "authors": "Shanaev, Savva; Ghimire, Binam",
+          "year": 2022,
+          "source": "The Quarterly Review of Economics and Finance",
+          "key_finding": "The study confirms robust evidence for the day-of-the-week effect across most of the analyzed crypto assets.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Seasonality, Trend-following, and Mean reversion in Bitcoin",
+          "authors": "Pady\u0161\u00e1k, Mat\u00fa\u0161; Vojtko, Radovan",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "The paper examines daily return distributions but focuses more on an intraday seasonality strategy, though it acknowledges daily components.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.75,
+      "implementation_notes": "Implement a cross-sectional strategy based on Long et al. (2020). Each weekday, rank all assets in the universe by their average historical return on that same weekday. Go long the top quintile and potentially short the bottom quintile. Rebalance daily. Alternatively, a simpler time-series version could go long a basket of assets (or just BTC) on Mondays and stay flat otherwise, per Caporale & Plastun (2019).",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T06:03:41.297132+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
