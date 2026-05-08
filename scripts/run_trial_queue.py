@@ -202,6 +202,35 @@ SCRIPTER_AGENT_TIMEOUT_S = 600
 # so the outer loop exits cleanly.
 MAX_SCRIPTER_AGENT_ATTEMPTS = 1
 
+# Phase-1 unsupervised-run guardrails (2026-05-08).  These bound a
+# single orchestrator invocation in three independent ways so that
+# any future unforeseen failure cannot recur the runaway pattern.
+#
+# DEFAULT_MAX_BATCHES: how many run_batch iterations a single
+# `python scripts/run_trial_queue.py` call performs by default.
+# Set to 1 so the outer while-loop is bounded out-of-the-box; pass
+# --max-batches N or --continuous to opt into multi-batch runs.
+# The 2026-05-08 runaway happened because the loop was unbounded
+# by default with no env-var or arg cap.
+DEFAULT_MAX_BATCHES = 1
+
+# Wall-clock cap on a single orchestrator invocation, matching the
+# 4-hour PC compute budget in CLAUDE.md and .claude/rules/backtest.md.
+# When elapsed time exceeds this, the loop breaks with a "wall-budget"
+# reason and a digest email is dispatched.  Independent of --max-batches
+# so a single batch that hangs (long-running trial subprocess) is also
+# bounded.
+MAX_ORCHESTRATOR_WALL_S = 4 * 3600
+
+# Consecutive-no-progress kill switch.  After this many run_batch
+# iterations in a row produce zero net queue movement (no item
+# advanced from queued/needs_rerun to a terminal state AND no item
+# completed successfully), the loop breaks with a "no-progress"
+# reason.  Belt-and-suspenders defence against any new failure mode
+# that bypasses the per-pass attempt caps.  Default 2 keeps a single
+# transient flake from tripping the brake.
+MAX_CONSECUTIVE_NOPROGRESS_BATCHES = 2
+
 
 # 429 retry policy: backoff window before a rate-limited trial may
 # rerun, and the per-item attempt cap. After RETRY_429_MAX_ATTEMPTS
@@ -2672,7 +2701,30 @@ def main() -> int:
         action="store_true",
         help=(
             "Run ONE batch (every currently queued item in parallel) "
-            "then stop. Distinct from the prior per-item semantics."
+            "then stop. Equivalent to --max-batches 1 (the default). "
+            "Retained for back-compat."
+        ),
+    )
+    parser.add_argument(
+        "--max-batches",
+        type=int,
+        default=None,
+        help=(
+            "Cap on run_batch iterations in a single orchestrator "
+            f"invocation. Default {DEFAULT_MAX_BATCHES}; pass 0 (or "
+            "--continuous) for unbounded. The default-1 cap is the "
+            "Phase-1 unsupervised-run guardrail; the 2026-05-08 "
+            "runaway happened because this loop was unbounded by "
+            "default."
+        ),
+    )
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help=(
+            "Opt into the unbounded outer-loop mode (alias for "
+            "--max-batches 0). Use only under supervision; the "
+            "wall-clock and no-progress watchdogs still apply."
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
@@ -2792,8 +2844,78 @@ def main() -> int:
             )
         save_queue(startup_data)
 
+        # Resolve effective batch cap.  Precedence: --continuous wins,
+        # else --max-batches if given, else --once == 1, else
+        # DEFAULT_MAX_BATCHES.  cap == 0 means unbounded.
+        if args.continuous:
+            cap = 0
+        elif args.max_batches is not None:
+            cap = max(0, int(args.max_batches))
+        elif args.once:
+            cap = 1
+        else:
+            cap = DEFAULT_MAX_BATCHES
+        cap_label = "unbounded" if cap == 0 else str(cap)
+
+        # Pre-flight banner: print the effective merged-state snapshot
+        # of the queue + the runnable set BEFORE entering the loop, so
+        # what an operator (or audit log) thinks will run matches what
+        # actually runs.  The 2026-05-08 incident was prolonged because
+        # trial_queue.json's status fields disagreed with
+        # trial_queue_state.json's effective state, and that disagreement
+        # was invisible until the loop fired.
+        from collections import Counter as _PreflightCounter
+        _preflight_data = load_queue()
+        _preflight_runnable = _select_runnable(_preflight_data)
+        _preflight_full = _preflight_data.get("queue", [])
+        _status_counts = _PreflightCounter(
+            it.get("status") for it in _preflight_full
+        )
+        print(
+            f"\n[queue] pre-flight: {len(_preflight_full)} total items; "
+            f"runnable={len(_preflight_runnable)}; "
+            f"max_batches={cap_label}; "
+            f"wall_budget_s={MAX_ORCHESTRATOR_WALL_S}; "
+            f"no_progress_kill_at={MAX_CONSECUTIVE_NOPROGRESS_BATCHES} "
+            "consecutive batches"
+        )
+        print(f"  status breakdown: {dict(_status_counts)}")
+        for _it in _preflight_runnable:
+            _ready_label = (
+                "needs-scripter" if _it.get("needs_trial_script")
+                else "ready-to-trial"
+            )
+            print(
+                f"    {_it.get('id', '?'):<8} "
+                f"{_ready_label:<15} "
+                f"scripter={_it.get('scripter_attempts', 0)} "
+                f"build={_it.get('build_attempts', 0)} "
+                f"run={_it.get('run_attempts', 0)}  "
+                f"{_it.get('strategy_id', '?')} / "
+                f"{_it.get('variation_id', '?')}"
+            )
+
+        orchestrator_started_at = time.monotonic()
         batches_run = 0
+        consecutive_noprogress = 0
+        exit_reason = "normal"
         while True:
+            # Wall-clock watchdog: bound the whole orchestrator
+            # invocation to MAX_ORCHESTRATOR_WALL_S.  Independent of
+            # batch count so a single hung batch (long trial
+            # subprocess, scripter timeout, etc.) is also bounded.
+            elapsed = time.monotonic() - orchestrator_started_at
+            if elapsed > MAX_ORCHESTRATOR_WALL_S:
+                exit_reason = "wall-budget"
+                print(
+                    f"\n[queue] WALL-BUDGET breaker fired: elapsed="
+                    f"{elapsed:.0f}s > cap {MAX_ORCHESTRATOR_WALL_S}s "
+                    f"after {batches_run} batch(es); breaking outer "
+                    "loop. Re-invoke the orchestrator to continue.",
+                    file=sys.stderr,
+                )
+                break
+
             queue_data = load_queue()
             items_to_run = _select_runnable(queue_data)
 
@@ -2810,6 +2932,8 @@ def main() -> int:
                 # (cron or manually) to pick up newly queued items.
                 break
 
+            runnable_before = len(items_to_run)
+
             n_workers = _resolve_workers(args.workers, len(items_to_run))
 
             if args.dry_run:
@@ -2817,11 +2941,65 @@ def main() -> int:
                 print("[dry-run] no execution; exiting after plan print")
                 break
 
-            run_batch(items_to_run, n_workers, args.dry_run)
+            done_count = run_batch(items_to_run, n_workers, args.dry_run)
             batches_run += 1
 
-            if args.once:
+            # No-progress watchdog: snapshot the runnable set after
+            # this batch.  If the queue's runnable count did not
+            # decrease AND no item completed successfully, count
+            # this batch as no-progress.  Two consecutive no-progress
+            # batches means an item is stuck in a way the per-pass
+            # attempt caps are not catching; break with email.
+            queue_after = load_queue()
+            runnable_after = len(_select_runnable(queue_after))
+            made_progress = (
+                runnable_after < runnable_before
+                or (done_count or 0) > 0
+            )
+            if made_progress:
+                consecutive_noprogress = 0
+            else:
+                consecutive_noprogress += 1
+                print(
+                    f"[queue] no-progress watchdog: batch "
+                    f"{batches_run} produced 0 done and "
+                    f"runnable count unchanged ({runnable_after}); "
+                    f"consecutive={consecutive_noprogress}/"
+                    f"{MAX_CONSECUTIVE_NOPROGRESS_BATCHES}",
+                    file=sys.stderr,
+                )
+                if consecutive_noprogress >= MAX_CONSECUTIVE_NOPROGRESS_BATCHES:
+                    exit_reason = "no-progress"
+                    print(
+                        f"\n[queue] NO-PROGRESS breaker fired: "
+                        f"{consecutive_noprogress} consecutive batches "
+                        "with zero queue movement. Breaking outer loop. "
+                        "Inspect trial_queue_state.json and the run log "
+                        "to identify the stuck item(s).",
+                        file=sys.stderr,
+                    )
+                    break
+
+            # Batch-count watchdog (the new default cap).  cap == 0 is
+            # unbounded (--continuous); any other value caps the loop.
+            if cap and batches_run >= cap:
+                exit_reason = "batch-cap"
+                print(
+                    f"\n[queue] batch cap reached: ran {batches_run}/"
+                    f"{cap} batches; stopping. Re-invoke or pass "
+                    "--continuous for unbounded.",
+                )
                 break
+
+            if args.once:
+                exit_reason = "once-flag"
+                break
+
+        elapsed_final = time.monotonic() - orchestrator_started_at
+        print(
+            f"\n[queue] orchestrator exit: reason={exit_reason} "
+            f"batches_run={batches_run} elapsed={elapsed_final:.0f}s"
+        )
 
         # Digest pass (Task 5): one digest email per orchestrator run
         # if 8h has elapsed and there is unreported activity, or a
