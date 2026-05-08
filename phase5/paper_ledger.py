@@ -208,6 +208,7 @@ def record_recommendation(
         "market_liquidity_usd_at_record": float(
             market_snapshot.get("liquidity_usd", 0.0)
         ),
+        "clob_token_ids": list(clob_token_ids) if clob_token_ids else None,
         "action": action,
         "size_usd": float(size_usd),
         "quoted_entry_price": quoted_entry_price,
