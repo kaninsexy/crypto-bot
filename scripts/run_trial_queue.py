@@ -2738,7 +2738,17 @@ def _print_dry_run_plan(items_to_run: list[dict], n_workers: int) -> None:
 # Proposal agent timeout: 5 minutes. The agent makes network/API calls
 # with no internal timeout; this caps the wait so an unresponsive
 # upstream cannot hang the orchestrator indefinitely.
-PROPOSAL_AGENT_TIMEOUT_S = 300
+#
+# Bumped from 300s -> 600s 2026-05-09 after the cron emailed
+# "TIMEOUT after 300s" from the empty-queue branch. The proposal
+# agent's per-LLM-call timeout is 120s and it makes the OpenRouter
+# call followed by an Anthropic fallback if needed, plus discovery +
+# deep-dive rounds. Realistic completion under load is 200-500s; the
+# 300s cap was too aggressive and produced the empty-queue email
+# alert + skipped queue refill. 600s gives both providers room to
+# return without leaving the orchestrator hung if both genuinely
+# fail.
+PROPOSAL_AGENT_TIMEOUT_S = 600
 
 
 def _invoke_proposal_agent(dry_run: bool) -> None:
