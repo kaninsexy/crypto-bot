@@ -114,9 +114,14 @@ logger.info(
 
 # -- 2. Pre-flight ------------------------------------------------------------
 # Single-shot guard: abort if any prior row already has variation_id
-# == VARIATION_ID. Otherwise accept any pre-state in which V1 has
-# produced at least one trial row -- V2b is a sibling of V2, not a
-# successor; both are V2-class structural redesigns of V1.
+# == VARIATION_ID. V2b stands on its own structural-redesign citation
+# chain (Almeida et al. 2024 + Schmeling et al.) and does NOT require
+# a prior V1 row to be present in this machine's trials.log -- V1's
+# canonical outcome lives in research/funding-rate-literature.md
+# (dsr_holdout 0.0054, retired post-holdout 2026-05-02), which may
+# have been recorded on a different harness path or machine. Removing
+# the V1-precedence check unblocks operators whose trials.log doesn't
+# carry the V1 row but who do have the V1 outcome via the literature.
 
 prior_rows = list(_trials.read_trials(strategy_id=STRATEGY_ID))
 v2b_rows = [r for r in prior_rows if r.get("variation_id") == VARIATION_ID]
@@ -130,20 +135,15 @@ if v2b_rows:
     )
     sys.exit(1)
 
-v1_rows = [
+prior_non_v2b = [
     r for r in prior_rows
     if r.get("variation_id") != VARIATION_ID
 ]
-if not v1_rows:
-    logger.error(
-        "[full_cpcv-v2b] pre-flight: no prior trial rows for {}; "
-        "expected V1 (and possibly V2) work to predate V2b. Aborting.",
-        STRATEGY_ID,
-    )
-    sys.exit(1)
 logger.info(
-    "[full_cpcv-v2b] pre-flight clean: {} prior non-V2b row(s); zero "
-    "V2b rows.", len(v1_rows),
+    "[full_cpcv-v2b] pre-flight clean: {} prior non-V2b row(s) for "
+    "{} in this trials.log; zero V2b rows. (V1 outcome in literature "
+    "is the canonical record; V2b proceeds independently.)",
+    len(prior_non_v2b), STRATEGY_ID,
 )
 
 
