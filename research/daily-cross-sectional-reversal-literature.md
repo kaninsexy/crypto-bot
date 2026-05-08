@@ -82,3 +82,4 @@ coins, which is exactly what this implementation tests.
 
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
+| cs-daily-reversal | 2026-05-08 | under_tested | -0.0166 | 0.3074 | 1393 |

@@ -673,3 +673,11 @@ prior. No edge in this window.
 - **cross-sectional-weekday-effect (2026-05-08):** verdict=retire. sr=0.7567, baseline_sr=1.9391, dsr=1.0000, n_trades=550, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### DailyCrossSectionalReversal
+
+#### Phase 4 outcomes
+
+- **cs-daily-reversal (2026-05-08):** verdict=under_tested. sr=-0.0166, baseline_sr=0.8010, dsr=0.3074, n_trades=1393, mt_mean_pass=None, baseline_pass=None.
+
+---
