@@ -1,6 +1,14 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-05-04 (Phase 4.B Variation #1 retired 2026-05-02;
+Last updated: 2026-05-08 (autonomy expansion landed -- paper deploy,
+MASTER_PLAN.md outcome rows, paper-mode capital sweeps moved from
+Human-only to Agent-decides per CLAUDE.md "Human only" / "Agent
+decides" 2026-05-08 update; cron orchestrator switched from --once
+to --continuous; orchestrator-digest interval dropped from 8h to 0
+so every run with unreported activity sends an email; agent-hook
+paths corrected from $HOME/dev/crypto-bot to $CLAUDE_PROJECT_DIR
+which fixes the scripter-rc=1 fall-through observed 2026-05-08)
+Previously 2026-05-04 (Phase 4.B Variation #1 retired 2026-05-02;
 analyst overlay v3 Phase A approved 2026-05-04 per architecture D.4;
 Phase 4.C "0 pass" branch reframed as continuation via autonomous
 research loop)

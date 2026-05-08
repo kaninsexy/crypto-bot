@@ -81,6 +81,18 @@ Agents never push or deploy autonomously.
 - Investigate performance issues and implement fixes
 - Archive retired experiments (move to `strategies/archive/`)
 - Add new strategy variations to `backtest/trial_queue.json` when `scripts/propose_next_variation.py` produces a qualifying proposal (citation score >= 3.0, not previously tested per trials.log)
+- **Paper deploy / paper-mode start / kill / restart** (added 2026-05-08).
+  Paper mode is reversible (process termination); agent monitors and rolls
+  back. Live deploy remains Human-only.
+- **`docs/MASTER_PLAN.md` outcome-row edits** (added 2026-05-08): post-hoc
+  retire/keep notes, status updates, batch-completion summaries, sq-row
+  verdict reconciliation. New strategy CATEGORIES still Human-only.
+- **`docs/architecture.md` and `docs/validation_framework.md` edits within
+  their existing autonomy carve-outs** (added 2026-05-08). The autonomy
+  framework itself (the lists in this file) remains Human-only — agents do
+  not grant themselves more autonomy.
+- **Paper-mode capital allocation experiments and risk-parameter sweeps**
+  (added 2026-05-08). Live capital changes remain Human-only above.
 
 ### Agent consults the human (present findings, wait for decision)
 
@@ -92,18 +104,38 @@ Agents never push or deploy autonomously.
 - Borderline retire/keep calls (DSR within ±0.05 of threshold on holdout)
 - Scope changes that increase the multiple-testing count meaningfully
 - Any permanent deletion of code, strategies, or data
+- Live capital changes (paper-mode parameter changes are agent-autonomous
+  per the expansion above)
 
 ### Human only (agents must not perform)
 
+Updated 2026-05-08: autonomy expansion. The principle is
+**reversible-or-paper-only ⇒ agent; irreversible-or-live-or-audit-
+corrupting ⇒ human.** Items moved to "Agent decides" are listed
+below in the next section.
+
 - Pushes to any remote
 - Force operations (force-push, hard reset on main, etc.)
-- Paper deploy to server
-- Live deploy to production
-- Capital or risk parameter changes
-- Modifying sacred-harness documents (`CLAUDE.md`, `docs/MASTER_PLAN.md`,
-  `docs/architecture.md`, `docs/validation_framework.md`) without
-  explicit pre-authorization in the prompt's AUTONOMY section. The
-  Pre-authorization exception below covers the bypass mechanism.
+- Live deploy to production (real OKX API or any non-paper venue)
+- Live capital allocation or risk-parameter changes that affect
+  real-money execution
+- Adding NEW strategy CATEGORIES to `docs/MASTER_PLAN.md` (scope
+  expansion). Outcome rows, status updates, and verdict
+  reconciliation within an existing category are agent-autonomous
+  per the "Agent decides" list.
+- Modifying the SCHEMA of sacred-harness FILES (`trials.log` column
+  structure, `holdout_manifest.json` field shape, `holdout.py`
+  interface). Append-only data writes within the established schema
+  are governed elsewhere (e.g., the trial-queue orchestrator
+  exception for trials.log appends).
+- Editing or copying secrets / keys / passwords (anything in
+  `~/.crypto-bot.env`, any file containing an API key, or any
+  Resend / OKX / Anthropic credential).
+- Modifying `CLAUDE.md` itself, `docs/architecture.md`, or
+  `docs/validation_framework.md` without explicit pre-authorization
+  in the prompt's AUTONOMY section. (`docs/MASTER_PLAN.md` outcome-
+  row edits are agent-autonomous; new-category edits remain
+  human-only above.)
 
 > **Pre-authorization exception.** Claude Code may edit any file in
 > this list when the user explicitly pre-authorizes the edit in the
