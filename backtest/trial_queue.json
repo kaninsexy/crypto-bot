@@ -1673,6 +1673,57 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-036",
+      "status": "queued",
+      "strategy_id": "PutCallRatioContrarian",
+      "variation_id": "pcr-contrarian-zscore-reversal",
+      "script_path": "scripts/run_put_call_ratio_contrarian_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Extreme levels of the crypto options Put/Call Ratio, indicating crowded one-sided sentiment, predict an imminent price reversal that can be profitably traded in a contrarian manner.",
+      "source_citation": "Kyriazis (2022); Akyildirim (2024); Chen (2023)",
+      "literature_doc": "research/put-call-ratio-contrarian-literature.md",
+      "citations": [
+        {
+          "title": "Investor sentiment in the Bitcoin market: An analysis of the put/call ratio",
+          "authors": "Kyriazis, N. A., Papakyriakou, P., & Rozas, G.",
+          "year": 2022,
+          "source": "Global Finance Journal",
+          "key_finding": "The Put-Call Ratio acts as a strong contrarian indicator; a one standard deviation increase in the PCR is associated with a 1.69% increase in Bitcoin's return on the next day.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Forecasting Bitcoin prices: The role of the options market",
+          "authors": "Akyildirim, E., et al.",
+          "year": 2024,
+          "source": "Finance Research Letters",
+          "key_finding": "The open interest put-call ratio has significant predictive power for Bitcoin returns, with the effect being contrarian (a higher ratio predicts positive returns).",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "The information content of the Bitcoin options market",
+          "authors": "Chen, Z., et al.",
+          "year": 2023,
+          "source": "Journal of International Financial Markets, Institutions and Money",
+          "key_finding": "The open interest-based put-call ratio is a strong contrarian predictor of Bitcoin spot returns, especially over short horizons (1 to 5 days).",
+          "crypto_specific": true,
+          "quality_score": 4
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "Calculate a daily Put/Call Ratio (PCR) for a major asset like BTC using either trading volume or open interest from a dominant options exchange (e.g., Deribit). Normalize the PCR series using a rolling z-score (e.g., 60-day lookback). Generate a long signal when the z-score exceeds a positive threshold (e.g., > +2.0) and a short signal when it falls below a negative threshold (e.g., < -2.0). Execute trades on the corresponding perpetual future and hold for a fixed period (e.g., 1-5 days) as suggested by the literature.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T17:06:22.778006+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": false
     }
   ]
 }
