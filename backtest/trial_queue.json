@@ -891,7 +891,7 @@
       "needs_trial_script": true
     },
     {
-      "id": "sq-020",
+      "id": "sq-024",
       "status": "queued",
       "strategy_id": "ShortTermCrossSectionalMomentum",
       "variation_id": "cs-short-term-mom-7d",
@@ -1035,6 +1035,66 @@
       "implementation_notes": "Calculate intraday returns (e.g., 1-hour). Compute a rolling standard deviation of returns over a lookback period (e.g., 24 hours). A jump is signaled when the absolute z-score of the current return (return / rolling_std) exceeds a threshold (e.g., 3.0). Fade the jump by taking a position opposite to the direction of the initial move and hold until the next signal. As noted in the sources, performance is regime-dependent and may degrade in strongly trending markets.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T16:45:29.258213+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-023",
+      "status": "queued",
+      "strategy_id": "OvernightSessionReversal",
+      "variation_id": "us-session-overnight-reversal",
+      "script_path": "scripts/run_overnight_session_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "Returns during the US stock market trading session are negatively correlated with the preceding overnight session's returns, creating a profitable reversal opportunity.",
+      "source_citation": "Hyuna Ham (2022); Dong Lou (2019); Adam Zaremba (2021)",
+      "literature_doc": "research/overnight-session-reversal-literature.md",
+      "citations": [
+        {
+          "title": "The effects of overnight events on daytime trading sessions",
+          "authors": "Hyuna Ham, Doojin Ryu, Robert I. Webb",
+          "year": 2022,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "A strategy that shorts (longs) a cryptocurrency during the NYSE daytime session following a positive (negative) return in the prior overnight session generates statistically significant positive returns.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "A tug of war: Overnight versus intraday expected returns",
+          "authors": "Dong Lou, Christopher Polk, Spyros Skouras",
+          "year": 2019,
+          "source": "Journal of Financial Economics",
+          "key_finding": "In equities, price momentum strategies primarily earn their premium overnight while reversing intraday, revealing a 'tug of war' between different investor clienteles dominant at different times.",
+          "crypto_specific": false,
+          "quality_score": 5
+        },
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Adam Zaremba, Mehmet Huseyin Bilgin, Huaigang Long, Aleksander Mercik, Jan J. Szczygielski",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "Cryptocurrencies with low returns on the previous day significantly outperform those with high returns, an effect concentrated in less liquid coins. [ideas.repec.org](https://ideas.repec.org/a/eee/finana/v78y2021ics1057521921002349.html)",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "What Drives Momentum and Reversal? Evidence from Day and Night Signals",
+          "authors": "Yashar H. Barardehi, Vincent Bogousslavsky, Dmitriy Muravyev",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Using equity market data, portfolios formed on past intraday returns exhibit short-term reversal, consistent with investor underreaction to information from trades. [papers.ssrn.com](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4069509)",
+          "crypto_specific": false,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 4.0,
+      "implementation_notes": "Define the 'overnight' session by the hours when the NYSE is closed (e.g., 4:00 PM to 9:30 AM EST) and the 'day' session as the hours when it is open. Calculate the return of the overnight session. If the overnight return is positive, open a short position at the start of the day session; if negative, open a long position. Close the position at the end of the day session.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T03:02:51.735178+00:00",
       "started_at": null,
       "finished_at": null,
       "verdict": null,
