@@ -87,7 +87,7 @@ import re
 import subprocess
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -2185,11 +2185,19 @@ def _auto_scripter_pass(
         re-read trial_queue.json to verify needs_trial_script flipped
         to False; if so, the item is kept in the runnable set so the
         normal trial subprocess path runs it. If not, the item is
-        dropped from this batch's runnable set (failure surfaces in
-        the agent log; manual intervention or cc_build_helper fallback
-        on the next pass).
+        kept (still flagged needs_trial_script) so _auto_build_pass
+        picks it up via the cc_build_helper fallback in this same
+        batch.
       - dry_run=True: print the would-build line, do not invoke the
         agent, drop the still-needs-build item from the runnable set.
+
+    Parallelism (added 2026-05-08): the subprocess.run scripter
+    invocations are I/O-bound (each waits on a `claude` CLI to
+    return) so the orchestrator now runs up to
+    SCRIPTER_PASS_MAX_PARALLEL=4 invocations concurrently via
+    ThreadPoolExecutor.  Pre-flight (skip-cap / data-blocker / peer-
+    select) and post-flight (re-read queue, fold results, save once)
+    remain sequential so trial_queue.json writes never race.
 
     The agent invocation pattern matches the prompt's spec:
       claude -p ".claude/agents/scripter.md" --input '<json>'
@@ -2214,19 +2222,17 @@ def _auto_scripter_pass(
     except (OSError, json.JSONDecodeError):
         manifest = {}
 
+    # Pre-flight: classify each item. "invoke" items are batched for
+    # the parallel ThreadPoolExecutor; skip cases are resolved
+    # synchronously here so the parallel pool sees only real work.
     ready: list[dict] = []
+    invoke_targets: list[dict] = []
     for it in items_to_run:
         if not it.get("needs_trial_script"):
             ready.append(it)
             continue
         item_id = it.get("id")
         live = by_id.get(item_id)
-        # Per-item cap: if the scripter agent has already been tried
-        # MAX_SCRIPTER_AGENT_ATTEMPTS times for this item, skip the
-        # agent path entirely and let _auto_build_pass (cc_build_helper)
-        # handle it.  Without this cap a persistent claude-agent failure
-        # made the outer while-True orchestrator loop spin indefinitely
-        # (2026-05-08 incident).
         prior_attempts = int((live or {}).get("scripter_attempts", 0) or 0)
         if prior_attempts >= MAX_SCRIPTER_AGENT_ATTEMPTS:
             print(
@@ -2264,13 +2270,30 @@ def _auto_scripter_pass(
             "queue_entry": it,
             "peer_script": peer_script,
         })
+        invoke_targets.append({
+            "item": it,
+            "item_id": item_id,
+            "agent_input": agent_input,
+            "prior_attempts": prior_attempts,
+            "peer_script": peer_script,
+        })
+
+    if not invoke_targets:
+        return ready
+
+    # Parallel invocation pass.  Each thread runs subprocess.run for
+    # exactly one item; no shared state mutation in the worker so
+    # threads never race.  I/O-bound (each waits on the `claude` CLI)
+    # so threads suffice; capped by SCRIPTER_PASS_MAX_PARALLEL.
+    def _invoke(target: dict) -> tuple:
+        _item_id = target["item_id"]
         cmd = [
             "claude", "-p", ".claude/agents/scripter.md",
-            "--input", agent_input,
+            "--input", target["agent_input"],
         ]
         print(
-            f"[queue] auto-scripter: invoking for {item_id} "
-            f"(peer={peer_script})",
+            f"[queue] auto-scripter: invoking for {_item_id} "
+            f"(peer={target['peer_script']})",
         )
         env = os.environ.copy()
         env.pop("ANTHROPIC_API_KEY", None)  # use OAuth, not API key
@@ -2280,69 +2303,91 @@ def _auto_scripter_pass(
                 timeout=SCRIPTER_AGENT_TIMEOUT_S,
                 cwd=str(ROOT), env=env,
             )
+            return (_item_id, proc.returncode, "")
         except subprocess.TimeoutExpired:
-            print(
-                f"[queue] auto-scripter: {item_id} TIMEOUT after "
-                f"{SCRIPTER_AGENT_TIMEOUT_S}s",
-                file=sys.stderr,
-            )
-            continue
+            return (_item_id, -1, f"TIMEOUT after {SCRIPTER_AGENT_TIMEOUT_S}s")
         except FileNotFoundError:
-            print(
-                f"[queue] auto-scripter: claude CLI not found on PATH; "
-                "cc_build_helper fallback (_auto_build_pass) will run",
-                file=sys.stderr,
-            )
-            return items_to_run
+            return (_item_id, -2, "claude CLI not found on PATH")
         except Exception as exc:  # noqa: BLE001
-            print(
-                f"[queue] auto-scripter: {item_id} exception "
-                f"{exc.__class__.__name__}: {exc}",
-                file=sys.stderr,
-            )
-            continue
+            return (_item_id, -3, f"{exc.__class__.__name__}: {exc}")
 
-        # Re-read trial_queue.json: success means needs_trial_script
-        # flipped to False for this id.
-        try:
-            verify = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
-            verify_item = next(
-                (q for q in verify.get("queue", []) if q.get("id") == item_id),
-                None,
-            )
-            still_needs = bool(verify_item and verify_item.get("needs_trial_script"))
-        except (OSError, json.JSONDecodeError):
-            still_needs = True
+    n_workers = min(len(invoke_targets), SCRIPTER_PASS_MAX_PARALLEL)
+    print(
+        f"[queue] auto-scripter: parallel invocation -- "
+        f"{len(invoke_targets)} target(s), {n_workers} worker(s)"
+    )
+    invoke_results: dict = {}
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        futures = {
+            executor.submit(_invoke, t): t for t in invoke_targets
+        }
+        for fut in as_completed(futures):
+            t = futures[fut]
+            try:
+                _id, rc, err = fut.result()
+            except Exception as exc:  # noqa: BLE001
+                _id = t["item_id"]
+                rc = -4
+                err = f"future exception: {exc.__class__.__name__}: {exc}"
+            invoke_results[_id] = (rc, err)
+            if rc < 0:
+                print(
+                    f"[queue] auto-scripter: {_id} subprocess failure "
+                    f"rc={rc}; {err}",
+                    file=sys.stderr,
+                )
 
-        if not still_needs:
+    # Post-flight: re-read trial_queue.json once.  The scripter agent
+    # commits its own queue update via heredoc so the flip from
+    # needs_trial_script=True to False is on disk by now.  Fold the
+    # invoke_results back into queue_data, then save once.
+    try:
+        verify = json.loads(QUEUE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        verify = {"queue": []}
+    verify_by_id = {q.get("id"): q for q in verify.get("queue", [])}
+
+    # Reload local queue_data after the scripter's own commits to
+    # avoid clobbering the scripter's own writes when we save below.
+    queue_data = load_queue()
+    by_id_post = {q.get("id"): q for q in queue_data.get("queue", [])}
+
+    for target in invoke_targets:
+        item_id = target["item_id"]
+        it = target["item"]
+        prior_attempts = target["prior_attempts"]
+        live_post = by_id_post.get(item_id)
+        rc, err = invoke_results.get(item_id, (-5, "no result"))
+
+        verify_item = verify_by_id.get(item_id)
+        still_needs = bool(verify_item and verify_item.get("needs_trial_script"))
+
+        if rc == 0 and not still_needs:
             print(f"[queue] auto-scripter: BUILD_OK for {item_id}")
             it["needs_trial_script"] = False
-            if live is not None:
-                live["scripter_attempts"] = prior_attempts + 1
-                save_queue(queue_data)
+            if live_post is not None:
+                live_post["scripter_attempts"] = prior_attempts + 1
             ready.append(it)
         else:
-            # Persist the failed attempt counter on the live entry so
-            # the next outer-loop iteration (or this run's fallback
-            # check above) sees the cap and routes to cc_build_helper.
-            # KEEP the item in `ready` (with needs_trial_script still
-            # true) so _auto_build_pass picks it up in this same
-            # batch — the comment claimed "fallback may pick it up"
-            # but the original code dropped the item, defeating the
-            # fallback.  See MAX_SCRIPTER_AGENT_ATTEMPTS for the
-            # 2026-05-08 runaway incident.
-            if live is not None:
-                live["scripter_attempts"] = prior_attempts + 1
-                save_queue(queue_data)
+            # Either subprocess returned non-zero OR scripter exited
+            # but never flipped needs_trial_script.  Persist the failed
+            # attempt counter so the next outer-loop iteration sees
+            # the cap and routes to cc_build_helper.  KEEP the item in
+            # `ready` so _auto_build_pass picks it up in this same
+            # batch (per the 2026-05-08 fallback semantics).
+            if live_post is not None:
+                live_post["scripter_attempts"] = prior_attempts + 1
             print(
                 f"[queue] auto-scripter: {item_id} agent did not flip "
-                f"needs_trial_script; rc={proc.returncode}; "
+                f"needs_trial_script; rc={rc}; "
                 f"scripter_attempts={prior_attempts + 1}/"
                 f"{MAX_SCRIPTER_AGENT_ATTEMPTS}; falling through to "
                 "cc_build_helper (_auto_build_pass)",
                 file=sys.stderr,
             )
             ready.append(it)
+
+    save_queue(queue_data)
     return ready
 
 
@@ -2368,6 +2413,14 @@ def _auto_build_pass(
     item stays needs_trial_script=true (the build did not actually
     happen), so the orchestrator drops it from this batch's runnable
     set to avoid spawning a missing trial script.
+
+    Parallelism (added 2026-05-08): cc_build_helper.build_strategy
+    is I/O-bound (subprocess.run on a `claude` CLI) so up to
+    BUILD_PASS_MAX_PARALLEL=4 builds run concurrently via
+    ThreadPoolExecutor.  Pre-flight (lazy import, item filter) and
+    post-flight (queue mutation, single save_queue, build-failure
+    email dispatch) remain sequential so trial_queue.json writes
+    never race.
     """
     if not items_to_run:
         return items_to_run
@@ -2401,12 +2454,14 @@ def _auto_build_pass(
     queue_data = load_queue()
     by_id = {it.get("id"): it for it in queue_data.get("queue", [])}
 
+    # Pre-flight: filter into ready (no build needed) and
+    # build_targets (needs build, will be parallelised).
     ready: list[dict] = []
+    build_targets: list[dict] = []
     for it in items_to_run:
         if not it.get("needs_trial_script"):
             ready.append(it)
             continue
-
         item_id = it.get("id")
         live = by_id.get(item_id)
         if live is None:
@@ -2416,53 +2471,116 @@ def _auto_build_pass(
                 file=sys.stderr,
             )
             continue
+        build_targets.append({"item": it, "live": live})
 
+    if not build_targets:
+        return ready
+
+    # In dry-run, cc_build_helper.build_strategy short-circuits
+    # itself; we still call it once per item synchronously so the
+    # "would build" log line fires.  No parallelism gain in dry-run.
+    if dry_run:
+        for target in build_targets:
+            it = target["item"]
+            live = target["live"]
+            print(
+                f"[queue] auto-build: invoking CC for {live.get('id')} "
+                f"({live.get('strategy_id')} / {live.get('variation_id')})"
+            )
+            try:
+                build_strategy(live, ROOT, dry_run=True)
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[queue] auto-build: dry-run exception "
+                    f"{exc.__class__.__name__}: {exc}",
+                    file=sys.stderr,
+                )
+            live["build_attempts"] = int(live.get("build_attempts", 0)) + 1
+        save_queue(queue_data)
+        return ready
+
+    # Parallel invocation pass.  cc_build_helper.build_strategy is
+    # thread-safe in the sense that each call runs its own
+    # subprocess.run; no shared state inside build_strategy itself.
+    def _build(target: dict) -> tuple:
+        live = target["live"]
+        item_id = live.get("id")
         print(
             f"[queue] auto-build: invoking CC for {item_id} "
             f"({live.get('strategy_id')} / {live.get('variation_id')})"
         )
         try:
-            success, log = build_strategy(
-                live, ROOT, dry_run=dry_run,
-            )
+            success, log = build_strategy(live, ROOT, dry_run=False)
+            return (item_id, bool(success), log)
         except Exception as exc:  # noqa: BLE001
-            success, log = (
+            return (
+                item_id,
                 False,
                 f"build_strategy raised {exc.__class__.__name__}: {exc}",
             )
 
-        live["build_attempts"] = int(live.get("build_attempts", 0)) + 1
+    n_workers = min(len(build_targets), BUILD_PASS_MAX_PARALLEL)
+    print(
+        f"[queue] auto-build: parallel invocation -- "
+        f"{len(build_targets)} target(s), {n_workers} worker(s)"
+    )
+    build_results: dict = {}
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        futures = {
+            executor.submit(_build, t): t for t in build_targets
+        }
+        for fut in as_completed(futures):
+            t = futures[fut]
+            try:
+                item_id, success, log = fut.result()
+            except Exception as exc:  # noqa: BLE001
+                item_id = t["live"].get("id")
+                success = False
+                log = f"future exception: {exc.__class__.__name__}: {exc}"
+            build_results[item_id] = (success, log)
 
-        if dry_run:
-            # Build was a no-op skip; needs_trial_script stays true.
-            # Drop from this batch's runnable set so the worker pool
-            # does not attempt to spawn the (still-missing) trial.
-            save_queue(queue_data)
+    # Post-flight: fold results into queue_data, save once, dispatch
+    # build-failure emails sequentially (they hit the Resend rate
+    # limit if fired in parallel).  Reload queue first because the
+    # scripter agent or build_strategy itself may have committed
+    # queue updates while the parallel calls were running.
+    queue_data = load_queue()
+    by_id_post = {it.get("id"): it for it in queue_data.get("queue", [])}
+
+    failed_for_email: list[tuple] = []  # (live, log) per failure
+    for target in build_targets:
+        it = target["item"]
+        item_id = it.get("id")
+        live_post = by_id_post.get(item_id)
+        if live_post is None:
             continue
-
+        success, log = build_results.get(item_id, (False, "no result"))
+        live_post["build_attempts"] = int(live_post.get("build_attempts", 0)) + 1
         if success:
-            live["needs_trial_script"] = False
-            save_queue(queue_data)
+            live_post["needs_trial_script"] = False
             print(
                 f"[queue] auto-build: BUILD_OK for {item_id}; "
                 "queueing for trial"
             )
             ready.append(it)
-            # Reflect the freshly-cleared flag on the item the worker
-            # will see (run_batch holds its own dict reference).
             it["needs_trial_script"] = False
         else:
-            live["status"] = "error"
-            live["error"] = (f"auto-build failed: {log}")[:400]
-            live["finished_at"] = utcnow_iso()
-            save_queue(queue_data)
+            live_post["status"] = "error"
+            live_post["error"] = (f"auto-build failed: {log}")[:400]
+            live_post["finished_at"] = utcnow_iso()
             print(
                 f"[queue] auto-build: FAILED for {item_id} "
-                f"(build_attempts={live['build_attempts']}); "
+                f"(build_attempts={live_post['build_attempts']}); "
                 "skipping trial run",
                 file=sys.stderr,
             )
-            _send_build_failure_email(live, log, dry_run)
+            failed_for_email.append((live_post, log))
+
+    save_queue(queue_data)
+
+    # Build-failure email dispatch is sequential (Resend rate limit).
+    for live_post, log in failed_for_email:
+        _send_build_failure_email(live_post, log, dry_run)
 
     return ready
 
