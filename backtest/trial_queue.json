@@ -1829,7 +1829,7 @@
     },
     {
       "id": "sq-039",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "DEXFlowSpillover",
       "variation_id": "dex-cex-flow-imbalance-spillover",
       "script_path": "scripts/run_dex_flow_spillover_trial.py",
@@ -1871,12 +1871,12 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T20:05:02.435686+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T21:08:57.734686+00:00",
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     }
   ]
 }

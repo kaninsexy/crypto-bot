@@ -81,3 +81,8 @@ spillover reaction to extreme positive OFI z-scores on BTC/USDT 1H.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| dex-cex-flow-imbalance-spillover | 2026-05-08 | retire | -0.7421 | 0.0000 | 355 |
+

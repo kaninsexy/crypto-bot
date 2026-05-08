@@ -753,3 +753,11 @@ prior. No edge in this window.
 - **cs-funding-rate-carry-v1 (2026-05-08):** verdict=retire. sr=1.0964, baseline_sr=1.9391, dsr=1.0000, n_trades=846, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### DEXFlowSpillover
+
+#### Phase 4 outcomes
+
+- **dex-cex-flow-imbalance-spillover (2026-05-08):** verdict=retire. sr=-0.7421, baseline_sr=1.9373, dsr=0.0000, n_trades=355, mt_mean_pass=False, baseline_pass=False.
+
+---
