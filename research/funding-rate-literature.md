@@ -450,10 +450,22 @@ first trial row is appended.
 ## Variation #2 candidate (b) -- `phase4b-volregime-conditional-singlepair-btc-v2b`
 
 **Date:** 2026-05-08
-**Status:** Hypothesis-of-record. Not yet queued. Pending
-chat-side selection between this candidate and the threshold-
-entry V2 (above), or both. Spec sourced from the deep-researcher
-2026-05-08 pass; full alternatives + 4-candidate analysis in
+**Status (2026-05-08 evening, BKK):** RETIRED post-holdout. Dev
+cleared (sharpe 2.8992, dsr_validation 1.0, all four quality gates
+pass; 9 vol_regime_hv_flat exits across CPCV blocks confirm the
+gate fires). Holdout failed: dsr_holdout 0.0, sharpe -1.140 vs
+sr_zero_expected +0.5198, baseline_pass=False (BTC B&H baseline
+itself was -0.8958 over the holdout window). The vol-regime gate
+fired 6 hv_flat exits and 7 funding_flips on holdout (mechanism
+worked), but the post-2024 carry-pool collapse Schmeling et al.
+predicted was severe enough that even regime-gated harvest bled
+in the LV sub-window. final_gate trial appended to trials.log.
+Holdout single-access invariant for FundingRateHarvest_BTC is
+now exhausted; cannot retry without manifest regeneration
+(sacred-track, human-only).
+
+Spec sourced from the deep-researcher 2026-05-08 pass; full
+alternatives + 4-candidate analysis in
 `research/funding-rate-variation-2-candidates.md`.
 
 **Structural failure mode addressed.** Same as the threshold-
@@ -536,6 +548,44 @@ Deribit options data are available for the dev window).
 are run; the no-p-hacking rule allows variations with distinct
 structural hypotheses to count as distinct variation slots,
 both contributing to `count_trials_for_dsr("FundingRateHarvest")`.
+
+### V2b dev outcome (2026-05-08, KEEP on dev)
+
+| field | value |
+|---|---|
+| trial_id | a6bc5ab5312744108ebff843760aae24 |
+| sharpe | 2.8992 |
+| dsr_validation | 1.0 |
+| n_trades | 27 |
+| signal_event_count | 2780 |
+| baseline | BTC B&H over dev (sr +1.94) |
+| verdict booleans | trade_count_pass=False, signal_event_count_pass=True, mintrl_pass=True, mt_mean_pass=True, baseline_pass=True |
+| block exit reasons | vol_regime_hv_flat=9, funding_flip=12, backtest_end=6 |
+| superseded duplicate | ea32883e... tagged superseded_by=duplicate-of:a6bc5ab5... per Policy (c) after operator-error double-run |
+
+### V2b holdout outcome (2026-05-08, RETIRE on holdout)
+
+| field | value |
+|---|---|
+| holdout window | 2025-09-22T22:36:00+00:00 -> 2026-05-08T13:00:00+00:00 |
+| sharpe | -1.140 |
+| dsr_holdout | 0.0 (saturated below threshold) |
+| sr_zero_expected | +0.5198 |
+| n_trades | 14 |
+| signal_event_count | 683 (funding-cadence count over holdout) |
+| baseline_sr | -0.8958 (BTC B&H also negative on holdout) |
+| verdict booleans | trade_count_pass=False, signal_event_count_pass=True, mintrl_pass=True, mt_mean_pass=False, baseline_pass=False |
+| holdout exit reasons | funding_flip=7, vol_regime_hv_flat=6, backtest_end=1 |
+| post-holdout vol regime | LV=2352 (43.7%) / HV=3032 (56.3%) -- shifted slightly more HV than dev's 50/50 |
+| structural failure mode | The vol-regime gate fired (6 HV-flat exits) so the structural mechanism worked. But the carry-pool collapse Schmeling et al. predicted was severe enough that even LV-regime harvest bled. Holdout sharpe (-1.140) is structurally similar to V1's holdout sharpe (-1.177); the regime gate did not save the substrate. |
+
+**Net result:** V2b's structural-redesign claim ("the vol-regime
+gate addresses the dev-vs-holdout gap") is REJECTED by the
+holdout. Both V1 and V2b cleared dev (dsr saturated to 1.0) and
+both failed holdout with sharpes in the -1.1 to -1.2 range. The
+funding-harvest substrate appears to be structurally bear-trapped
+in the post-2024 carry regime; no construction tested so far
+recovers edge.
 
 ## Variation #2 — `phase4b-delta-neutral-top-N-funding-v1` (STUB, NOT QUEUED)
 
