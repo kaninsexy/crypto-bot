@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -647,5 +647,13 @@ prior. No edge in this window.
   Trends 429, second by CPCVError); access flag will not be reset
   again for this entry.
   trial_id=8c1278b5d259411b969260a61d5cea28.
+
+---
+
+### ShortTermCrossSectionalMomentum
+
+#### Phase 4 outcomes
+
+- **cs-short-term-mom-7d (2026-05-08):** verdict=retire. sr=0.9605, baseline_sr=1.9391, dsr=1.0000, n_trades=189, mt_mean_pass=True, baseline_pass=False.
 
 ---

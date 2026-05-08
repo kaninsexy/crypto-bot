@@ -63,3 +63,8 @@ winner portfolio is the dominant configuration.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-short-term-mom-7d | 2026-05-08 | retire | 0.9605 | 1.0000 | 189 |
+
