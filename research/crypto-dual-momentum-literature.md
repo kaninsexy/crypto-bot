@@ -78,3 +78,8 @@ and inflict losses on shorts.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| tsmom-filter-cs-rotation | 2026-05-08 | under_tested | 1.9006 | 1.0000 | 15 |
+
