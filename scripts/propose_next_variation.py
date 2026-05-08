@@ -774,7 +774,12 @@ def propose_and_queue(dry_run: bool) -> tuple[int, list[dict]]:
         existing_ids = [
             item.get("id", "") for item in queue_data.get("queue", [])
         ]
-        next_num = len(existing_ids) + 1
+        _id_nums = [
+            int(m.group(1))
+            for _raw_id in existing_ids
+            if (m := re.match(r"sq-(\d+)$", _raw_id))
+        ]
+        next_num = (max(_id_nums) + 1) if _id_nums else 1
         next_id = f"sq-{next_num:03d}"
 
         item = build_queue_item(proposal, next_id)
