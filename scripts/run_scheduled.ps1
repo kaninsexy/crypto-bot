@@ -4,10 +4,17 @@
 # 1. cd to the repo root (derived from $PSScriptRoot so the script
 #    works from any CWD Task Scheduler hands us)
 # 2. git pull --ff-only with logging (continue on failure)
-# 3. python scripts\run_trial_queue.py --once with logging
+# 3. python scripts\run_trial_queue.py --continuous with logging
 #
 # Designed to run unattended under SYSTEM or "Run whether user is
 # logged on or not". No interactive prompts, no env assumptions.
+#
+# 2026-05-08: switched --once -> --continuous. The cron tick fires
+# hourly; each tick that finds the lock free starts a continuous
+# orchestrator run that holds the lock for up to 4h (the wall budget
+# in run_trial_queue.py:MAX_ORCHESTRATOR_WALL_S). Subsequent hourly
+# ticks see the lock held and no-op cleanly. PC utilisation under
+# this mode is ~95% (vs ~16% under --once with hourly cron).
 
 $ErrorActionPreference = "Continue"
 
@@ -57,9 +64,13 @@ if ($WarmExit -ne 0) {
         Out-File -Append -FilePath $WarmLog -Encoding utf8
 }
 
-# --- 4. Trial queue (one batch then exit) ---------------------------
+# --- 4. Trial queue (continuous: drain queue then exit) -------------
+# --continuous: orchestrator loops until queue is empty, wall-budget
+# breaker fires (4h), or no-progress breaker fires (2 consecutive
+# zero-progress batches). All three breakers are defined in
+# run_trial_queue.py and are independent of the cron schedule.
 "=== trial_queue at $Timestamp ===" | Out-File -Append -FilePath $QueueLog -Encoding utf8
 $QueueScript = Join-Path $RepoRoot "scripts\run_trial_queue.py"
-python $QueueScript --once 2>&1 | Out-File -Append -FilePath $QueueLog -Encoding utf8
+python $QueueScript --continuous 2>&1 | Out-File -Append -FilePath $QueueLog -Encoding utf8
 
 exit $LASTEXITCODE
