@@ -535,5 +535,26 @@
     ],
     "strategy_warmup_candles": 121,
     "min_tradeable_candles_per_block": 30
+  },
+  "ExchangeNetflowReversal": {
+    "timeframe": "1d",
+    "data_start": "2023-03-06T00:00:00+00:00",
+    "data_end": "2026-04-19T00:00:00+00:00",
+    "dev_end": "2025-09-22T00:00:00+00:00",
+    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "symbols": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "SOL/USDT",
+      "BNB/USDT",
+      "XRP/USDT",
+      "ADA/USDT",
+      "AVAX/USDT",
+      "DOT/USDT",
+      "LINK/USDT",
+      "LTC/USDT"
+    ],
+    "strategy_warmup_candles": 31,
+    "min_tradeable_candles_per_block": 30
   }
 }
