@@ -59,6 +59,10 @@ scripts/phase_4b_v2b_probe_output.json
 # Phase 5 Polymarket cache (runtime artefact; markets data refresh from API)
 backtest/cache/polymarket/
 
+# Phase 5 per-session orchestration working files (regenerated each scan)
+candidates.json
+research_outputs.json
+
 # Phase 4.A TrendFollowing smoke output (runtime artefact)
 scripts/phase_4a_tf_smoke_output.json
 
