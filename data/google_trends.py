@@ -190,6 +190,7 @@ def load_or_fetch_trends(
     months: int,
     cache_dir: Path = DEFAULT_CACHE_DIR,
     ttl_hours: int = DEFAULT_TTL_HOURS,
+    required_end_date: object = None,
 ) -> pd.DataFrame:
     """Return cached or freshly fetched Google Trends daily series.
 
@@ -199,6 +200,17 @@ def load_or_fetch_trends(
         months:  Months of history to cover.
         cache_dir: Parquet cache directory.
         ttl_hours: Cache freshness window in hours.
+        required_end_date:
+            Optional caller-supplied end-date the cache MUST cover
+            (typically `holdout_manifest[<sid>]["data_end"]` for
+            holdout evaluations). When set, the cache is treated as
+            fresh whenever the cached data extends to or past this
+            date, regardless of mtime age. Bypasses the mtime TTL
+            for the holdout path so a 24h-stale parquet whose data
+            already covers the fixed holdout window is NOT re-fetched
+            (the re-fetch trips Trends 429 with no benefit). When
+            None (live-trading default), behaviour is unchanged --
+            mtime TTL governs freshness.
 
     Returns:
         DataFrame indexed by UTC daily timestamp with column
@@ -208,6 +220,34 @@ def load_or_fetch_trends(
         GoogleTrendsError: API or cache failure after retries.
     """
     path = _cache_path(keyword, months, cache_dir)
+
+    # Coverage-first cache check: when the caller has named an exact
+    # end-date the cached data must reach (e.g. holdout data_end), and
+    # the on-disk parquet's last index satisfies it, treat as fresh
+    # regardless of mtime. Live-trading callers pass None and fall
+    # through to the mtime TTL branch.
+    if required_end_date is not None:
+        cached = _read_cache(path)
+        if cached is not None and len(cached) > 0:
+            try:
+                last_ts = pd.Timestamp(cached.index.max())
+                req_ts = pd.Timestamp(required_end_date)
+                if last_ts.tzinfo is None:
+                    last_ts = last_ts.tz_localize("UTC")
+                if req_ts.tzinfo is None:
+                    req_ts = req_ts.tz_localize("UTC")
+                if last_ts >= req_ts:
+                    logger.info(
+                        f"[gtrends] coverage-cache hit {path} "
+                        f"rows={len(cached)} "
+                        f"(last={last_ts}, required>={req_ts})"
+                    )
+                    return cached
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    f"[gtrends] coverage check failed on {path} "
+                    f"({exc.__class__.__name__}: {exc}); falling back to TTL"
+                )
 
     if _is_fresh(path, ttl_hours):
         cached = _read_cache(path)

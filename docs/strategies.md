@@ -627,8 +627,25 @@ prior. No edge in this window.
   trial_id=8c1278b5d259411b969260a61d5cea28. Block distribution
   bimodal (blocks 2+3 Sharpes 9.86/21.10; p50=0.24): expected for
   the strategy class -- backtest runs without a regime gate
-  (conservative); deployment adds the regime filter. **Holdout:
-  PENDING -- awaiting human approval for holdout access.** First
-  KEEP verdict in Phase 4.
+  (conservative); deployment adds the regime filter. First KEEP
+  verdict in Phase 4.
+
+#### Holdout evaluation
+
+- **search-volume-momentum holdout (2026-05-08):** verdict=retire_holdout.
+  sr=-1.1771, baseline_sr=-1.0105 (BTC B&H over the 209-bar holdout
+  window 2025-09-22 -> 2026-04-19, an objectively bear regime),
+  n_trades=14 (< min 30). Two independent verdict-tree failures
+  pre-DSR: sr below baseline (margin -0.167) AND trade count below
+  floor. CPCVError on the formal block run (holdout window 226 bars
+  / effective n_blocks=5 = 45 bars per block, below the 60-bar floor
+  in `_MIN_BLOCK_CANDLES`); verdict accepted from the completed
+  headline run per the two-condition shortcut rule. Dev KEEP did not
+  generalise: bull-regime distribution dominance reverses cleanly in
+  a bear window without the regime-gate overlay the dev write-up
+  flagged. Two `load_holdout` accesses consumed (first aborted by
+  Trends 429, second by CPCVError); access flag will not be reset
+  again for this entry.
+  trial_id=8c1278b5d259411b969260a61d5cea28.
 
 ---

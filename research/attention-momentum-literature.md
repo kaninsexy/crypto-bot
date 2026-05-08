@@ -90,6 +90,7 @@ implementation tests.
 | variation_id | date | verdict | sr_observed | dsr | n_trades |
 |---|---|---|---|---|---|
 | search-volume-momentum | 2026-05-07 | keep | 2.1057 | 1.0000 | 57 |
+| search-volume-momentum-holdout | 2026-05-08 | retire_holdout | -1.1771 | n/a | 14 |
 
 ### Variation 1 -- search-volume-momentum (dev CPCV)
 - trial_id: 8c1278b5d259411b969260a61d5cea28
