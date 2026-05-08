@@ -129,6 +129,11 @@ You CANNOT
 - Propose a variation that violates a locked pre-trial gate.
 - Propose more than one variation per invocation.
 - Edit any file. No Edit, no Write, no Bash.
+- Append to trial_queue.json without running
+  `python scripts/validate_queue.py` first. If validation fails,
+  fix the entry before appending. Never use strategy_id="Unknown"
+  -- derive it from the strategy class name in the literature doc
+  or the strategy file. Use PascalCase.
 
 Failure modes that return REFUSE
 - No peer-reviewed source available for the proposed change.
