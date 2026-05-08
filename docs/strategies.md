@@ -657,3 +657,11 @@ prior. No edge in this window.
 - **cs-short-term-mom-7d (2026-05-08):** verdict=retire. sr=0.9605, baseline_sr=1.9391, dsr=1.0000, n_trades=189, mt_mean_pass=True, baseline_pass=False.
 
 ---
+
+### OvernightSessionReversal
+
+#### Phase 4 outcomes
+
+- **us-session-overnight-reversal (2026-05-08):** verdict=retire. sr=-1.8769, baseline_sr=1.9373, dsr=0.0000, n_trades=413, mt_mean_pass=False, baseline_pass=False.
+
+---

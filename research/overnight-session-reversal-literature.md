@@ -138,3 +138,8 @@ before the first decision can fire).
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| us-session-overnight-reversal | 2026-05-08 | retire | -1.8769 | 0.0000 | 413 |
+
