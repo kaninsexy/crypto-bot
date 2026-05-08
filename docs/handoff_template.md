@@ -12,6 +12,10 @@ Before any response that asks the user to do something, run this
 
 - First tool call: bash_tool on repomix-output.xml. Not
   project_knowledge_search. Always more current than standalone uploads.
+- When reading a specific file from repomix, always run
+  grep -n to find its CURRENT line position first. Never use a
+  line number carried from a previous chat or repomix version.
+  Line numbers shift on every repomix regeneration.
 - Never run individual trial scripts. Always use
   run_trial_queue.py. Run warm_google_trends_cache.py first when
   any Google Trends strategy is queued.
@@ -57,6 +61,15 @@ turn count. The signal is task completion, not turn count.
 
 ## New-chat handoff structure
 
+Every new-chat paste block MUST open with this exact line (Block 0):
+
+"Read repomix-output.xml with bash_tool as your FIRST action, then
+CLAUDE.md, then docs/handoff_template.md, then userMemories.
+Confirm when done."
+
+This line is mandatory. Without it the new chat has no instruction
+to read repomix and falls back to pattern-matching from stale memory.
+
 Every chat-close handoff MUST end with three blocks:
 
 1. **CARRY-FORWARD STATE.** What's at HEAD, what's locked, what's
@@ -80,7 +93,8 @@ Every chat-close handoff MUST end with three blocks:
    scripts/ files uploaded separately. Check each against current repo
    state before listing as current.
 
-Self-check before sending: each of the three blocks present.
+Self-check before sending: Block 0 (standard opening) present.
+Each of the three blocks present.
 
 ## Memory edits always permitted
 
@@ -90,6 +104,11 @@ directly via `memory_user_edits` — even when the chat's scope is
 "report and stop" or the chat is mid-handoff. Memory edits are
 NEVER scoped out by a handoff prompt. If a handoff prompt is
 silent on memory, memory edits remain permitted.
+
+Memory entries must be short context cues (1-2 sentences max).
+Technical rules and implementation details belong in T3_procedural
+or CLAUDE.md, not in memory. Long entries cause skimming and rule
+violations in downstream chats.
 
 ## Project knowledge inspection
 
