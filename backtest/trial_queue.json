@@ -1418,6 +1418,159 @@
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
+    },
+    {
+      "id": "sq-031",
+      "status": "queued",
+      "strategy_id": "MarketStateConditionedMomentum",
+      "variation_id": "market-state-conditioned-momentum",
+      "script_path": "scripts/run_market_state_conditioned_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A strategy that conditions its exposure to time-series momentum based on the broader crypto market state (e.g., trending vs. reversing) will yield higher risk-adjusted returns than a static momentum strategy.",
+      "source_citation": "Chulwoo Han (2024); Muhammad A. Cheema (2017); Panagiotis Tzouvanas (2019)",
+      "literature_doc": "research/market-state-conditioned-momentum-literature.md",
+      "citations": [
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "Evidence for time-series momentum in cryptocurrencies is strong, whereas evidence for cross-sectional momentum is weak, with the effect concentrated among winners.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Cross-Sectional and Time-Series Momentum Returns and Market States",
+          "authors": "Muhammad A. Cheema, Gilbert V. Nartea, Yimei Man",
+          "year": 2017,
+          "source": "MPRA Paper",
+          "key_finding": "In equity markets, time-series momentum strategies outperform cross-sectional strategies only when the market continues in the same state (UP/UP or DN/DN), but underperform in market transitions (UP/DN, DN/UP).",
+          "crypto_specific": false,
+          "quality_score": 3
+        },
+        {
+          "title": "Momentum trading in cryptocurrencies: Short-term returns and diversification benefits",
+          "authors": "Panagiotis Tzouvanas, Renatas Kizys, Bayasgalan Tsend-Ayush",
+          "year": 2019,
+          "source": "University of Southampton",
+          "key_finding": "Short-term cross-sectional momentum strategies (e.g., 7-day formation/holding) are highly profitable in crypto, yielding a 19% weekly return, but the effect disappears over longer terms.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.0,
+      "implementation_notes": "First, define the market state using a benchmark like Bitcoin's return over a lookback period (e.g., 6-12 months). If the market state is trending (continuous UP or DOWN periods), deploy a time-series momentum strategy on a universe of liquid perpetuals. If the market state is transitioning (reversing from UP to DOWN or vice-versa), reduce or neutralize exposure to the time-series strategy to avoid being caught on the wrong side of the market's net direction.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T13:02:04.740778+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-032",
+      "status": "queued",
+      "strategy_id": "CryptoDualMomentum",
+      "variation_id": "tsmom-filter-cs-rotation",
+      "script_path": "scripts/run_crypto_dual_momentum_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A strategy that rotates into a basket of the top-performing cryptocurrencies (cross-sectional momentum) only when the broad crypto market itself exhibits positive absolute momentum (time-series momentum) will generate positive risk-adjusted returns.",
+      "source_citation": "Chulwoo Han (2024); Oliver Borgards (2021); Zih-Chun Huang (2024)",
+      "literature_doc": "research/crypto-dual-momentum-literature.md",
+      "citations": [
+        {
+          "title": "Time-Series and Cross-Sectional Momentum in the Cryptocurrency Market: A Comprehensive Analysis under Realistic Assumptions",
+          "authors": "Chulwoo Han, Byeongguk Kang, Jehyeon Ryu",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "After accounting for realistic costs and liquidation risk, time-series momentum remains strong and profitable, especially for past winners, while cross-sectional momentum is found to be weak.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Dynamic time series momentum of cryptocurrencies",
+          "authors": "Oliver Borgards",
+          "year": 2021,
+          "source": "The North American Journal of Economics and Finance",
+          "key_finding": "A dynamic time-series momentum trading strategy on cryptocurrencies significantly outperforms a buy-and-hold strategy, yielding higher risk-adjusted returns and lower downside risk.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Cryptocurrency Volume-Weighted Time Series Momentum",
+          "authors": "Zih-Chun Huang, Ivan Sangiorgi, Andrew Urquhart",
+          "year": 2024,
+          "source": "SSRN",
+          "key_finding": "A volume-weighted time-series momentum (TSMOM) strategy generates significant returns, with a winner-minus-loser portfolio achieving 0.94% per day and an annualized Sharpe ratio of 2.17.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "First, define a market-wide trend filter using time-series momentum (e.g., price > 10-month moving average on a market-cap weighted index). If the trend is positive, rank a universe of liquid perpetual futures by their relative strength (e.g., 6-month return). Go long the top decile or quintile of performers, rebalancing monthly. Based on Han et al. (2024), the strategy should be long-only, as the 'loser' portfolio tends to rebound and inflict losses.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T13:02:46.020369+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
+    },
+    {
+      "id": "sq-033",
+      "status": "queued",
+      "strategy_id": "LiquidityConditionedReversal",
+      "variation_id": "liquidity-conditioned-reversal-daily",
+      "script_path": "scripts/run_liquidity_conditioned_reversal_trial.py",
+      "trial_type": "full_cpcv",
+      "hypothesis_one_line": "A short-term cross-sectional reversal strategy (long past losers, short past winners) is profitable only when applied to a universe of low-liquidity cryptocurrencies, as high-liquidity coins tend to exhibit momentum.",
+      "source_citation": "Milan Fi\u010dura (2023); Adam Zaremba (2021); Zhuzhu Wen (2022)",
+      "literature_doc": "research/liquidity-conditioned-reversal-literature.md",
+      "citations": [
+        {
+          "title": "Impact of Size and Volume on Cryptocurrency Momentum and Reversal",
+          "authors": "Milan Fi\u010dura, Gonul Colak",
+          "year": 2023,
+          "source": "SSRN",
+          "key_finding": "Weekly return reversal is statistically significant only for small and illiquid coins (t-stat = -7.31), while large and liquid coins exhibit a weekly momentum effect.",
+          "crypto_specific": true,
+          "quality_score": 3
+        },
+        {
+          "title": "Up or down? Short-term reversal, momentum, and liquidity effects in cryptocurrency markets",
+          "authors": "Adam Zaremba, Mehmet Huseyin Bilgin, Huaigang Long, Aleksander Mercik, Jan J. Szczygielski",
+          "year": 2021,
+          "source": "International Review of Financial Analysis",
+          "key_finding": "A significant daily reversal effect where cryptocurrencies with low last day's returns outperform is documented, with the authors arguing this pattern is driven by the illiquidity of most coins.",
+          "crypto_specific": true,
+          "quality_score": 4
+        },
+        {
+          "title": "Intraday Return Predictability in the Cryptocurrency Markets: Momentum, Reversal, or Both",
+          "authors": "Zhuzhu Wen, Elie Bouri, Yahua Xu, Yang Zhao",
+          "year": 2022,
+          "source": "SSRN",
+          "key_finding": "The patterns of intraday return predictability (both momentum and reversal) are shown to change depending on liquidity levels, among other factors.",
+          "crypto_specific": true,
+          "quality_score": 3
+        }
+      ],
+      "overall_quality": 3.33,
+      "implementation_notes": "On a daily or weekly basis, first filter the universe of cryptocurrencies for low liquidity (e.g., bottom quintile of average daily dollar volume over the past 30 days). Within this illiquid subset, construct a portfolio by going long the bottom decile of performers over the lookback period (e.g., 1 to 7 days) and short the top decile. The strategy is predicated on the finding that reversal effects are concentrated in small, illiquid coins.",
+      "added_by": "proposal-agent",
+      "added_at": "2026-05-08T13:03:19.805979+00:00",
+      "started_at": null,
+      "finished_at": null,
+      "verdict": null,
+      "trial_id": null,
+      "error": null,
+      "email_sent": false,
+      "needs_trial_script": true
     }
   ]
 }
