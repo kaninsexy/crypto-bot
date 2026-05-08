@@ -586,7 +586,7 @@
     },
     {
       "id": "sq-020",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "CrossSectionalMomentum",
       "variation_id": "cs-momentum-long-winners",
       "script_path": "scripts/run_cross_sectional_momentum_trial.py",
@@ -628,16 +628,16 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T06:23:42.271411+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
-      "trial_id": null,
+      "finished_at": "2026-05-07T15:18:47.121949+00:00",
+      "verdict": "retire",
+      "trial_id": "bdf9d5077697432b9ee38fa1f3cc9167",
       "error": null,
       "email_sent": false,
       "needs_trial_script": false
     },
     {
       "id": "sq-015",
-      "status": "queued",
+      "status": "dropped",
       "strategy_id": "VRPHarvesting",
       "variation_id": "vrp-harvesting-regime-filtered",
       "script_path": "scripts/run_vrp_harvesting_trial.py",
@@ -682,9 +682,9 @@
       "finished_at": null,
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "dropped: no crypto-specific options data layer (Deribit DVOL/IV not in repo); citations are equity SPX/VIX papers only (Requejo 2024, Makarewicz 2024) plus non-crypto Kakushadze 2019. Building the required options data infrastructure is out of scope pre-edge. Revisit only after Phase 5 produces a live edge verdict AND Deribit data layer exists.",
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-016",
@@ -739,7 +739,7 @@
     },
     {
       "id": "sq-017",
-      "status": "queued",
+      "status": "deferred",
       "strategy_id": "XGBoostPCA",
       "variation_id": "xgboost-pca-technical-indicators",
       "script_path": "scripts/run_xgboost_pca_trial.py",
@@ -784,9 +784,9 @@
       "finished_at": null,
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "deferred: feature set unspecified -- no-p-hacking rule requires each indicator group cited before selection. Required before resuming: (1) enumerate exact feature list with one citation per group, (2) lock PCA n_components with justification (no sweep), (3) define retrain schedule. xgboost/sklearn model-artifact lifecycle not built. Revisit when spec is complete.",
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-018",
