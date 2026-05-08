@@ -154,9 +154,13 @@ _RUNTIME_DEFAULTS: dict = {
     # every CC auto-build invocation (success or failure). run_attempts
     # increments on every trial-subprocess attempt; the orchestrator
     # auto-requeues once on transient failure before falling through
-    # to status="error".
+    # to status="error".  scripter_attempts is a separate counter for
+    # the claude-agent (.claude/agents/scripter.md) path that runs
+    # before cc_build_helper; capped by MAX_SCRIPTER_AGENT_ATTEMPTS so
+    # a persistent agent failure cannot loop the orchestrator.
     "build_attempts": 0,
     "run_attempts": 0,
+    "scripter_attempts": 0,
 }
 
 
@@ -184,6 +188,19 @@ _DATA_BLOCKER_KEYWORDS: tuple[str, ...] = (
 # cc_build_helper invocation uses; the agent is invoked once per
 # needs_trial_script item via `claude -p .claude/agents/scripter.md`.
 SCRIPTER_AGENT_TIMEOUT_S = 600
+
+# Per-item cap on auto-scripter agent invocations.  After this many
+# failures the item falls through to _auto_build_pass (cc_build_helper
+# fallback) without re-trying the claude-agent path.  Prevents the
+# runaway pattern observed 2026-05-08 where a scripter rc=1 produced
+# ~1400 invocations / target across the outer while-True orchestrator
+# loop before manual kill: scripter dropped failed items from `ready`,
+# the items remained status=queued, the next outer iteration re-
+# selected them, and the loop never terminated.  With this cap the
+# scripter is bounded per-item; the cc_build_helper fallback does its
+# own bounded retry via build_attempts and finally flips status=error
+# so the outer loop exits cleanly.
+MAX_SCRIPTER_AGENT_ATTEMPTS = 1
 
 
 # 429 retry policy: backoff window before a rate-limited trial may
@@ -2140,6 +2157,7 @@ def _auto_scripter_pass(
 
     queue_data = load_queue()
     queue_full = queue_data.get("queue", [])
+    by_id = {q.get("id"): q for q in queue_full}
     try:
         manifest_text = (ROOT / "backtest" / "holdout_manifest.json").read_text(encoding="utf-8")
         manifest = json.loads(manifest_text)
@@ -2152,6 +2170,23 @@ def _auto_scripter_pass(
             ready.append(it)
             continue
         item_id = it.get("id")
+        live = by_id.get(item_id)
+        # Per-item cap: if the scripter agent has already been tried
+        # MAX_SCRIPTER_AGENT_ATTEMPTS times for this item, skip the
+        # agent path entirely and let _auto_build_pass (cc_build_helper)
+        # handle it.  Without this cap a persistent claude-agent failure
+        # made the outer while-True orchestrator loop spin indefinitely
+        # (2026-05-08 incident).
+        prior_attempts = int((live or {}).get("scripter_attempts", 0) or 0)
+        if prior_attempts >= MAX_SCRIPTER_AGENT_ATTEMPTS:
+            print(
+                f"[queue] auto-scripter: SKIP {item_id} -- "
+                f"scripter_attempts={prior_attempts} >= cap "
+                f"{MAX_SCRIPTER_AGENT_ATTEMPTS}; cc_build_helper "
+                "fallback (_auto_build_pass) will handle",
+            )
+            ready.append(it)  # KEEP item; build_pass will run cc_build_helper
+            continue
         if _has_data_blocker(it):
             print(
                 f"[queue] auto-scripter: SKIP {item_id} -- data-layer "
@@ -2232,14 +2267,32 @@ def _auto_scripter_pass(
         if not still_needs:
             print(f"[queue] auto-scripter: BUILD_OK for {item_id}")
             it["needs_trial_script"] = False
+            if live is not None:
+                live["scripter_attempts"] = prior_attempts + 1
+                save_queue(queue_data)
             ready.append(it)
         else:
+            # Persist the failed attempt counter on the live entry so
+            # the next outer-loop iteration (or this run's fallback
+            # check above) sees the cap and routes to cc_build_helper.
+            # KEEP the item in `ready` (with needs_trial_script still
+            # true) so _auto_build_pass picks it up in this same
+            # batch — the comment claimed "fallback may pick it up"
+            # but the original code dropped the item, defeating the
+            # fallback.  See MAX_SCRIPTER_AGENT_ATTEMPTS for the
+            # 2026-05-08 runaway incident.
+            if live is not None:
+                live["scripter_attempts"] = prior_attempts + 1
+                save_queue(queue_data)
             print(
                 f"[queue] auto-scripter: {item_id} agent did not flip "
-                f"needs_trial_script; rc={proc.returncode}; cc_build_helper "
-                "fallback may pick it up",
+                f"needs_trial_script; rc={proc.returncode}; "
+                f"scripter_attempts={prior_attempts + 1}/"
+                f"{MAX_SCRIPTER_AGENT_ATTEMPTS}; falling through to "
+                "cc_build_helper (_auto_build_pass)",
                 file=sys.stderr,
             )
+            ready.append(it)
     return ready
 
 
