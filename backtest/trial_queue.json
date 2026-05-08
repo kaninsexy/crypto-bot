@@ -1778,7 +1778,7 @@
     },
     {
       "id": "sq-038",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "CrossSectionalFundingRateCarry",
       "variation_id": "cs-funding-rate-carry-v1",
       "script_path": "scripts/run_cross_sectional_funding_rate_carry_trial.py",
@@ -1820,12 +1820,12 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-08T20:04:28.193707+00:00",
       "started_at": null,
-      "finished_at": null,
-      "verdict": null,
+      "finished_at": "2026-05-08T21:32:08.496267+00:00",
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-039",

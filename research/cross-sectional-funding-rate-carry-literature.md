@@ -116,3 +116,8 @@ unaffected.
 ## Trial outcomes
 
 <!-- Trial outcomes will be appended here by the orchestrator -->
+
+| variation_id | date | verdict | sr_observed | dsr | n_trades |
+|---|---|---|---|---|---|
+| cs-funding-rate-carry-v1 | 2026-05-08 | retire | 1.0964 | 1.0000 | 846 |
+

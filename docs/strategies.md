@@ -745,3 +745,11 @@ prior. No edge in this window.
 - **pcr-contrarian-zscore-reversal (2026-05-08):** verdict=retire. sr=None, baseline_sr=nan, dsr=None, n_trades=0, mt_mean_pass=?, baseline_pass=?.
 
 ---
+
+### CrossSectionalFundingRateCarry
+
+#### Phase 4 outcomes
+
+- **cs-funding-rate-carry-v1 (2026-05-08):** verdict=retire. sr=1.0964, baseline_sr=1.9391, dsr=1.0000, n_trades=846, mt_mean_pass=True, baseline_pass=False.
+
+---
