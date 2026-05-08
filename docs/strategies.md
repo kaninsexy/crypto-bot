@@ -697,3 +697,11 @@ prior. No edge in this window.
 - **cs-residual-reversal-daily (2026-05-08):** verdict=retire. sr=-0.3544, baseline_sr=0.8010, dsr=0.0000, n_trades=935, mt_mean_pass=False, baseline_pass=False.
 
 ---
+
+### CryptoSectorRotation
+
+#### Phase 4 outcomes
+
+- **crypto-sector-rotation-long-only (2026-05-08):** verdict=retire. sr=0.7741, baseline_sr=1.9391, dsr=1.0000, n_trades=123, mt_mean_pass=True, baseline_pass=False.
+
+---
