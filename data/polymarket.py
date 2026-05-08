@@ -331,6 +331,8 @@ def filter_scanner_candidates(
     min_liquidity_usd: float = 5_000.0,
     min_time_to_resolution_h: float = 24.0,
     max_spread_pp: float = 5.0,
+    min_yes_price: float = 0.0,
+    max_yes_price: float = 1.0,
     now: Optional[pd.Timestamp] = None,
 ) -> pd.DataFrame:
     """Apply the scanner agent's default filters to a markets DataFrame.
@@ -340,6 +342,12 @@ def filter_scanner_candidates(
       - Drop markets with time-to-resolution < `min_time_to_resolution_h`
       - Drop markets with spread > `max_spread_pp` percentage points
         (Gamma's `spread` is in price units; 0.01 == 1 pp)
+      - (extension 2026-05-08) Drop markets with bestAsk outside
+        [min_yes_price, max_yes_price]. Default range is [0, 1] which
+        is a no-op (all prices pass). Tighter ranges (e.g., 0.20-0.80)
+        exclude long-odds / near-resolution markets where research
+        cannot meaningfully shift the implied probability above the
+        2pp edge threshold the sizer uses.
 
     Returns a fresh DataFrame; does not mutate input.
     """
@@ -348,7 +356,7 @@ def filter_scanner_candidates(
 
     work = df.copy()
     # Coerce numerics (Gamma sometimes returns string-typed numbers).
-    for col in ("liquidityNum", "spread"):
+    for col in ("liquidityNum", "spread", "bestAsk", "bestBid"):
         if col in work.columns:
             work[col] = pd.to_numeric(work[col], errors="coerce")
 
@@ -359,13 +367,17 @@ def filter_scanner_candidates(
         (work["liquidityNum"].fillna(0.0) >= min_liquidity_usd)
         & (work["_ttr_hours"].fillna(0.0) >= min_time_to_resolution_h)
         & ((work["spread"].fillna(1.0) * 100.0) <= max_spread_pp)
+        & (work["bestAsk"].fillna(0.0) >= min_yes_price)
+        & (work["bestAsk"].fillna(1.0) <= max_yes_price)
     )
     out = work[keep].drop(columns=["_ttr_hours"])
     logger.info(
         "[polymarket] filter_scanner_candidates: {} -> {} markets "
-        "(min_liq=${:.0f} min_ttr={}h max_spread={:.2f}pp)",
+        "(min_liq=${:.0f} min_ttr={}h max_spread={:.2f}pp "
+        "yes_price=[{:.2f},{:.2f}])",
         len(df), len(out),
         min_liquidity_usd, min_time_to_resolution_h, max_spread_pp,
+        min_yes_price, max_yes_price,
     )
     return out
 
