@@ -139,7 +139,7 @@
         }
       ],
       "overall_quality": 3.3,
-      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required \ufffd pure time-of-day filter. Test on 1H candles.",
+      "implementation_notes": "Enter long at 21:00 UTC, close at 23:00 UTC. BTC/USDT:USDT perpetual. No indicator required � pure time-of-day filter. Test on 1H candles.",
       "added_by": "manual",
       "added_at": "2026-05-04T17:12:13.115172+00:00",
       "started_at": "2026-05-04T18:05:50.281605+00:00",
@@ -172,7 +172,7 @@
         },
         {
           "title": "Copula-Based Trading of Cointegrated Cryptocurrency Pairs",
-          "authors": "Masood Tadi, Ji\u0159\u00ed Witzany",
+          "authors": "Masood Tadi, Jiří Witzany",
           "year": 2023,
           "source": "arXiv",
           "key_finding": "A novel pairs trading strategy using copulas to model the dependency of cointegrated crypto pairs outperformed buy-and-hold strategies on both profitability and risk-adjusted returns.",
@@ -183,14 +183,14 @@
           "title": "Pairs trading : cointegration-based methods : applied to the cryptocurrency market",
           "authors": "Daniel da Silva Carvalho",
           "year": 2021,
-          "source": "Master Dissertation, Universidade Cat\u00f3lica Portuguesa",
+          "source": "Master Dissertation, Universidade Católica Portuguesa",
           "key_finding": "The Engle-Granger approach using the ADF test was the best predictor of cointegration, yielding a positive mean return, with strategies based on longer (6-month) formation periods performing better than shorter (3-month) ones.",
           "crypto_specific": true,
           "quality_score": 3
         }
       ],
       "overall_quality": 3.0,
-      "implementation_notes": "B2 rotation reframe approved 2026-05-06. Hold BTC when spread z<-2 (BTC cheap vs ETH), hold ETH when z>+2 (ETH cheap vs BTC), exit when |z|<0.5. ADF cointegration filter gates entries. No short positions \u2014 engine_multi compatible as-is.",
+      "implementation_notes": "B2 rotation reframe approved 2026-05-06. Hold BTC when spread z<-2 (BTC cheap vs ETH), hold ETH when z>+2 (ETH cheap vs BTC), exit when |z|<0.5. ADF cointegration filter gates entries. No short positions — engine_multi compatible as-is.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-05T08:01:36.467534+00:00",
       "started_at": "2026-05-06T06:00:00.888005+00:00",
@@ -260,7 +260,7 @@
       "script_path": "scripts/run_papers_ssrn_com_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "Cryptocurrencies exhibit a positive 'weekend effect' anomaly, whereby holding long positions from Friday evening through Monday morning generates positive excess returns.",
-      "source_citation": "Matus Padysak (2022); Radovan Vojtko (2023); So\u0148a Belusk\u00e1 (2024)",
+      "source_citation": "Matus Padysak (2022); Radovan Vojtko (2023); Soňa Beluská (2024)",
       "literature_doc": "research/papers-ssrn-com-literature.md",
       "citations": [
         {
@@ -274,7 +274,7 @@
         },
         {
           "title": "The Seasonality of Bitcoin",
-          "authors": "Radovan Vojtko, Juli\u00e1na Javorsk\u00e1",
+          "authors": "Radovan Vojtko, Juliána Javorská",
           "year": 2023,
           "source": "SSRN",
           "key_finding": "This follow-up study confirms the persistence of the two-hour intraday seasonality strategy and examines how patterns are influenced by market trend and volatility, but does not extend the analysis to weekly or monthly strategies.",
@@ -283,7 +283,7 @@
         },
         {
           "title": "Revisiting Trend-following and Mean-Reversion Strategies in Bitcoin",
-          "authors": "So\u0148a Belusk\u00e1, Radovan Vojtko",
+          "authors": "Soňa Beluská, Radovan Vojtko",
           "year": 2024,
           "source": "SSRN",
           "key_finding": "This paper extends the analysis with more recent data (through August 2024), reassessing trend, mean-reversion, and seasonality, confirming earlier intraday findings without introducing or testing specific weekly or monthly seasonal effects.",
@@ -528,7 +528,7 @@
         }
       ],
       "overall_quality": 3.5,
-      "implementation_notes": "For a given lookback period (e.g., 20 days), calculate the time-series momentum signal as the volume-weighted average of daily returns. The formula would be Signal = \u03a3(return_i * volume_i) / \u03a3(volume_i) over the lookback period. Go long if the signal is positive and short if the signal is negative. Rebalance daily or at the end of the holding period.",
+      "implementation_notes": "For a given lookback period (e.g., 20 days), calculate the time-series momentum signal as the volume-weighted average of daily returns. The formula would be Signal = Σ(return_i * volume_i) / Σ(volume_i) over the lookback period. Go long if the signal is positive and short if the signal is negative. Rebalance daily or at the end of the holding period.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T02:02:20.566782+00:00",
       "needs_trial_script": true,
@@ -727,7 +727,7 @@
         }
       ],
       "overall_quality": 3.5,
-      "implementation_notes": "The strategy involves calculating expected idiosyncratic skewness, as historical skewness is a poor predictor. At each rebalance period (e.g., monthly): 1. Define a universe of liquid perpetuals. 2. For each asset, obtain daily idiosyncratic returns by taking the residuals of a regression against a market factor (e.g., BTC or a universe index) over a lookback period. 3. From these residuals, calculate historical idiosyncratic skewness (is_t) and volatility (iv_t). 4. Run a cross-sectional regression: `is_{i,t} = \u03b30 + \u03b31*is_{i,t-1} + \u03b32*iv_{i,t-1} + e_i`. 5. Use the fitted coefficients to predict next month's skewness: `E[is_{i,t+1}] = \u03b30 + \u03b31*is_{i,t} + \u03b32*iv_{i,t}`. 6. Form an equal-weighted portfolio by longing the bottom quintile and shorting the top quintile of assets ranked by `E[is_{i,t+1}]`.",
+      "implementation_notes": "The strategy involves calculating expected idiosyncratic skewness, as historical skewness is a poor predictor. At each rebalance period (e.g., monthly): 1. Define a universe of liquid perpetuals. 2. For each asset, obtain daily idiosyncratic returns by taking the residuals of a regression against a market factor (e.g., BTC or a universe index) over a lookback period. 3. From these residuals, calculate historical idiosyncratic skewness (is_t) and volatility (iv_t). 4. Run a cross-sectional regression: `is_{i,t} = γ0 + γ1*is_{i,t-1} + γ2*iv_{i,t-1} + e_i`. 5. Use the fitted coefficients to predict next month's skewness: `E[is_{i,t+1}] = γ0 + γ1*is_{i,t} + γ2*iv_{i,t}`. 6. Form an equal-weighted portfolio by longing the bottom quintile and shorting the top quintile of assets ranked by `E[is_{i,t+1}]`.",
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T07:56:15.199861+00:00",
       "started_at": null,
@@ -746,7 +746,7 @@
       "script_path": "scripts/run_xgboost_pca_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "An XGBoost classifier trained on a high-dimensional, stationary set of technical indicators with PCA for dimensionality reduction can predict daily price direction with sufficient accuracy to generate positive risk-adjusted returns.",
-      "source_citation": "Rza Hasanli (2025); Darya Lapitskaya (2025); Jos\u00e9 \u00c1ngel Islas Anguiano (2025)",
+      "source_citation": "Rza Hasanli (2025); Darya Lapitskaya (2025); José Ángel Islas Anguiano (2025)",
       "literature_doc": "research/xgboost-pca-literature.md",
       "citations": [
         {
@@ -769,7 +769,7 @@
         },
         {
           "title": "Technical Analysis Meets Machine Learning: Bitcoin Evidence",
-          "authors": "Jos\u00e9 \u00c1ngel Islas Anguiano, Andr\u00e9s Garc\u00eda-Medina",
+          "authors": "José Ángel Islas Anguiano, Andrés García-Medina",
           "year": 2025,
           "source": "arXiv",
           "key_finding": "An LSTM model achieved a cumulative return of approximately 65.23% in under a year, significantly outperforming a buy-and-hold strategy for Bitcoin.",
@@ -955,7 +955,7 @@
       "citations": [
         {
           "title": "Cryptocurrency momentum has (not) its moments",
-          "authors": "Klaus Grobys, James W. Kolari, Davide Sandretto, Syed Jawad H. Shahzad, Janne \u00c4ij\u00f6",
+          "authors": "Klaus Grobys, James W. Kolari, Davide Sandretto, Syed Jawad H. Shahzad, Janne Äijö",
           "year": 2025,
           "source": "Financial Markets and Portfolio Management",
           "key_finding": "Volatility management techniques applied to cryptocurrency momentum portfolios substantially increase payoffs and result in statistically significant alphas by mitigating severe crashes.",
@@ -1144,7 +1144,7 @@
         },
         {
           "title": "Seasonality, Trend-following, and Mean reversion in Bitcoin",
-          "authors": "Pady\u0161\u00e1k, Mat\u00fa\u0161; Vojtko, Radovan",
+          "authors": "Padyšák, Matúš; Vojtko, Radovan",
           "year": 2022,
           "source": "SSRN",
           "key_finding": "The paper examines daily return distributions but focuses more on an intraday seasonality strategy, though it acknowledges daily components.",
@@ -1172,7 +1172,7 @@
       "script_path": "scripts/run_daily_cross_sectional_reversal_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "A strategy buying cryptocurrencies with the lowest 1-day returns and selling those with the highest 1-day returns will yield positive risk-adjusted returns, particularly when applied to less liquid assets.",
-      "source_citation": "Zaremba (2021); Guglielmo Maria Caporale; Alex Plastun (2019); Milan Fi\u010dura (2023)",
+      "source_citation": "Zaremba (2021); Guglielmo Maria Caporale; Alex Plastun (2019); Milan Fičura (2023)",
       "literature_doc": "research/daily-cross-sectional-reversal-literature.md",
       "citations": [
         {
@@ -1195,7 +1195,7 @@
         },
         {
           "title": "Impact of size and volume on cryptocurrency momentum and reversal",
-          "authors": "Milan Fi\u010dura",
+          "authors": "Milan Fičura",
           "year": 2023,
           "source": "FFA Working Papers",
           "key_finding": "This paper confirms that size and volume are critical factors determining the direction of return predictability, with reversal effects prominent in smaller, less-traded coins.",
@@ -1223,7 +1223,7 @@
       "script_path": "scripts/run_hurst_exponent_regime_switch_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "Calculating the Hurst exponent over a rolling window can identify market regimes (trending/persistent vs. mean-reverting/anti-persistent); applying a trend-following strategy in persistent regimes (H > 0.5) and a mean-reverting strategy in anti-persistent regimes (H < 0.5) generates positive risk-adjusted returns.",
-      "source_citation": "Andrea Calef (2021); Sandra Begu\u0161i\u0107 (2022); Nikolaos A. Kyriazis (2020)",
+      "source_citation": "Andrea Calef (2021); Sandra Begušić (2022); Nikolaos A. Kyriazis (2020)",
       "literature_doc": "research/hurst-exponent-regime-switch-literature.md",
       "citations": [
         {
@@ -1237,7 +1237,7 @@
         },
         {
           "title": "Deep Reinforcement Learning in Cryptocurrency Trading: A Review and Case Study on the Hurst Exponent",
-          "authors": "Sandra Begu\u0161i\u0107, Petar Veli\u010dkovi\u0107, Pietro Li\u00f2",
+          "authors": "Sandra Begušić, Petar Veličković, Pietro Liò",
           "year": 2022,
           "source": "Applied Sciences",
           "key_finding": "Adding the time-varying Hurst exponent as a state feature to a deep reinforcement learning trading agent increased its Sharpe ratio on a BTC/USD backtest from 1.05 to 1.77.",
@@ -1468,7 +1468,7 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": false
     },
     {
       "id": "sq-032",
@@ -1529,12 +1529,12 @@
       "script_path": "scripts/run_liquidity_conditioned_reversal_trial.py",
       "trial_type": "full_cpcv",
       "hypothesis_one_line": "A short-term cross-sectional reversal strategy (long past losers, short past winners) is profitable only when applied to a universe of low-liquidity cryptocurrencies, as high-liquidity coins tend to exhibit momentum.",
-      "source_citation": "Milan Fi\u010dura (2023); Adam Zaremba (2021); Zhuzhu Wen (2022)",
+      "source_citation": "Milan Fičura (2023); Adam Zaremba (2021); Zhuzhu Wen (2022)",
       "literature_doc": "research/liquidity-conditioned-reversal-literature.md",
       "citations": [
         {
           "title": "Impact of Size and Volume on Cryptocurrency Momentum and Reversal",
-          "authors": "Milan Fi\u010dura, Gonul Colak",
+          "authors": "Milan Fičura, Gonul Colak",
           "year": 2023,
           "source": "SSRN",
           "key_finding": "Weekly return reversal is statistically significant only for small and illiquid coins (t-stat = -7.31), while large and liquid coins exhibit a weekly momentum effect.",
@@ -1798,7 +1798,7 @@
         },
         {
           "title": "Taming the Basis: A Cross-Sectional Perspective on Cryptocurrency Carry",
-          "authors": "Abedifar, Pejman and Fica, Omid and Imbierowicz, Bj\u00f6rn",
+          "authors": "Abedifar, Pejman and Fica, Omid and Imbierowicz, Björn",
           "year": 2023,
           "source": "SSRN",
           "key_finding": "A dollar-neutral strategy going long perpetuals with a low basis and shorting those with a high basis generates significant risk-adjusted returns of up to 2.5% per week, unexplained by common risk factors.",

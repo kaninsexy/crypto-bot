@@ -72,5 +72,20 @@ if ($WarmExit -ne 0) {
 "=== trial_queue at $Timestamp ===" | Out-File -Append -FilePath $QueueLog -Encoding utf8
 $QueueScript = Join-Path $RepoRoot "scripts\run_trial_queue.py"
 python $QueueScript --continuous 2>&1 | Out-File -Append -FilePath $QueueLog -Encoding utf8
+$QueueExit = $LASTEXITCODE
 
-exit $LASTEXITCODE
+# --- 5. Phase 5 paper-ledger resolution update ----------------------
+# Polls Polymarket Gamma /markets/{id} for each open paper-traded
+# entry and updates status + realized P&L on resolution. Cheap
+# (read-only API calls), idempotent, runs every cron tick so
+# resolutions are detected within an hour of finalization on UMA.
+# Failures are logged but do not abort the cron tick (no abort here
+# anyway; this is the last step). Independent of trial-queue.
+$LedgerLog = Join-Path $LogDir "paper_ledger.log"
+"=== paper_ledger update at $Timestamp ===" | Out-File -Append -FilePath $LedgerLog -Encoding utf8
+$LedgerScript = Join-Path $RepoRoot "phase5\paper_ledger.py"
+if (Test-Path $LedgerScript) {
+    python $LedgerScript update 2>&1 | Out-File -Append -FilePath $LedgerLog -Encoding utf8
+}
+
+exit $QueueExit
