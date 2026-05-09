@@ -22,6 +22,19 @@ $ErrorActionPreference = "Continue"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -Path $RepoRoot
 
+# --- 0. Kill switch (early-exit before any work) --------------------
+# 2026-05-09: Phase 4 crypto grinding paused per Kanin -- pivot to
+# Phase 6 (IBKR equities). Touch C:\crypto-bot\.cron-pause to stop
+# cron from running any LLM-spending work. Remove the file to
+# resume. Reversible without touching Task Scheduler.
+$PauseFile = Join-Path $RepoRoot ".cron-pause"
+if (Test-Path $PauseFile) {
+    $PauseLog = Join-Path $RepoRoot "logs\cron_pause.log"
+    "=== cron paused (skipped) at $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK') ===" | `
+        Out-File -Append -FilePath $PauseLog -Encoding utf8
+    exit 0
+}
+
 # Ensure logs directory exists (idempotent).
 $LogDir = Join-Path $RepoRoot "logs"
 if (-not (Test-Path $LogDir)) {
