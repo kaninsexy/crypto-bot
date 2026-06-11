@@ -587,6 +587,8 @@ funding-harvest substrate appears to be structurally bear-trapped
 in the post-2024 carry regime; no construction tested so far
 recovers edge.
 
+### STRATEGY RETIRED 2026-06-11 — archived to strategies/archive/funding_rate_harvest/ (see KILL_REPORT.md; two structural designs failed across three windows; 30d cooldown before any revival proposal, which needs a NEW structural hypothesis + citation)
+
 ### V2b extended-window re-test (2026-06-11, gate spec v2 — under_tested on dev)
 
 | field | value |

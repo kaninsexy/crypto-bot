@@ -38,7 +38,7 @@ if str(ROOT) not in sys.path:
 import backtest.holdout as holdout
 from backtest.engine_perp import run_perp
 from data import okx_funding
-from strategies.funding_rate_harvest import FundingRateHarvestStrategy
+from strategies.archive.funding_rate_harvest.funding_rate_harvest import FundingRateHarvestStrategy
 
 
 STRATEGY_ID = "FundingRateHarvest_BTC"

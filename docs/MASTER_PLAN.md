@@ -339,6 +339,8 @@ statement of this constraint.
 
 **Variation #1 status — RETIRED 2026-05-02.** First full holdout/final_gate run on Variation #1 (single-pair BTC delta-neutral, locked params per `research/funding-rate-literature.md`) failed the verdict tree on regime-decay holdout (dev_cpcv +5.17 mean → holdout decay reflecting Schmeling et al. 2025 negative-funding regime). Variation #2 design constraint: structural redesign sourced from a specific paper (different leg construction, different instrument family, or different rebalancing rule) — NOT a parameter perturbation of V1. V2 hypothesis-of-record entry pending in research/funding-rate-literature.md. Per CLAUDE.md no-p-hacking rule, V2 cannot enter trials.log without peer-reviewed source citation.
 
+**Variation #2b + strategy status — RETIRED 2026-06-11 (Phase 4.B closed).** V2b (vol-regime-conditional structural redesign per Almeida et al. 2024) passed the old bull-heavy dev window (+2.90, 2026-05-08) but failed its holdout (−1.14) and failed the 2026-06-11 extended-window re-test under gate spec v2 (dev 2021-08-31→2025-05-01: sharpe +0.5007, family DSR 0.044 vs ≥0.95, MinTRL ~20y at realized SR; trial 2567dbd3). Two structural designs failed across three windows — carry edge is a 2023–2024 regime artifact, consistent with Schmeling et al.'s own sub-sample decay. Strategy archived to `strategies/archive/funding_rate_harvest/` with kill report; shared perp/funding harness retained for future two-leg candidates. Phase 4.C tally: Phase 4.B contributes 0 passers.
+
 #### Phase 4.C — Branch decision (revisited)
 
 After 4.A and 4.B verdicts are in, the Branch A vs Branch C question is

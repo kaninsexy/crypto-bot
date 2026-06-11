@@ -69,7 +69,7 @@ from backtest.engine_perp import run_perp
 from backtest.holdout import _load_symbol_df  # for pre-load vol history
 from backtest.verdict import compute_verdict
 from data import okx_funding
-from strategies.funding_rate_harvest import FundingRateHarvestStrategy
+from strategies.archive.funding_rate_harvest.funding_rate_harvest import FundingRateHarvestStrategy
 
 
 VARIATION_ID = "phase4b-volregime-conditional-singlepair-btc-v2b"

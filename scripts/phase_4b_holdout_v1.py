@@ -53,7 +53,7 @@ from backtest.dsr import deflated_sharpe
 from backtest.engine_perp import run_perp
 from backtest.verdict import compute_verdict
 from data import okx_funding
-from strategies.funding_rate_harvest import FundingRateHarvestStrategy
+from strategies.archive.funding_rate_harvest.funding_rate_harvest import FundingRateHarvestStrategy
 
 
 VARIATION_ID = "phase4b-delta-neutral-singlepair-btc-v1"

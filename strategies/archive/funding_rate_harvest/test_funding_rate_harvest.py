@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from strategies.funding_rate_harvest import (
+from strategies.archive.funding_rate_harvest.funding_rate_harvest import (
     FundingRateHarvestStrategy,
     make_funding_settlement_counter,
 )

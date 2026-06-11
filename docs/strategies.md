@@ -403,6 +403,17 @@ baseline +1.6337.
 
 ### FundingRateHarvest — BTC/USDT (delta-neutral spot+perp)
 
+- **RETIRED 2026-06-11 (archived).** Extended-window re-test under
+  gate spec v2 (trial 2567dbd3, dev 2021-08-31 -> 2025-05-01, 44.0
+  months): dev sharpe +0.5007 (vs +2.90 on the old bull-heavy
+  window), family-scaled DSR 0.044 vs >=0.95 gate, forensic neutral
+  PSR ~0.76, MinTRL at realized SR ~20.5y. Carry edge is a
+  2023-2024 regime artifact; the V2b vol-regime gate does not
+  rescue it over the 2021-2022 carry-pool collapse. Files moved to
+  `strategies/archive/funding_rate_harvest/` with KILL_REPORT.md
+  (covers V1, V2b, and the re-test). Shared perp/funding harness
+  modules remain in place for future two-leg strategies.
+
 - **Phase 4.B verdict (2026-05-02):** FINAL_GATE RETIRE.
   Holdout sharpe +0.3527 vs sr_zero_expected +0.5198,
   dsr_holdout 0.005407 (vs dsr_validation 0.99999 on dev),
