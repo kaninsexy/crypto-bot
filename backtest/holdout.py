@@ -496,6 +496,19 @@ def load_holdout(
     #    authorised path for accessing holdout rows.
     entry = manifest[strategy_id]
     holdout_start = pd.Timestamp(entry["holdout_start"])
+    # 2026-06-11 bug fix (contract-preserving; mirror image of the
+    # load_dev data_start fix in commit 05507f0's batch): this
+    # function's documented contract is "[holdout_start, data_end)"
+    # but the implementation passed before_ts=None, returning every
+    # cached row after holdout_start.  Invisible while cache files
+    # ended exactly at data_end; the 2026-06-11 extended-window
+    # backfill made caches run past some entries' data_end (e.g.
+    # AttentionMomentum's data_end is trends-capped at 2026-05-03
+    # while its OHLCV cache reaches 2026-06-11), so the upper bound
+    # now has to be applied for the manifest to stay the substrate's
+    # source of truth — and for the audited n_rows to mean what the
+    # manifest says it means.
+    data_end = pd.Timestamp(entry["data_end"])
     legs = _get_legs(entry)
     token = _holdout_bypass_ctx.set(True)
     try:
@@ -504,7 +517,7 @@ def load_holdout(
                 legs,
                 entry["timeframe"],
                 after_ts=holdout_start,
-                before_ts=None,
+                before_ts=data_end,
             )
             n_rows = sum(len(df) for df in result.values())
         else:
@@ -512,7 +525,7 @@ def load_holdout(
                 _get_symbols(entry),
                 entry["timeframe"],
                 after_ts=holdout_start,
-                before_ts=None,
+                before_ts=data_end,
             )
             n_rows = len(result)
     finally:

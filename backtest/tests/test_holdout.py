@@ -765,3 +765,66 @@ def test_has_prior_access_ignores_unattributed_post_cutoff_regen(
         "new_holdout_start": "t",
     })
     assert holdout._has_prior_access("X") is False
+
+
+# ── 2026-06-11: manifest-bound window clipping (load_dev / load_holdout) ─────
+
+def _wire_single_symbol_window_fixture(monkeypatch, tmp_path):
+    """Cache deliberately WIDER than the manifest window on both sides:
+    cache [2021-06-01, 2024-07-01) vs manifest [DATA_START=2022-01-01,
+    DATA_END=2024-01-01), holdout_start 2023-07-02.  Exercises both the
+    load_dev lower-bound fix (commit 05507f0 batch) and the
+    load_holdout upper-bound fix (mirror image, 2026-06-11)."""
+    cache_dir = tmp_path / "cache" / "ohlcv"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    wide = make_ohlcv(
+        pd.Timestamp("2021-06-01T00:00:00", tz="UTC"),
+        pd.Timestamp("2024-07-01T00:00:00", tz="UTC"),
+        freq="1D",
+    )
+    wide.to_parquet(cache_dir / "BTC-USDT_1h_36mo.parquet")
+    manifest_path = tmp_path / "window_manifest.json"
+    manifest_path.write_text(json.dumps({
+        "WindowStrat": {
+            "timeframe": "1h",
+            "data_start": DATA_START.isoformat(),
+            "data_end": DATA_END.isoformat(),
+            "dev_end": HOLDOUT_START.isoformat(),
+            "holdout_start": HOLDOUT_START.isoformat(),
+            "symbol": "BTC/USDT",
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(holdout, "_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(holdout, "_CACHE_DIR", cache_dir)
+    monkeypatch.setattr(holdout, "_ACCESS_LOG_PATH", tmp_path / "access.log")
+    holdout.load_manifest.cache_clear()
+
+
+def test_load_dev_applies_manifest_data_start(monkeypatch, tmp_path):
+    """Dev frame is [data_start, holdout_start) even when the cache
+    holds earlier rows (extended-window backfill made caches deeper
+    than some entries' data_start)."""
+    _wire_single_symbol_window_fixture(monkeypatch, tmp_path)
+    dev = holdout.load_dev("WindowStrat")
+    assert dev.index.min() >= DATA_START
+    assert dev.index.max() < HOLDOUT_START
+
+
+def test_load_holdout_applies_manifest_data_end(monkeypatch, tmp_path):
+    """Holdout frame is [holdout_start, data_end) even when the cache
+    runs past data_end (e.g. trends-capped data_end with a longer
+    OHLCV cache).  Also pins n_rows-in-audit-event == returned rows."""
+    _wire_single_symbol_window_fixture(monkeypatch, tmp_path)
+    hold = holdout.load_holdout(
+        "WindowStrat",
+        caller="manual.WindowStrat.manual_inspection",
+        reason="window regression test",
+    )
+    assert hold.index.min() >= HOLDOUT_START
+    assert hold.index.max() < DATA_END
+    events = [
+        json.loads(l)
+        for l in (tmp_path / "access.log").read_text().splitlines()
+        if l.strip()
+    ]
+    assert events[-1]["n_rows"] == len(hold)
