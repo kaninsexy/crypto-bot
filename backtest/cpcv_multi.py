@@ -243,6 +243,7 @@ def run_cpcv_multi(
         trades_per_path=trade_counts,
         per_block_returns=block_returns,
         signal_events_per_block=(signal_event_counts if use_signal_events else None),
+        candle_duration_h=candle_duration_h,
     )
 
 

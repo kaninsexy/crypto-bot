@@ -33,6 +33,10 @@ from strategies.crypto_sector_rotation import CryptoSectorRotationStrategy
 
 
 STRATEGY_ID = "CryptoSectorRotation"
+# Gate spec v2 (2026-06-11): explicit bar frequency for the
+# units-correct DSR / MinTRL / verdict (manifest timeframe).
+from backtest.dsr import bars_per_year_for_timeframe
+BARS_PER_YEAR = bars_per_year_for_timeframe("1d")
 VARIATION_ID = "crypto-sector-rotation-long-only"
 
 HYPOTHESIS_TEXT = (
@@ -256,6 +260,7 @@ def main() -> int:
             result=cpcv_result,
             strategy_id=STRATEGY_ID,
             sr_candidate=sr_observed,
+            bars_per_year=BARS_PER_YEAR,
         )
     finally:
         _t_mod.count_trials_for_dsr = _orig_count
@@ -286,6 +291,7 @@ def main() -> int:
         n_trials=n_trials_pre + 1,
         min_trade_count=30,
         confidence=0.95,
+        bars_per_year=BARS_PER_YEAR,
     )
 
     print("\n--- Verdict (dev-side preview) ---")

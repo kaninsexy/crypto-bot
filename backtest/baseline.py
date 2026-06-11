@@ -184,9 +184,14 @@ def buy_and_hold_sharpe(
 def beats_baseline(strategy_sharpe: float, baseline_sharpe: float) -> bool:
     """Return True iff strategy_sharpe > baseline_sharpe (strict).
 
-    Spec is in `docs/validation_framework.md` § Baseline comparison:
-    "merely matches buy-and-hold is not adding value."  Tie or worse
-    fails the floor.
+    GATE SPEC v2 NOTE (2026-06-11): this raw-Sharpe comparison is no
+    longer the verdict tree's baseline gate — `backtest/verdict.py`
+    now uses `ols_alpha_newey_west` + `information_ratio_annualised`
+    (directional) or a PSR vs 0 (delta-neutral).  Kept because the
+    audit showed the raw comparison retired strategies for failing to
+    beat a 1.94-Sharpe bull-window B&H with no significance test at
+    all (docs/gate_recalibration_audit_2026-06.md §6).  The function
+    remains for forensics fields and legacy callers.
 
     Non-finite inputs return False — a strategy that produces NaN or
     +inf Sharpe never beats anything, since the comparison is
@@ -195,3 +200,149 @@ def beats_baseline(strategy_sharpe: float, baseline_sharpe: float) -> bool:
     if not (math.isfinite(strategy_sharpe) and math.isfinite(baseline_sharpe)):
         return False
     return strategy_sharpe > baseline_sharpe
+
+
+# ── Gate spec v2 helpers (2026-06-11) ─────────────────────────────────────────
+#
+# The v2 directional baseline gate is two tests, both required:
+#   (a) OLS alpha of per-bar strategy returns on same-instrument B&H
+#       returns > 0 at 95 % one-sided, with HAC (Newey-West) standard
+#       errors — per-bar financial returns are autocorrelated and
+#       heteroskedastic, so plain OLS SEs understate the variance.
+#   (b) annualised information ratio vs B&H >= 0.5.
+# Spec: docs/validation_framework.md § Gate spec v2; rationale:
+# docs/gate_recalibration_audit_2026-06.md (S1).
+
+
+@dataclass(frozen=True)
+class AlphaResult:
+    """OLS-with-NW-errors alpha of strategy returns on benchmark returns.
+
+    Attributes:
+      alpha_per_bar:     Intercept of r_s = α + β·r_b + ε (per-bar).
+      alpha_annualised:  alpha_per_bar × bars_per_year (decimal/yr).
+      beta:              Slope on the benchmark.
+      t_stat:            alpha / NW-SE(alpha).
+      p_value_one_sided: P(α <= 0) under the t≈normal approximation —
+                         the gate tests alpha > 0 at 95 %, i.e.
+                         p_value_one_sided < 0.05.
+      nw_lags:           Newey-West lag count used
+                         (floor(4·(T/100)^(2/9)) convention).
+      n_obs:             Aligned observation count.
+    """
+    alpha_per_bar: float
+    alpha_annualised: float
+    beta: float
+    t_stat: float
+    p_value_one_sided: float
+    nw_lags: int
+    n_obs: int
+
+
+def ols_alpha_newey_west(
+    strategy_returns: np.ndarray,
+    benchmark_returns: np.ndarray,
+    *,
+    bars_per_year: float,
+    nw_lags: int | None = None,
+) -> AlphaResult:
+    """Regress per-bar strategy returns on per-bar benchmark returns
+    and return the intercept with Newey-West (HAC) errors.
+
+    Inputs must be ALIGNED per-bar series of equal length (caller
+    aligns; `verdict.compute_verdict` tail-truncates to the common
+    length and records the aligned count for forensics).
+
+    Raises BaselineError on: length mismatch, < 30 observations,
+    non-finite values, or a degenerate (zero-variance) benchmark.
+    """
+    rs = np.asarray(strategy_returns, dtype=float)
+    rb = np.asarray(benchmark_returns, dtype=float)
+    if rs.size != rb.size:
+        raise BaselineError(
+            f"strategy/benchmark return lengths differ: "
+            f"{rs.size} vs {rb.size}; align before calling"
+        )
+    n = rs.size
+    if n < 30:
+        raise BaselineError(
+            f"need >= 30 aligned observations for the alpha gate; got {n}"
+        )
+    if not (np.all(np.isfinite(rs)) and np.all(np.isfinite(rb))):
+        raise BaselineError("non-finite values in return series")
+    if float(rb.std()) == 0.0:
+        raise BaselineError("benchmark returns have zero variance")
+
+    # OLS: y = X @ [alpha, beta] + e,  X = [1, r_b].
+    x = np.column_stack([np.ones(n), rb])
+    xtx_inv = np.linalg.inv(x.T @ x)
+    coef = xtx_inv @ (x.T @ rs)
+    alpha, beta = float(coef[0]), float(coef[1])
+    resid = rs - x @ coef
+
+    # Newey-West HAC covariance with Bartlett kernel.
+    if nw_lags is None:
+        nw_lags = int(math.floor(4.0 * (n / 100.0) ** (2.0 / 9.0)))
+    nw_lags = max(0, min(nw_lags, n - 1))
+    scores = x * resid[:, None]            # (n, 2) moment conditions
+    s = scores.T @ scores                  # lag-0
+    for lag in range(1, nw_lags + 1):
+        w = 1.0 - lag / (nw_lags + 1.0)
+        gamma = scores[lag:].T @ scores[:-lag]
+        s += w * (gamma + gamma.T)
+    cov = xtx_inv @ s @ xtx_inv
+    se_alpha = math.sqrt(max(float(cov[0, 0]), 0.0))
+    if se_alpha == 0.0 or not math.isfinite(se_alpha):
+        raise BaselineError(
+            f"degenerate NW SE for alpha ({se_alpha}); gate undefined"
+        )
+
+    t_stat = alpha / se_alpha
+    # One-sided P(alpha <= 0); normal approximation (T >= 30 floor).
+    from scipy import stats as _sps
+    p_one_sided = float(1.0 - _sps.norm.cdf(t_stat))
+
+    return AlphaResult(
+        alpha_per_bar=alpha,
+        alpha_annualised=alpha * bars_per_year,
+        beta=beta,
+        t_stat=float(t_stat),
+        p_value_one_sided=p_one_sided,
+        nw_lags=int(nw_lags),
+        n_obs=int(n),
+    )
+
+
+def information_ratio_annualised(
+    strategy_returns: np.ndarray,
+    benchmark_returns: np.ndarray,
+    *,
+    bars_per_year: float,
+) -> float:
+    """Annualised information ratio of strategy vs benchmark:
+
+        IR = mean(r_s − r_b) / std(r_s − r_b) × sqrt(bars_per_year)
+
+    Inputs are aligned per-bar series of equal length.  Returns 0.0
+    when the active-return series has zero variance (no tracking
+    difference ⇒ no information).  Raises BaselineError on length
+    mismatch, < 30 observations, or non-finite values.
+    """
+    rs = np.asarray(strategy_returns, dtype=float)
+    rb = np.asarray(benchmark_returns, dtype=float)
+    if rs.size != rb.size:
+        raise BaselineError(
+            f"strategy/benchmark return lengths differ: "
+            f"{rs.size} vs {rb.size}; align before calling"
+        )
+    if rs.size < 30:
+        raise BaselineError(
+            f"need >= 30 aligned observations for IR; got {rs.size}"
+        )
+    if not (np.all(np.isfinite(rs)) and np.all(np.isfinite(rb))):
+        raise BaselineError("non-finite values in return series")
+    active = rs - rb
+    sd = float(active.std())
+    if sd == 0.0:
+        return 0.0
+    return float(active.mean() / sd * math.sqrt(bars_per_year))

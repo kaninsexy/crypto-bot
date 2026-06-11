@@ -83,9 +83,28 @@ def _write_manifest(
     path.write_text(json.dumps(manifest), encoding="utf-8")
 
 
+def _synthetic_funding_history(instid: str, months: int, **kwargs) -> pd.DataFrame:
+    """Stand-in for data.okx_funding.load_or_fetch_funding_history so
+    the CPCV-perp tests never hit the network.  (2026-06-11: the real
+    loader started live-fetching once the repo funding cache aged past
+    the requested window, and the fetch dies inside ccxt's keysort on
+    OKX's current market table — an environment failure, not a harness
+    property.  Synthetic funding at the manifest cadence is the
+    correct hermetic fixture, mirroring test_engine_perp.py.)"""
+    idx = pd.date_range(DATA_START, DATA_END, freq="8h", tz="UTC")
+    return pd.DataFrame(
+        {
+            "funding_rate": np.full(len(idx), 0.0001),
+            "mark_price": np.full(len(idx), 50_000.0),
+        },
+        index=idx,
+    )
+
+
 @pytest.fixture
 def patched_paths(tmp_path, monkeypatch):
-    """Redirect manifest + cache paths to tmp_path."""
+    """Redirect manifest + cache paths to tmp_path; stub the funding
+    loader so no test depends on network or repo funding cache."""
     cache_dir = tmp_path / "cache" / "ohlcv"
     perp_cache_dir = tmp_path / "cache" / "perp"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -95,6 +114,10 @@ def patched_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(holdout, "_MANIFEST_PATH", manifest_path)
     monkeypatch.setattr(holdout, "_CACHE_DIR", cache_dir)
     monkeypatch.setattr(holdout, "_PERP_CACHE_DIR", perp_cache_dir)
+    monkeypatch.setattr(
+        cpcv_perp, "load_or_fetch_funding_history",
+        _synthetic_funding_history,
+    )
     holdout.load_manifest.cache_clear()
     yield {
         "manifest_path": manifest_path,

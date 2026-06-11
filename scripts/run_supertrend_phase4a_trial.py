@@ -50,6 +50,10 @@ PARAMS: dict = {
 }
 
 STRATEGY_ID = "Supertrend"
+# Gate spec v2 (2026-06-11): explicit bar frequency for the
+# units-correct DSR / MinTRL / verdict (manifest timeframe).
+from backtest.dsr import bars_per_year_for_timeframe
+BARS_PER_YEAR = bars_per_year_for_timeframe("1h")
 VARIATION_ID = "phase4a-daily-resurrection-v1"
 
 
@@ -131,6 +135,7 @@ def main() -> int:
         result=cpcv_result,
         strategy_id=STRATEGY_ID,
         sr_candidate=sr_observed,
+        bars_per_year=BARS_PER_YEAR,
     )
     print(
         f"DSR validation: dsr={dsr_result.dsr:.4f} | "
@@ -153,6 +158,7 @@ def main() -> int:
         n_trials=n_trials_pre + 1,  # include this trial in the multiple-testing count
         min_trade_count=30,
         confidence=0.95,
+        bars_per_year=BARS_PER_YEAR,
     )
 
     print("\n--- Verdict (dev-side preview) ---")

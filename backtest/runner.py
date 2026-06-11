@@ -53,8 +53,13 @@ from backtest.report import print_comparison_table, print_period_report
 from backtest import holdout as _holdout
 from backtest import trials as _trials
 from backtest.baseline import buy_and_hold_sharpe
-from backtest.cpcv import CPCVConfig, run_cpcv, CPCVResult
-from backtest.dsr import deflated_sharpe, min_track_record_length
+from backtest.cpcv import CPCVConfig, run_cpcv, CPCVResult, _infer_candle_hours
+from backtest.dsr import (
+    bars_per_year_from_candle_hours,
+    deflated_sharpe,
+    min_track_record_length,
+)
+from backtest import families as _families
 from backtest.verdict import compute_verdict, VerdictResult
 from rescue.policy import RESCUE_TRIAL_BUDGET
 
@@ -746,7 +751,16 @@ def _run_strategy_final_gate(
     returns = (
         result.equity_curve.pct_change().dropna().values.astype(float)
     )
-    n_trials = _trials.count_trials_for_dsr(strategy_id)
+    # Gate spec v2 (2026-06-11): N for the multiple-testing haircut is
+    # the per-FAMILY trial count (+1 for this trial), and the eq.7
+    # haircut is scaled by the family's realized cross-trial Sharpe
+    # variance.  bars_per_year is passed explicitly from the holdout
+    # frame's own index (units fix).
+    fam_stats = _families.family_sharpe_stats(strategy_id)
+    n_trials = max(fam_stats.n_trials + 1, 1)
+    bars_per_year = bars_per_year_from_candle_hours(
+        _infer_candle_hours(primary_df)
+    )
 
     verdict = compute_verdict(
         strategy_id=strategy_id,
@@ -755,6 +769,8 @@ def _run_strategy_final_gate(
         total_trades=int(result.metrics.total_trades),
         baseline_df=primary_df,
         n_trials=n_trials,
+        bars_per_year=bars_per_year,
+        sr_var_trials=fam_stats.sr_var,
     )
 
     # dsr_holdout: for keep/retire branches the verdict already
@@ -1123,18 +1139,32 @@ def _run_strategy_dev_cpcv(
     #    isn't.
     returns_for_dsr = _concat_per_block_returns(cpcv_result)
 
-    # 5. DSR — n_trials=RESCUE_TRIAL_BUDGET, explicit.
+    # Gate spec v2 (2026-06-11): bars_per_year passed explicitly from
+    # the dev frame's own index (units fix); the eq.7 haircut is
+    # scaled by the family's realized cross-trial Sharpe variance.
+    bars_per_year = bars_per_year_from_candle_hours(
+        _infer_candle_hours(primary_dev_df)
+    )
+    fam_stats = _families.family_sharpe_stats(strategy_id)
+
+    # 5. DSR — n_trials=RESCUE_TRIAL_BUDGET, explicit (Phase-3c rescue
+    #    convention per rescue/policy.py; unchanged by gate spec v2 —
+    #    the fixed budget is this path's documented multiplicity
+    #    denominator).
     n_trials = RESCUE_TRIAL_BUDGET
     dsr_result = deflated_sharpe(
         sr_candidate=observed_sharpe,
         returns=returns_for_dsr,
         n_trials=n_trials,
+        bars_per_year=bars_per_year,
+        sr_var_trials=fam_stats.sr_var,
     )
 
     # 6. MinTRL.
     mintrl_result = min_track_record_length(
         sr_candidate=observed_sharpe,
         returns=returns_for_dsr,
+        bars_per_year=bars_per_year,
     )
 
     # 7. Verdict.  Pass the same n_trials so the verdict's internal
@@ -1146,6 +1176,8 @@ def _run_strategy_dev_cpcv(
         total_trades=total_trades,
         baseline_df=primary_dev_df,
         n_trials=n_trials,
+        bars_per_year=bars_per_year,
+        sr_var_trials=fam_stats.sr_var,
     )
 
     # 8. Build the row.

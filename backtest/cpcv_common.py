@@ -216,6 +216,13 @@ class CPCVResult:
     # the default is None and the validity check falls back to
     # `trades_per_path` when no callback is configured.
     signal_events_per_block: Optional[list[int]] = None
+    # Candle duration in hours, inferred by the runner from the dev
+    # frame's own index (gate spec v2, 2026-06-11 — additive).  Lets
+    # the DSR adapters derive bars_per_year exactly instead of
+    # guessing, closing the annualised-vs-per-bar units hole the
+    # 2026-06 gate-recalibration audit found.  None only on legacy
+    # result objects constructed before this field existed.
+    candle_duration_h: Optional[float] = None
 
     @property
     def per_block_sharpes(self) -> list[float]:

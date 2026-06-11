@@ -195,12 +195,13 @@ def test_rescue_trial_budget_passed_to_deflated_sharpe(
 
     real_deflated_sharpe = dsr_mod.deflated_sharpe
 
-    def spy(sr_candidate, returns, n_trials):
+    def spy(sr_candidate, returns, n_trials, **kw):
         seen_n_trials.append(n_trials)
         return real_deflated_sharpe(
             sr_candidate=sr_candidate,
             returns=returns,
             n_trials=n_trials,
+            **kw,
         )
 
     monkeypatch.setattr(dsr_mod, "deflated_sharpe", spy)
@@ -564,10 +565,11 @@ def test_deflated_sharpe_receives_per_block_concat(
     seen_returns: list[np.ndarray] = []
     real_deflated_sharpe = dsr_mod.deflated_sharpe
 
-    def spy(sr_candidate, returns, n_trials):
+    def spy(sr_candidate, returns, n_trials, **kw):
         seen_returns.append(np.asarray(returns, dtype=float).copy())
         return real_deflated_sharpe(
             sr_candidate=sr_candidate, returns=returns, n_trials=n_trials,
+            **kw,
         )
 
     monkeypatch.setattr(dsr_mod, "deflated_sharpe", spy)
@@ -598,12 +600,13 @@ def test_min_track_record_length_receives_per_block_concat(
     seen: list[np.ndarray] = []
     real_mintrl = dsr_mod.min_track_record_length
 
-    def spy(sr_candidate, returns, confidence=0.95):
+    def spy(sr_candidate, returns, confidence=0.95, **kw):
         seen.append(np.asarray(returns, dtype=float).copy())
         return real_mintrl(
             sr_candidate=sr_candidate,
             returns=returns,
             confidence=confidence,
+            **kw,
         )
 
     monkeypatch.setattr(dsr_mod, "min_track_record_length", spy)

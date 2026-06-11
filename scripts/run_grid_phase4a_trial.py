@@ -29,6 +29,10 @@ from rescue.policy import RESCUE_TRIAL_BUDGET
 from strategies.grid_trading import GridTradingStrategy
 
 STRATEGY_ID = "GridTrading"
+# Gate spec v2 (2026-06-11): explicit bar frequency for the
+# units-correct DSR / MinTRL / verdict (manifest timeframe).
+from backtest.dsr import bars_per_year_for_timeframe
+BARS_PER_YEAR = bars_per_year_for_timeframe("1h")
 VARIATION_ID = "phase4a-regime-conditional-v1"
 TIMEFRAME = "1h"
 INITIAL_BALANCE = 10_000.0
@@ -142,6 +146,7 @@ def main() -> int:
         sr_candidate=observed_sharpe,
         returns=returns_for_dsr,
         n_trials=n_trials,
+        bars_per_year=BARS_PER_YEAR,
     )
     print(f"\nDSR: dsr={dsr_result.dsr:.6f}  "
           f"sr_zero_expected (N={n_trials})={dsr_result.sr_zero_expected:+.4f}  "
@@ -151,6 +156,7 @@ def main() -> int:
     mintrl_result = min_track_record_length(
         sr_candidate=observed_sharpe,
         returns=returns_for_dsr,
+        bars_per_year=BARS_PER_YEAR,
     )
     print(f"MinTRL: required={mintrl_result.min_trl:.0f} bars  "
           f"observed={mintrl_result.t_observed} bars  "
@@ -164,6 +170,7 @@ def main() -> int:
         total_trades=total_trades,
         baseline_df=primary_dev_df,
         n_trials=n_trials,
+        bars_per_year=BARS_PER_YEAR,
     )
 
     # 8. Build the row with explicit Phase 4.A variation params + hypothesis.

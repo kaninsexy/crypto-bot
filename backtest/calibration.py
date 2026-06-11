@@ -251,8 +251,12 @@ def _sample_dsrs(
         rets = generator(rng, _T_BARS, target_sharpe)
         sr = _annualised_sharpe(rets)
         try:
+            # Synthetic series are 1h-candle convention (candle_hours
+            # = 1.0 in _annualised_sharpe), so bars/year =
+            # _BARS_PER_YEAR / 1.0.  Gate spec v2 units contract.
             out = deflated_sharpe(
                 sr_candidate=sr, returns=rets, n_trials=n_trials,
+                bars_per_year=_BARS_PER_YEAR,
             )
             dsrs.append(out.dsr)
         except DSRError:
