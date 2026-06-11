@@ -91,6 +91,7 @@ implementation tests.
 |---|---|---|---|---|---|
 | search-volume-momentum | 2026-05-07 | keep | 2.1057 | 1.0000 | 57 |
 | search-volume-momentum-holdout | 2026-05-08 | retire_holdout | -1.1771 | n/a | 14 |
+| search-volume-momentum-gatev2-retest | 2026-06-11 | insufficient_data (pre-check; not run) | n/a | n/a | 0 |
 
 ### Variation 1 -- search-volume-momentum (dev CPCV)
 - trial_id: 8c1278b5d259411b969260a61d5cea28
@@ -103,3 +104,18 @@ implementation tests.
   Expected pattern for attention-momentum strategy class.
 - Holdout: PENDING -- awaiting human approval for holdout access.
 
+### Extended-window re-test 2026-06-11 — MinTRL pre-check: INSUFFICIENT DATA
+
+Gate-spec-v2 re-run work order (2026-06-11): same hypothesis + params,
+regenerated substrate window (dev_end 2025-05-01). The units-correct
+BLP eq.13 pre-check at target true annualised Sharpe 1.0 requires
+~963 daily bars (~2.64y, actual dev-window B&H moments); the basket's
+available dev intersection is 862 bars (2022-12-21 -> 2025-05-01,
+2.36y), capped by BNB/USDT's OKX listing date 2022-12-21 — NOT by the
+exchange archive, which reaches 2020-11 for the other basket members.
+Verdict: insufficient data; the trial was NOT run (no CPCV, no
+trials.log row — a skipped run is not a statistical draw and must not
+inflate the family multiple-testing count). Recorded here and in
+docs/bot_status.md. Unblocking requires either a longer wait or a
+basket change (dropping/substituting BNB = pair substitution = human
+decision per CLAUDE.md).

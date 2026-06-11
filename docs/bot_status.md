@@ -43,6 +43,32 @@ verdict):**
    tail; recorded here so the asterisk is applied evidence-side, not
    prompt-side.
 
+## Gate-spec-v2 re-run batch 2026-06-11 — running results
+
+Pre-justified batch (work order 2026-06-11); same variation_ids as the
+original trials, extended window, gate spec v2. DEV ONLY — no holdout
+access. MinTRL pre-check at target true annualised Sharpe 1.0
+(units-correct eq.13, actual dev B&H moments).
+
+| Strategy | MinTRL pre-check | Dev verdict | Numbers | vs original trial |
+|---|---|---|---|---|
+| CrossSectionalMomentum | 862 bars < 963 needed — INSUFFICIENT DATA (BNB cap 2022-12-21) | not run | n/a | orig retire (sr 1.64 vs B&H 1.94, no significance test) |
+| AltcoinSeasonRotation | 862 < 963 — INSUFFICIENT DATA (BNB cap) | not run | n/a | orig retire (sr 1.68) |
+| NewsSentimentMomentum | 862 < 963 — INSUFFICIENT DATA (BNB cap; sentiment proxy is OHLCV-derived, no extra cap) | not run | n/a | orig retire (sr 1.48) |
+| AttentionMomentum | 862 < 963 — INSUFFICIENT DATA (BNB cap; trends span 2021-05-02..2026-05-03 not binding) | not run | n/a | orig keep -> retire_holdout (sr 2.11) |
+| FundingRateHarvest_BTC V2b | TESTABLE (32,112 >= 23,746) | **under_tested** | sr +0.5007; CPCV p50 +0.056; PSR ~0.76 (< 0.95, forensic); DSR 0.044 vs sr_zero 1.74 (carry N=4); MinTRL@realized-SR 179k bars | orig dev sr +2.8992 KEEP -> holdout -1.14 retire. Extended window (incl. 2021-09 -> 2022 carry collapse) removes the edge; bull-window artifact confirmed |
+
+Skipped strategies recorded in their literature files; NO trials.log
+rows for skipped runs (a pre-check skip is not a statistical draw and
+must not inflate family N). Unblocking the four 1d baskets requires a
+basket change (BNB substitution = pair substitution = human decision)
+or ~3.5 more months of BNB history.
+
+FRH re-test trial row: trial_id 2567dbd3eb9a442986a5f83a1ceddd7e
+(notes carry the "extended-window re-test under gate spec v2" marker;
+per-bar series persisted; vol threshold recalibrated 0.4284 -> 0.5220
+by the pre-specified dev-median rule).
+
 ## Current state
 
 - **Current commit:** `80fc2c9` — Phase 3b Chunks 1-6 stack pushed 

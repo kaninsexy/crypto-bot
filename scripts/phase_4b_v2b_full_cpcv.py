@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter
@@ -129,7 +130,20 @@ logger.info(
 
 prior_rows = list(_trials.read_trials(strategy_id=STRATEGY_ID))
 v2b_rows = [r for r in prior_rows if r.get("variation_id") == VARIATION_ID]
-if v2b_rows:
+# 2026-06-11 extended-window re-test: the human work order explicitly
+# re-runs the SAME variation_id on the regenerated substrate window
+# under gate spec v2 (no new variation slot; prior rows remain valid
+# draws, NOT superseded).  The env flag is the deliberate per-run
+# opt-in; without it the single-shot guard behaves exactly as before.
+_RERUN_OK = os.environ.get("GATE_V2_RERUN_2026_06_11") == "1"
+if v2b_rows and _RERUN_OK:
+    logger.warning(
+        "[full_cpcv-v2b] pre-flight: {} prior V2b row(s) present; "
+        "proceeding anyway under GATE_V2_RERUN_2026_06_11=1 "
+        "(extended-window re-test under gate spec v2).",
+        len(v2b_rows),
+    )
+elif v2b_rows:
     logger.error(
         "[full_cpcv-v2b] pre-flight: {} prior row(s) already exist with "
         "variation_id={!r}. Single-shot guard tripped -- re-running "
@@ -510,6 +524,15 @@ notes = (
     f"Schrimpf, Todorov (BIS WP 1087); Ruan & Streltsov (SSRN "
     f"4218907)."
 )
+if os.environ.get("GATE_V2_RERUN_2026_06_11") == "1":
+    notes = (
+        "Extended-window re-test under gate spec v2 (2026-06-11 work "
+        "order): same hypothesis + params as the 2026-05-08 V2b trial, "
+        "regenerated substrate window (data_start from funding/perp "
+        "availability, dev_end 2025-05-01), units-correct DSR/MinTRL, "
+        "family-scaled eq.7, neutral PSR baseline gate. Consumes no "
+        "new variation slot. " + notes
+    )
 
 event = {
     "strategy_id": STRATEGY_ID,
@@ -563,9 +586,14 @@ clean_post_v2b = [
     if r.get("variation_id") == VARIATION_ID
     and not r.get("superseded_by")
 ]
-assert len(clean_post_v2b) == 1, (
-    f"expected exactly 1 clean V2b full_cpcv row after append, got "
-    f"{len(clean_post_v2b)}"
+_prior_clean_fc = [
+    r for r in v2b_rows
+    if r.get("trial_type") == "full_cpcv" and not r.get("superseded_by")
+]
+_expected_clean = (len(_prior_clean_fc) if _RERUN_OK else 0) + 1
+assert len(clean_post_v2b) == _expected_clean, (
+    f"expected {_expected_clean} clean V2b full_cpcv row(s) after "
+    f"append, got {len(clean_post_v2b)}"
 )
 new_row = clean_post_v2b[-1]
 assert "cpcv" in new_row and "sharpe_distribution" in new_row["cpcv"], (

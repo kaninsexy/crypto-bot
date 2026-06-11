@@ -367,20 +367,31 @@ def load_dev(strategy_id: str) -> pd.DataFrame | dict[str, pd.DataFrame]:
         raise StrategyNotInManifest(f"'{strategy_id}' not found in holdout manifest.")
     entry = manifest[strategy_id]
     holdout_start = pd.Timestamp(entry["holdout_start"])
+    # 2026-06-11 bug fix (contract-preserving): this function's
+    # documented contract is "[data_start, holdout_start)" but the
+    # implementation passed after_ts=None, returning every cached row
+    # before holdout_start.  Invisible while cache files started
+    # exactly at data_start; the 2026-06-11 extended-window backfill
+    # made caches deeper than some entries' data_start (e.g.
+    # FundingRateHarvest_BTC: spot/perp cached from 2020-11 but
+    # data_start funding-bound at 2021-08-31), so the lower bound now
+    # has to be applied for the manifest to stay the substrate's
+    # source of truth.
+    data_start = pd.Timestamp(entry["data_start"])
 
     legs = _get_legs(entry)
     if legs is not None:
         return _build_legs_dict(
             legs,
             entry["timeframe"],
-            after_ts=None,
+            after_ts=data_start,
             before_ts=holdout_start,
         )
 
     return _build_df(
         _get_symbols(entry),
         entry["timeframe"],
-        after_ts=None,
+        after_ts=data_start,
         before_ts=holdout_start,
     )
 

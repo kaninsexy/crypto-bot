@@ -587,6 +587,28 @@ funding-harvest substrate appears to be structurally bear-trapped
 in the post-2024 carry regime; no construction tested so far
 recovers edge.
 
+### V2b extended-window re-test (2026-06-11, gate spec v2 — under_tested on dev)
+
+| field | value |
+|---|---|
+| trial_id | 2567dbd3eb9a442986a5f83a1ceddd7e |
+| dev window | 2021-08-31T16:00Z -> 2025-05-01T00:00Z (44.0 months, funding-archive-bound) |
+| MinTRL pre-check @ SR 1.0 | TESTABLE: 32,112 dev bars >= 23,746 required |
+| vol_regime_threshold | 0.522038 (recalibrated by the pre-specified dev-median rule; was 0.428442 — params_hash drift is this constant only, spec unchanged) |
+| headline dev Sharpe | **+0.5007** (vs +2.8992 on the old 2023-05->2025-09 window) |
+| CPCV dist | mean +1.959, std 4.00, p50 +0.056 (blocks 6-8, 2024 bull, carry the mean) |
+| verdict (gate v2) | **under_tested** — MinTRL at realized SR 0.50 = 179,275 bars (~20.5y) >> 31,602 available |
+| forensic gates | neutral PSR ~0.76 (< 0.95 floor); family-scaled DSR 0.0439 vs sr_zero 1.738 (carry family N=4) |
+| n_trades / signal events | 45 / 4,011 |
+
+Reading: the V2b structural claim (LV-regime-gated carry survives) does
+not hold over a window including the 2021-09 -> 2022 carry-pool
+collapse. The original dev KEEP was a bull-window artifact — consistent
+with the 2026-05-08 holdout failure (-1.14) and the 2026-06 audit's
+S3/regime finding. Notes field carries the "extended-window re-test
+under gate spec v2" marker; per-bar return series persisted under the
+trial_id.
+
 ## Variation #2 — `phase4b-delta-neutral-top-N-funding-v1` (STUB, NOT QUEUED)
 
 Multi-pair selection layer: rank OKX USDT-M perps by current
