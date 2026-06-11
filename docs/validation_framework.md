@@ -1,11 +1,102 @@
-# Validation Framework (Phase 3b)
+# Validation Framework (Phase 3b; gate spec v2 as of 2026-06-11)
 
-Last updated: 2026-04-25
+Last updated: 2026-06-11 (gate spec v2 — pre-authorized edit per the
+2026-06-11 work order implementing
+`docs/gate_recalibration_audit_2026-06.md`)
 
 This document describes the statistical validation framework that will gate
 every strategy and the portfolio as a whole before anything moves toward
 deployment. It is the authoritative reference for what "validated" means on
 this project. Modifications require human approval (see `CLAUDE.md`).
+
+## Gate spec v2 (2026-06-11)
+
+The 2026-06 gate-recalibration audit
+(`docs/gate_recalibration_audit_2026-06.md`) found five defects in the
+v1 gates; this section is the canonical record of the corrections.
+Sections below are amended in place where v1 text was wrong; where v1
+behaviour is described for historical context it is marked SUPERSEDED.
+
+**1. Units fix (BLP eq. 9/13).** The eq.9 SR-estimator variance and
+eq.13 MinTRL formulas operate in per-bar units; v1 plugged the
+engine's ANNUALISED Sharpe into them, inflating the deflation z-score
+by ~√(bars-per-year) (≈19× at 1d, ≈94× at 1h). Consequence: every
+positive-Sharpe trial recorded `dsr_validation = 1.0` (saturated) and
+absurdly small `mintrl` values (6–286 bars). v2:
+`deflated_sharpe` / `min_track_record_length` take a REQUIRED
+`bars_per_year` argument and convert internally
+(`sr_pb = sr_ann / √bars_per_year`); result dataclasses echo both unit
+systems; `CPCVResult.candle_duration_h` lets the adapters derive the
+frequency exactly from the data's own index.
+
+> **ALL `dsr_validation` and `mintrl` values persisted in
+> `backtest/trials.log` BEFORE commit `2af7cd8` (2026-06-11) are
+> units-invalid. They must not be compared against post-fix values,
+> used as thresholds, or cited as probabilities/sample sizes. The
+> rows themselves remain valid trial records (sharpe, n_trades,
+> distribution stats are unaffected).**
+
+**2. Cross-trial variance scaling (BLP eq. 7).** v1 computed
+`sr_zero_expected` as the bare Gumbel term (implicit V[{SR_n}] = 1.0
+in annualised units, and per-strategy N that equalled 1 for most
+Phase-4 first variations — a double no-op). v2:
+
+    sr_zero_expected = sqrt(V[{SR_n}]) × [(1−γ)Φ⁻¹(1−1/N) + γΦ⁻¹(1−1/(N·e))]
+
+with V[{SR_n}] = realized population variance of observed annualised
+Sharpes across trials in the SAME strategy family, and N = the
+per-family trial count (+1 for the trial being deflated). The family
+taxonomy lives in `backtest/strategy_families.json` (non-sacred;
+ex-ante assignments by anomaly mechanism, never by observed Sharpe;
+8 families per the audit's Appendix A). Families with < 2 finite
+trials fall back to V = 1.0 (conservative) with a warning
+(`backtest/families.py`).
+
+**3. Verdict gates (composition layer, `backtest/verdict.py`).**
+Preconditions unchanged in shape (trade/signal-event floor 30 +
+MinTRL, now units-correct). Quality gates:
+
+- *mt gate:* corrected DSR ≥ 0.95 (subsumes the v1 raw
+  `SR > sr_zero_expected`; margins still recorded as forensics).
+- *baseline gate, directional/long-only:* BOTH required —
+  (a) OLS alpha of per-bar strategy returns on same-instrument
+  buy-and-hold returns > 0 at 95 % one-sided with Newey-West (HAC)
+  standard errors, and (b) annualised information ratio vs B&H ≥ 0.5.
+- *baseline gate, market/delta-neutral* (taxonomy flag
+  `"neutral": true`): PSR(SR > 0) ≥ 0.95 against benchmark 0 — a
+  B&H comparison is meaningless for a delta-neutral book.
+
+The v1 raw-Sharpe-beats-B&H comparison retired strategies for failing
+to beat a 1.94-Sharpe bull-window B&H with no significance test
+(audit §6 found three retirements that pass the corrected family-layer
+gates). It survives only as the forensic fields
+`baseline_sharpe_at_eval` / `sr_margin_vs_baseline`.
+
+**4. Per-bar return persistence.** Every trial run persists its
+per-bar strategy return series (and aligned benchmark series) to
+`backtest/reports/per_bar_returns/<trial_id>.parquet` via
+`backtest.trials.record_trial`'s optional per-bar arguments (wired in
+`runner.py` and the trial-script template pattern). The audit's S1
+and holdout-bootstrap analyses were impossible because these series
+were never saved; rows recorded before 2026-06-11 remain
+unrecoverable. The trials.log SCHEMA is unchanged — the parquet is a
+sidecar keyed by `trial_id`.
+
+**5. Event-based block sizing.** `CPCVConfig.block_mode = "event"`
+(default `"calendar"`, unchanged behaviour) sizes blocks by equal
+signal-event count via `locate_signal_events`, with a hard floor of
+5 blocks × 5 events = 25 total events. Built for sparse event-driven
+designs that died as CPCVError under calendar deciles (audit §3).
+Single-symbol only this iteration.
+
+**Expected consequence of the units fix — read before interpreting
+new verdicts.** Units-correct MinTRL at annualised |SR| ≈ 1.0 is
+≈ 2.71 YEARS of history regardless of bar frequency. The ~29-month
+dev windows therefore render `under_tested` for most moderate-Sharpe
+strategies (audit §4: minimum detectable annualised SR on the current
+windows is ≈ 1.03–1.07). That is the honest reading of the data, not
+a harness bug: claims the window cannot support are neither kept nor
+retired.
 
 ## Two-way data split (80 / 20)
 
@@ -82,8 +173,13 @@ instead of one, which preserves the multi-sample basis DSR requires.
 
 ### Block construction
 
-- Equal-row split into N = 10 blocks (configurable; calibration
-  pending in Phase 3b step 6).
+- Default (`block_mode="calendar"`): equal-row split into N = 10
+  blocks (configurable; calibration pending in Phase 3b step 6).
+- Gate spec v2 option (`block_mode="event"`): contiguous blocks sized
+  by EQUAL SIGNAL-EVENT COUNT via `CPCVConfig.locate_signal_events`,
+  minimum 5 blocks of 5 events (25 total). For sparse event-driven
+  designs whose events concentrate into too few calendar blocks.
+  Single-symbol only this iteration.
 - For multi-symbol strategies (DualMomentum), the split is on the
   timestamp intersection across symbols so per-symbol blocks cover
   the same calendar window.
@@ -122,18 +218,20 @@ DSR adjusts an observed Sharpe for:
 
 The output is a probability that the observed Sharpe is not a false positive
 given the multiple-testing context. This probability is the keep / reject
-gate.
+gate: under gate spec v2 the mt gate is **corrected DSR ≥ 0.95**, with
+`bars_per_year` conversion and family-scaled `sr_zero_expected` per
+§ Gate spec v2.
 
-At production T (~20k bars on hourly candles), the deflated test statistic
-Z = (SR − sr_zero_expected) / σ_SR has very large leverage on the SR gap
-because √(T−1) ≈ 141. The transition between DSR ≈ 0 and DSR ≈ 1 collapses
-into a Sharpe band roughly 0.05 wide, narrower than typical strategy
-run-to-run noise. The implication: DSR is no longer a graded probability
-but a binary "above or below sr_zero_expected(N)" indicator. The verdict
-tree below uses that binary directly; the DSR float is recorded for
-forensics, not used for gating. Empirically confirmed via
-`backtest/calibration.py` (synthetic harness across student-t and
-skewed-student-t at T=20000, N ∈ {1, 5, 10, 20, 50}).
+> SUPERSEDED (v1 historical note): the v1 framework observed that DSR
+> "saturates to a step function at production T" and therefore gated
+> on the raw binary `SR > sr_zero_expected(N)`. The 2026-06 audit
+> showed that saturation was an artifact of the units bug (annualised
+> SR in the per-bar eq.9 inflated z by ~√bars-per-year), not a
+> property of DSR. Units-correct DSR discriminates properly — the
+> zero-edge calibration test in `backtest/tests/test_dsr.py`
+> (`test_zero_edge_synthetic_does_not_clear_095`) pins this. The v1
+> `backtest/calibration.py` thresholds derived under the old units
+> are likewise invalid for comparison against post-fix DSR values.
 
 ## Verdict tree
 
@@ -145,27 +243,30 @@ probability is no longer a tunable gate. The verdict logic reflects this:
 binary keep/retire on the quality side, with an under-tested precondition
 for strategies that don't have enough data to render a verdict at all.
 
-### Three signals
+### Three signals (gate spec v2)
 
-- SR > sr_zero_expected(N) — multiple-testing null. PASS = the observed
-  Sharpe is above what N rounds of trial-fishing would produce on average.
-  FAIL = indistinguishable from MT noise.
-- SR > buy_and_hold_sharpe — passive baseline. PASS = the strategy adds
-  value over holding the asset. FAIL = passive does as well or better, net
-  of strategy fees and operational risk.
-- MinTRL preconditions — bar-count via BLP eq. 13 plus a heuristic
-  trade-count floor (total_trades >= 30). PASS = enough data for the SR
-  estimate to be statistically meaningful. FAIL = under-tested.
+- Corrected DSR ≥ 0.95 — multiple-testing null with family-scaled
+  eq.7 haircut and per-bar units. PASS = the observed Sharpe is
+  confidently above what N family trials of trial-fishing would
+  produce. FAIL = indistinguishable from MT noise.
+- Baseline gate — directional: NW-alpha > 0 at 95 % AND annualised
+  IR ≥ 0.5 vs same-instrument B&H; delta-neutral: PSR(SR>0) ≥ 0.95.
+  PASS = the strategy adds statistically significant value over the
+  passive alternative (or over zero, for a neutral book).
+- MinTRL preconditions — bar-count via BLP eq. 13 (units-correct)
+  plus a heuristic trade-count floor (total_trades >= 30, or
+  signal_event_count >= 30 when supplied). PASS = enough data for
+  the SR estimate to be statistically meaningful. FAIL = under-tested.
 
 ### Tree
 
     Precondition (compute first):
-      if total_trades < 30 OR T < min_trl:
+      if event_floor_fail OR T < min_trl:
           verdict = "under_tested"
           # quality bools not computed; recorded as None
 
     Quality (only if precondition passes):
-      if SR > sr_zero_expected(N) AND SR > buy_and_hold_sharpe:
+      if DSR >= 0.95 AND baseline_gate_pass:
           verdict = "keep"
       else:
           verdict = "retire"
@@ -216,6 +317,12 @@ work harder to clear it. That is the intended behaviour.
 The schema for `trials.log` is part of the sacred harness; schema changes
 require human approval (per `CLAUDE.md`).
 
+Gate spec v2 adds a SIDECAR (not a schema change): each trial's
+per-bar strategy/benchmark return series persists to
+`backtest/reports/per_bar_returns/<trial_id>.parquet`, joined on
+`trial_id`. Rows recorded before 2026-06-11 have no sidecar and their
+per-bar series are unrecoverable (audit §2).
+
 ## Minimum Track Record Length (MinTRL)
 
 Secondary sanity check, also from Bailey & López de Prado. MinTRL estimates
@@ -224,6 +331,14 @@ distinguishable from zero at a given confidence level. If a strategy has
 fewer observations than MinTRL, it is flagged as *under-tested* rather than
 passed or failed. An under-tested strategy can be kept on paper for further
 data collection, but it does not clear the deploy gate on its own.
+
+Gate spec v2 units note: eq.13 runs on the PER-BAR Sharpe
+(`sr_ann / √bars_per_year`). At annualised |SR| ≈ 1.0 the requirement
+is ≈ 2.71 years of history, frequency-independent to first order —
+higher-frequency bars do not shorten the calendar requirement. The
+`mintrl` values persisted before 2026-06-11 were computed with the
+annualised SR plugged in directly and are units-invalid (see § Gate
+spec v2).
 
 The implementation is bar-level: T = len(returns), where the returns series
 is the per-bar return vector that the CPCV adapter produces by concatenating
@@ -236,9 +351,16 @@ with bar-level MinTRL inside the verdict tree's under-tested branch.
 
 ## Baseline comparison
 
-Every strategy's Sharpe must beat a buy-and-hold Sharpe on its trading pair
-over the same period. This is a floor, not a ceiling. A strategy that merely
-matches buy-and-hold is not adding value relative to the passive alternative.
+Gate spec v2: the baseline floor is statistical, not a raw-Sharpe
+race. Directional/long-only strategies must show (a) positive OLS
+alpha of per-bar strategy returns on same-instrument buy-and-hold
+returns, significant at 95 % one-sided under Newey-West (HAC) errors,
+AND (b) an annualised information ratio vs that benchmark of ≥ 0.5.
+Market/delta-neutral strategies (taxonomy `"neutral": true`) are
+benchmarked against zero: PSR(SR > 0) ≥ 0.95. The v1 raw comparison
+("strategy Sharpe > B&H Sharpe, strict") is recorded as forensics
+only — the audit showed it retired strategies for failing to beat a
+1.94-Sharpe bull-window B&H with no significance test at all.
 
 For portfolio-level validation (Phase 3d), the baseline is an equal-weighted
 passive portfolio of the same instruments. The combined strategy portfolio
