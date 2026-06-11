@@ -1,7 +1,47 @@
 # Bot Status
 
-Last updated: 2026-05-02 (post Phase 4.B Variation #1 final_gate retire)
+Last updated: 2026-06-11 (holdout regeneration + gate-spec-v2 re-run batch)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
+
+## Holdout regeneration 2026-06-11 (extended window) — DISCLOSURE
+
+The holdout split was regenerated on 2026-06-11 (human pre-authorized,
+gate-spec-v2 re-run work order; audit events in
+`backtest/holdout_access.log`, caller
+`phase4.gate_v2_rerun_batch.manifest_regen`):
+
+- `data_start` = max(2021-01-01, first available candle per substrate).
+  Backfilled bounds: BTC/ETH/SOL/XRP/ADA/AVAX/DOT/LINK/LTC/UNI spot 1d
+  + BTC spot/perp 1h from 2020-11-10/11 (OKX archive depth);
+  **BNB/USDT from 2022-12-21** (OKX listing — this caps every
+  BNB-containing basket's intersection); BTC funding from
+  **2021-08-31** (OKX archive starts 2021-09); Google Trends
+  2021-05-02 → 2026-05-03 (pytrends 5-y window).
+- Single global boundary: `dev_end = holdout_start =`
+  **2025-05-01T00:00Z**; `data_end` = latest complete day (2026-06-11
+  bound, earlier where a substrate ends earlier). Dev ≈ 52 months for
+  BTC-only substrates, 44 months for FundingRateHarvest_BTC
+  (funding-bound), **28.3 months for BNB baskets**.
+- Holdout single-access enforcement stays ON; unattributed
+  regeneration events no longer reset it (2026-06-11 harness fix).
+
+**Contamination disclosure (required reading before any new-holdout
+verdict):**
+
+1. **AttentionMomentum** and **FundingRateHarvest_BTC** evaluated the
+   OLD holdout window (2025-09-22 → 2026-04/05) on 2026-05-08;
+   verdicts were observed (params NOT retuned since). Their
+   new-holdout verdicts carry a contamination asterisk.
+2. **Global overlap (applies to every strategy, not just the two
+   above):** the new holdout_start (2025-05-01) is EARLIER than the
+   old one (2025-09-12/22), so the new holdout's first ~4.5 months
+   were inside the OLD dev window, which every pre-2026-06-11 trial
+   read freely. No strategy's new-holdout verdict is on fully unseen
+   data; the only fully virgin segment is (old data_end ≈ 2026-04/05,
+   new data_end]. The work-order text described non-rerun strategies'
+   new holdout as "clean" — that holds only for the post-2026-04
+   tail; recorded here so the asterisk is applied evidence-side, not
+   prompt-side.
 
 ## Current state
 

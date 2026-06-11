@@ -1,109 +1,120 @@
 {
   "DCA": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "Supertrend": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "ETH/USDT"
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "ETH/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "MeanReversion": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "ETH/USDT"
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "ETH/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "GridTrading": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "SOL/USDT"
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "SOL/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "Breakout": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "AVAX/USDT"
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "AVAX/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "TrendFollowing": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "BearShort": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "VWAP": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "ETH/USDT"
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "ETH/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "VolatilityBreakout": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "DualMomentum": {
     "timeframe": "1h",
-    "data_start": "2023-04-30T11:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-14T13:24:00+00:00",
-    "holdout_start": "2025-09-14T13:24:00+00:00",
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
       "BNB/USDT",
       "SOL/USDT",
       "XRP/USDT"
-    ]
+    ],
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "FundingRateHarvest_BTC": {
     "timeframe": "1h",
     "signal_cadence": "8h",
-    "data_start": "2023-05-03T01:00:00+00:00",
-    "data_end": "2026-04-29T10:00:00+00:00",
-    "dev_end": "2025-09-22T22:36:00+00:00",
-    "holdout_start": "2025-09-22T22:36:00+00:00",
+    "data_start": "2021-08-31T16:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "legs": {
       "spot": "BTC/USDT",
       "perp": "BTC/USDT"
     },
-    "funding_cadence_hours": 8
+    "funding_cadence_hours": 8,
+    "notes": "CONTAMINATION ASTERISK: this strategy ran a final_gate/holdout evaluation on the OLD holdout window (2025-09-22 -> 2026-04/05) on 2026-05-08; the verdict was observed (params NOT retuned since). Any new-holdout verdict is doubly non-virgin: old holdout seen entirely; new-holdout overlap segment 2025-05-01 -> 2025-09-22 seen as dev. 2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "TrendFollowing_multi": {
     "timeframe": "1d",
-    "data_start": "2023-05-03T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -118,22 +129,24 @@
       "UNI/USDT"
     ],
     "strategy_warmup_candles": 126,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "IntradaySeasonalityEffects": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "MeanReversion_BTC_Residual": {
     "timeframe": "4h",
-    "data_start": "2023-04-30T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-13T00:00:00+00:00",
-    "holdout_start": "2025-09-13T00:00:00+00:00",
+    "data_start": "2023-03-06T08:00:00+00:00",
+    "data_end": "2026-05-05T04:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -143,40 +156,43 @@
       "ADA/USDT"
     ],
     "strategy_warmup_candles": 90,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "PairsTradingCointegration": {
     "timeframe": "1h",
     "data_start": "2023-03-06T07:00:00+00:00",
     "data_end": "2026-05-05T06:00:00+00:00",
-    "dev_end": "2025-09-16T01:24:00+00:00",
-    "holdout_start": "2025-09-16T01:24:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT"
     ],
     "strategy_warmup_candles": 888,
-    "min_tradeable_candles_per_block": 168
+    "min_tradeable_candles_per_block": 168,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "IdiosyncraticResidualTSMOM": {
     "timeframe": "1h",
-    "data_start": "2023-04-30T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-13T00:00:00+00:00",
-    "holdout_start": "2025-09-13T00:00:00+00:00",
+    "data_start": "2023-03-06T07:00:00+00:00",
+    "data_end": "2026-05-05T06:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "ETH/USDT",
       "BTC/USDT"
     ],
     "strategy_warmup_candles": 888,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "IlliquidityPremium": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -190,44 +206,48 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 30,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "SocialSentimentMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 14,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "ContrarianSearchVolume": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 28,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "VolumeWeightedTSMOM": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 22,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CrossSectionalReversal": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -241,14 +261,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 5,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CrossSectionalMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -262,14 +283,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "ShortTermCrossSectionalMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -283,14 +305,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 8,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CrossSectionalSkewness": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -304,14 +327,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 91,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "AttentionMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-05-03T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -320,48 +344,53 @@
       "XRP/USDT"
     ],
     "strategy_warmup_candles": 29,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "CONTAMINATION ASTERISK: this strategy ran a final_gate/holdout evaluation on the OLD holdout window (2025-09-22 -> 2026-04/05) on 2026-05-08; the verdict was observed (params NOT retuned since). Any new-holdout verdict is doubly non-virgin: old holdout seen entirely; new-holdout overlap segment 2025-05-01 -> 2025-09-22 seen as dev. 2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "IntradayMomentumReversal": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "VolatilityScaledTSMOM": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 32,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "IntradayJumpReversal": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "OvernightSessionReversal": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "DayOfWeekSeasonality": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -375,14 +404,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 63,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "DailyCrossSectionalReversal": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "ETH/USDT",
       "SOL/USDT",
@@ -395,24 +425,26 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 5,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "HurstExponentRegimeSwitch": {
     "timeframe": "4h",
-    "data_start": "2023-04-30T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-13T00:00:00+00:00",
-    "holdout_start": "2025-09-13T00:00:00+00:00",
+    "data_start": "2023-03-06T08:00:00+00:00",
+    "data_end": "2026-05-05T04:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 132,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CrossSectionalResidualReversal": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -426,14 +458,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CryptoSectorRotation": {
     "timeframe": "1d",
-    "data_start": "2023-03-07T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -448,14 +481,15 @@
       "UNI/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "AltcoinSeasonRotation": {
     "timeframe": "1d",
-    "data_start": "2023-03-07T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -470,14 +504,15 @@
       "UNI/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "LiquidityConditionedReversal": {
     "timeframe": "1d",
-    "data_start": "2023-03-07T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -492,14 +527,15 @@
       "UNI/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CryptoDualMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -513,14 +549,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 201,
-    "min_tradeable_candles_per_block": 60
+    "min_tradeable_candles_per_block": 60,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "MarketStateConditionedMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -534,14 +571,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 121,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "ExchangeNetflowReversal": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -555,14 +593,15 @@
       "LTC/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "NewsSentimentMomentum": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -573,42 +612,46 @@
       "AVAX/USDT"
     ],
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 30
+    "min_tradeable_candles_per_block": 30,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "PutCallRatioContrarian": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 75,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "ExchangeListingDrift": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTC/USDT",
     "strategy_warmup_candles": 31,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "DEXFlowSpillover": {
     "timeframe": "1h",
-    "data_start": "2023-04-20T15:00:00+00:00",
-    "data_end": "2026-04-19T14:00:00+00:00",
-    "dev_end": "2025-09-12T14:12:00+00:00",
-    "holdout_start": "2025-09-12T14:12:00+00:00",
-    "symbol": "BTC/USDT"
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTC/USDT",
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   },
   "CrossSectionalFundingRateCarry": {
     "timeframe": "1d",
-    "data_start": "2023-03-06T00:00:00+00:00",
-    "data_end": "2026-04-19T00:00:00+00:00",
-    "dev_end": "2025-09-22T00:00:00+00:00",
-    "holdout_start": "2025-09-22T00:00:00+00:00",
+    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_end": "2026-06-11T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbols": [
       "BTC/USDT",
       "ETH/USDT",
@@ -619,6 +662,7 @@
       "AVAX/USDT"
     ],
     "strategy_warmup_candles": 2,
-    "min_tradeable_candles_per_block": 10
+    "min_tradeable_candles_per_block": 10,
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
   }
 }

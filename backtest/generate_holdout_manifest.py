@@ -295,6 +295,115 @@ def regenerate_manifest(
     )
 
 
+def regenerate_manifest_explicit(
+    new_entries: dict,
+    *,
+    caller: str,
+    reason: str,
+) -> list[str]:
+    """Replace the manifest with caller-computed entries, with the same
+    audit semantics as `regenerate_manifest`.
+
+    Added 2026-06-11 (extended-window regeneration, human
+    pre-authorized): the legacy `regenerate_manifest` derives every
+    entry from `config.STRATEGY_SYMBOLS` + the global 1h timeframe +
+    the 80/20 calendar split, which cannot express the Phase-4
+    manifest (44 entries, per-strategy timeframes/substrates) nor an
+    explicitly chosen boundary.  This entry point takes the fully
+    computed entries and owns ONLY the audit trail + atomic write:
+
+      - caller/reason validated exactly like `regenerate_manifest`
+        (`<phase>.<who>.manifest_regen`).
+      - basic schema validation per entry (required fields + exactly
+        one substrate specifier) so a malformed regeneration cannot
+        land.
+      - one regenerated=true event per strategy whose holdout_start
+        changed (carrying old/new boundaries + caller + reason +
+        git_commit), one stale_dsr_warning event when any changed.
+
+    Returns the list of strategy_ids whose holdout_start changed.
+    """
+    if _REGEN_CALLER_RE.match(caller or "") is None:
+        raise InvalidRegenCaller(
+            f"caller {caller!r} does not match "
+            "<phase>.<who>.manifest_regen "
+            "(phases: phase3c phase3d phase4 phase5 manual)."
+        )
+    if not isinstance(reason, str) or not reason.strip():
+        raise InvalidRegenCaller(
+            "reason must be a non-empty string explaining why the "
+            "split is being redrawn"
+        )
+    if not _MANIFEST_PATH.exists():
+        raise FileNotFoundError(
+            f"Manifest not found at {_MANIFEST_PATH}. "
+            "Call generate_initial() first."
+        )
+    # Entry-shape validation (mirror holdout.load_manifest's rules so
+    # the file we write always loads).
+    required = {"timeframe", "data_start", "data_end", "dev_end", "holdout_start"}
+    substrate = ("symbol", "symbols", "legs")
+    for sid, entry in new_entries.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"entry for {sid!r} must be a dict")
+        missing = required - entry.keys()
+        if missing:
+            raise ValueError(
+                f"entry for {sid!r} missing required fields: {sorted(missing)}"
+            )
+        present = [f for f in substrate if f in entry]
+        if len(present) != 1:
+            raise ValueError(
+                f"entry for {sid!r} must have exactly one of "
+                f"{list(substrate)}; got {present}"
+            )
+
+    old_manifest: dict = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
+    stale: list[str] = []
+    for sid, new_entry in new_entries.items():
+        old_hs = old_manifest.get(sid, {}).get("holdout_start")
+        new_hs = new_entry["holdout_start"]
+        if old_hs != new_hs:
+            stale.append(sid)
+            append_jsonl(_ACCESS_LOG_PATH, {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "strategy_id": sid,
+                "regenerated": True,
+                "old_holdout_start": old_hs,
+                "new_holdout_start": new_hs,
+                "caller": caller,
+                "reason": reason,
+                "git_commit": _get_git_commit(),
+            })
+
+    _MANIFEST_PATH.write_text(
+        json.dumps(new_entries, indent=2), encoding="utf-8",
+    )
+
+    if stale:
+        warning = (
+            "STALE DSR: the following strategies had their split redrawn. "
+            "Prior holdout DSR results are invalid and must be recomputed "
+            f"on the new split: {stale}"
+        )
+        print(warning, file=sys.stderr)
+        append_jsonl(_ACCESS_LOG_PATH, {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "type": "stale_dsr_warning",
+            "message": warning,
+            "affected_strategies": stale,
+            "caller": caller,
+            "reason": reason,
+        })
+
+    print(
+        f"[regenerate_manifest_explicit] wrote {len(new_entries)} entries; "
+        f"{len(stale)} changed holdout_start.",
+        file=sys.stderr if stale else sys.stdout,
+    )
+    return stale
+
+
 # ── CLI convenience ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
