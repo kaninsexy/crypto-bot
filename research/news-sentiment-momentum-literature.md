@@ -118,6 +118,7 @@ rebalance / sizing / verdict logic is unaffected.
 |---|---|---|---|---|---|
 | news-sentiment-momentum | 2026-05-08 | retire | 1.4838 | 1.0000 | 1189 |
 | news-sentiment-momentum-gatev2-retest | 2026-06-11 | insufficient_data (pre-check; not run) | n/a | n/a | 0 |
+| news-sentiment-momentum (extended-window re-test) | 2026-06-11 | under_tested | 0.7185 | 0.0513 | 2071 |
 
 ### Extended-window re-test 2026-06-11 — MinTRL pre-check: INSUFFICIENT DATA
 
@@ -134,3 +135,15 @@ inflate the family multiple-testing count). Recorded here and in
 docs/bot_status.md. Unblocking requires either a longer wait or a
 basket change (dropping/substituting BNB = pair substitution = human
 decision per CLAUDE.md).
+
+### Extended-window re-test 2026-06-11b — RUN after BNB cross-venue backfill
+
+The earlier same-day MinTRL skip was unblocked by the BNB cross-venue
+backfill (Binance 2021-01-01->2022-12-21 spliced ahead of OKX; seam max
+close divergence 0.13%; see manifest notes + BNB-USDT_1d_66mo
+provenance sidecar). Dev window now 2021-01-01 (2021-05-02 for
+search-volume substrates) -> 2025-05-01. Same hypothesis + params, same
+variation_id, "extended-window re-test under gate spec v2" marker in
+the trials.log notes; no new variation slot.
+
+Outcome: UNDER_TESTED: units-correct MinTRL at realized SR 0.72 needs 1,876 daily bars vs 1,571 available. PROVENANCE CAVEAT: the sentiment proxy is volume-weighted log-return and BNB volume 2021-01-01->2022-12-21 is Binance volume (self-normalised per symbol over trailing 30 bars, which bounds but does not eliminate the cross-venue volume-regime mix; ~1/7 of basket symbols, ~45% of the window).

@@ -39,6 +39,7 @@ Output is ASCII-only (Windows cp1252 terminal compatibility).
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -434,6 +435,16 @@ def main() -> int:
         "Sources: Chen/Hafner/Weber (2023); Kalamara et al (2022); "
         "Burggraf (2022); Han/Kang/Ryu (2024)."
     )
+    if os.environ.get("GATE_V2_RERUN_2026_06_11") == "1":
+        notes = (
+            "Extended-window re-test under gate spec v2 (2026-06-11 "
+            "work order): same hypothesis + params as the original "
+            "trial, extended substrate window (BNB backfilled from "
+            "Binance 2021-01-01->2022-12-21, see manifest notes), "
+            "units-correct DSR/MinTRL, family-scaled eq.7, alpha/IR "
+            "baseline gate. Consumes no new variation slot. " + notes
+        )
+
     event = {
         "strategy_id": STRATEGY_ID,
         "variation_id": VARIATION_ID,

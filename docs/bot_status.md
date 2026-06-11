@@ -43,6 +43,31 @@ verdict):**
    tail; recorded here so the asterisk is applied evidence-side, not
    prompt-side.
 
+## Gate-spec-v2 re-run batch 2026-06-11b — post-BNB-backfill results
+
+BNB cross-venue backfill (Binance 2021-01-01->2022-12-21, seam max
+divergence 0.13%, provenance in manifest notes + cache sidecar)
+unblocked the four MinTRL-skipped candidates. Dev only; same
+variation_ids; gate spec v2.
+
+| Strategy | MinTRL pre-check | Dev verdict | Gate numbers | orig vs re-test sharpe |
+|---|---|---|---|---|
+| CrossSectionalMomentum | TESTABLE (1,581 >= 985) | **retire** (DSR floor) | alpha +0.89/yr p=0.0153 PASS; IR 0.525 PASS; DSR 0.787 < 0.95 FAIL (family sr_zero 0.61) | +1.6423 -> +0.9443 |
+| AltcoinSeasonRotation | TESTABLE | **retire** (DSR floor) | alpha +0.88/yr p=0.0155 PASS; IR 0.512 PASS; DSR 0.690 FAIL | +1.6767 -> +0.8359 |
+| NewsSentimentMomentum | TESTABLE | **under_tested** | MinTRL 1,876 > 1,571 bars; DSR(forensic) 0.051. VOLUME PROVENANCE CAVEAT: sentiment proxy consumes market volume; BNB segment is Binance volume | +1.4838 -> +0.7185 |
+| AttentionMomentum | TESTABLE (1,460 >= 994) | **under_tested** | MinTRL 1,666 > 1,450 bars; DSR(forensic) 0.081 | +2.1057 -> +0.7691 |
+
+Notable: CSMom + AltcoinSeason are the first trials to PASS the v2
+directional baseline gate (significant NW alpha AND IR >= 0.5 vs BTC
+B&H) — genuine alpha on 2021-2025, retired purely on the
+multiple-testing floor. Every re-test sharpe is roughly half its
+bull-window original; the audit's bull-window-inflation thesis holds
+across the board.
+
+FundingRateHarvest_BTC RETIRED 2026-06-11 and archived
+(strategies/archive/funding_rate_harvest/KILL_REPORT.md); Phase 4.B
+closed with 0 passers.
+
 ## Gate-spec-v2 re-run batch 2026-06-11 — running results
 
 Pre-justified batch (work order 2026-06-11); same variation_ids as the

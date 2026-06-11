@@ -92,6 +92,7 @@ implementation tests.
 | search-volume-momentum | 2026-05-07 | keep | 2.1057 | 1.0000 | 57 |
 | search-volume-momentum-holdout | 2026-05-08 | retire_holdout | -1.1771 | n/a | 14 |
 | search-volume-momentum-gatev2-retest | 2026-06-11 | insufficient_data (pre-check; not run) | n/a | n/a | 0 |
+| search-volume-momentum (extended-window re-test) | 2026-06-11 | under_tested | 0.7691 | 0.0806 | 103 |
 
 ### Variation 1 -- search-volume-momentum (dev CPCV)
 - trial_id: 8c1278b5d259411b969260a61d5cea28
@@ -119,3 +120,15 @@ inflate the family multiple-testing count). Recorded here and in
 docs/bot_status.md. Unblocking requires either a longer wait or a
 basket change (dropping/substituting BNB = pair substitution = human
 decision per CLAUDE.md).
+
+### Extended-window re-test 2026-06-11b — RUN after BNB cross-venue backfill
+
+The earlier same-day MinTRL skip was unblocked by the BNB cross-venue
+backfill (Binance 2021-01-01->2022-12-21 spliced ahead of OKX; seam max
+close divergence 0.13%; see manifest notes + BNB-USDT_1d_66mo
+provenance sidecar). Dev window now 2021-01-01 (2021-05-02 for
+search-volume substrates) -> 2025-05-01. Same hypothesis + params, same
+variation_id, "extended-window re-test under gate spec v2" marker in
+the trials.log notes; no new variation slot.
+
+Outcome: UNDER_TESTED: MinTRL at realized SR 0.77 needs 1,666 daily bars vs 1,450 available (window trends-floored at 2021-05-02). The original +2.11 dev KEEP does not reproduce on the extended window (0.77) — bull-window artifact, consistent with the holdout failure.

@@ -60,6 +60,7 @@ configuration.
 |---|---|---|---|---|---|
 | cs-momentum-long-winners | 2026-05-07 | retire | 1.6423 | 1.0000 | 73 |
 | cs-momentum-long-winners-gatev2-retest | 2026-06-11 | insufficient_data (pre-check; not run) | n/a | n/a | 0 |
+| cs-momentum-long-winners (extended-window re-test) | 2026-06-11 | retire | 0.9443 | 0.7870 | 144 |
 
 ### Extended-window re-test 2026-06-11 — MinTRL pre-check: INSUFFICIENT DATA
 
@@ -76,3 +77,15 @@ inflate the family multiple-testing count). Recorded here and in
 docs/bot_status.md. Unblocking requires either a longer wait or a
 basket change (dropping/substituting BNB = pair substitution = human
 decision per CLAUDE.md).
+
+### Extended-window re-test 2026-06-11b — RUN after BNB cross-venue backfill
+
+The earlier same-day MinTRL skip was unblocked by the BNB cross-venue
+backfill (Binance 2021-01-01->2022-12-21 spliced ahead of OKX; seam max
+close divergence 0.13%; see manifest notes + BNB-USDT_1d_66mo
+provenance sidecar). Dev window now 2021-01-01 (2021-05-02 for
+search-volume substrates) -> 2025-05-01. Same hypothesis + params, same
+variation_id, "extended-window re-test under gate spec v2" marker in
+the trials.log notes; no new variation slot.
+
+Outcome: RETIRE on the family-scaled DSR floor (0.787 < 0.95; cs-momentum family sr_zero 0.61) — but BOTH legs of the new directional baseline gate PASS for the first time: NW alpha +0.89/yr (p=0.0153) and IR 0.525 vs BTC B&H. The audit's COND-FLIP is half-confirmed: genuine alpha exists over the 2021-2025 window; it does not clear the multiplicity haircut.
