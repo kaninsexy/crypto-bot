@@ -493,7 +493,15 @@ def main() -> int:
         "buy_and_hold_sharpe": float(verdict.baseline_sharpe_at_eval),
         "notes": notes,
     }
-    _trials.record_trial(event)
+    _trials.record_trial(
+        event,
+        # Gate spec v2 (2026-06-11): persist the per-bar series the
+        # verdict ran on (audit: never saved -> S1/bootstrap blocked).
+        per_bar_returns=concat_returns,
+        per_bar_benchmark=(
+            baseline_df["close"].pct_change().dropna().values.astype(float)
+        ),
+    )
     print(
         f"\nappended trial row to backtest/trials.log | "
         f"trial_id={event['trial_id']} | "

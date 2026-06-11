@@ -814,7 +814,17 @@ def _run_strategy_final_gate(
         "baseline_sharpe_at_eval": verdict.baseline_sharpe_at_eval,
         "total_trades": int(result.metrics.total_trades),
     }
-    _trials.record_trial(event)
+    # Per-bar persistence (gate spec v2): the audit's S4 holdout
+    # bootstrap was BLOCKED because these series were never saved.
+    _per_bar_series = result.equity_curve.pct_change().dropna()
+    _trials.record_trial(
+        event,
+        per_bar_returns=_per_bar_series.values.astype(float),
+        per_bar_benchmark=(
+            primary_df["close"].pct_change().dropna().values.astype(float)
+        ),
+        per_bar_index=_per_bar_series.index,
+    )
 
     return result, verdict
 
@@ -1191,8 +1201,16 @@ def _run_strategy_dev_cpcv(
         n_trials=n_trials,
     )
 
-    # 9. Append (atomic — last side-effect).
-    _trials.record_trial(row)
+    # 9. Append (atomic — last side-effect) + per-bar persistence
+    #    (gate spec v2: the audit found these series were never saved,
+    #    blocking alpha/IR and bootstrap analysis retroactively).
+    _trials.record_trial(
+        row,
+        per_bar_returns=returns_for_dsr,
+        per_bar_benchmark=(
+            primary_dev_df["close"].pct_change().dropna().values.astype(float)
+        ),
+    )
 
     res = DevCpcvResult(
         strategy_id=strategy_id,

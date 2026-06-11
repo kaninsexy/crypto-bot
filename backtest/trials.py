@@ -546,13 +546,31 @@ def _warn_on_variation_drift(event: dict) -> None:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def record_trial(event: dict) -> None:
+def record_trial(
+    event: dict,
+    *,
+    per_bar_returns=None,
+    per_bar_benchmark=None,
+    per_bar_index=None,
+) -> None:
     """Validate and append one trial event to backtest/trials.log.
 
     Mutates `event` in-place: schema_version, trial_id, ts (if absent),
     git_commit (if absent), and params_hash are written by this
     function and overwrite any caller-supplied values for
     schema_version, trial_id, and params_hash.
+
+    Per-bar persistence (gate spec v2, 2026-06-11 — additive optional
+    keyword args; the trials.log SCHEMA is unchanged): when
+    `per_bar_returns` is supplied, the series (plus the optional
+    aligned `per_bar_benchmark` and `per_bar_index`) is written to
+    backtest/reports/per_bar_returns/<trial_id>.parquet via
+    `backtest.per_bar_store.persist_per_bar_returns` AFTER the row
+    append succeeds.  The 2026-06 audit found per-bar series were
+    never persisted, making alpha/IR and bootstrap analysis
+    retroactively impossible — this hook is the closure.  A failed
+    parquet write warns and does not raise (the row is the primary
+    record).
 
     Raises:
         TrialSchemaError              — schema validation failed.
@@ -602,6 +620,25 @@ def record_trial(event: dict) -> None:
 
     # 8. Append.
     append_jsonl(_TRIALS_LOG_PATH, event)
+
+    # 9. Per-bar persistence (gate spec v2) — after the append so the
+    #    parquet is keyed by the final trial_id; never raises.
+    if per_bar_returns is not None:
+        # Lazy import keeps the writer importable without pandas/
+        # pyarrow in minimal tooling contexts.
+        from backtest.per_bar_store import persist_per_bar_returns
+
+        persist_per_bar_returns(
+            trial_id=event["trial_id"],
+            strategy_returns=per_bar_returns,
+            benchmark_returns=per_bar_benchmark,
+            index=per_bar_index,
+            meta={
+                "strategy_id": event.get("strategy_id"),
+                "variation_id": event.get("variation_id"),
+                "trial_type": event.get("trial_type"),
+            },
+        )
 
 
 def count_trials_for_dsr(strategy_id: str) -> int:

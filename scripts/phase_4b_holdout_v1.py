@@ -467,7 +467,15 @@ event = {
 }
 
 logger.info("[holdout-v1] recording final_gate row via trials.record_trial")
-_trials.record_trial(event)
+_trials.record_trial(
+    event,
+    # Gate spec v2 (2026-06-11): persist the per-bar series the
+    # verdict ran on (audit: never saved -> S1/bootstrap blocked).
+    per_bar_returns=returns,
+    per_bar_benchmark=(
+        baseline_df["close"].pct_change().dropna().values.astype(float)
+    ),
+)
 
 
 # ── 11. Verify row + summary print ───────────────────────────────────────────
