@@ -111,7 +111,7 @@
   },
   "TrendFollowing_multi": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -130,7 +130,7 @@
     ],
     "strategy_warmup_candles": 126,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "IntradaySeasonalityEffects": {
     "timeframe": "1h",
@@ -189,7 +189,7 @@
   },
   "IlliquidityPremium": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -207,7 +207,7 @@
     ],
     "strategy_warmup_candles": 30,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "SocialSentimentMomentum": {
     "timeframe": "1d",
@@ -244,7 +244,7 @@
   },
   "CrossSectionalReversal": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -262,11 +262,11 @@
     ],
     "strategy_warmup_candles": 5,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "CrossSectionalMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -284,11 +284,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "ShortTermCrossSectionalMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -306,11 +306,11 @@
     ],
     "strategy_warmup_candles": 8,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "CrossSectionalSkewness": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -328,11 +328,11 @@
     ],
     "strategy_warmup_candles": 91,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "AttentionMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-05-02T00:00:00+00:00",
     "data_end": "2026-05-03T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -345,7 +345,7 @@
     ],
     "strategy_warmup_candles": 29,
     "min_tradeable_candles_per_block": 10,
-    "notes": "CONTAMINATION ASTERISK: this strategy ran a final_gate/holdout evaluation on the OLD holdout window (2025-09-22 -> 2026-04/05) on 2026-05-08; the verdict was observed (params NOT retuned since). Any new-holdout verdict is doubly non-virgin: old holdout seen entirely; new-holdout overlap segment 2025-05-01 -> 2025-09-22 seen as dev. 2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "CONTAMINATION ASTERISK: this strategy ran a final_gate/holdout evaluation on the OLD holdout window (2025-09-22 -> 2026-04/05) on 2026-05-08; the verdict was observed (params NOT retuned since). Any new-holdout verdict is doubly non-virgin: old holdout seen entirely; new-holdout overlap segment 2025-05-01 -> 2025-09-22 seen as dev. 2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "IntradayMomentumReversal": {
     "timeframe": "1h",
@@ -387,7 +387,7 @@
   },
   "DayOfWeekSeasonality": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -405,11 +405,11 @@
     ],
     "strategy_warmup_candles": 63,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "DailyCrossSectionalReversal": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -426,7 +426,7 @@
     ],
     "strategy_warmup_candles": 5,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "HurstExponentRegimeSwitch": {
     "timeframe": "4h",
@@ -441,7 +441,7 @@
   },
   "CrossSectionalResidualReversal": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -459,11 +459,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "CryptoSectorRotation": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -482,11 +482,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "AltcoinSeasonRotation": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -505,11 +505,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "LiquidityConditionedReversal": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -528,11 +528,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "CryptoDualMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -550,11 +550,11 @@
     ],
     "strategy_warmup_candles": 201,
     "min_tradeable_candles_per_block": 60,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "MarketStateConditionedMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -572,11 +572,11 @@
     ],
     "strategy_warmup_candles": 121,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "ExchangeNetflowReversal": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -594,11 +594,11 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "NewsSentimentMomentum": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -613,7 +613,7 @@
     ],
     "strategy_warmup_candles": 31,
     "min_tradeable_candles_per_block": 30,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   },
   "PutCallRatioContrarian": {
     "timeframe": "1d",
@@ -648,7 +648,7 @@
   },
   "CrossSectionalFundingRateCarry": {
     "timeframe": "1d",
-    "data_start": "2022-12-21T00:00:00+00:00",
+    "data_start": "2021-01-01T00:00:00+00:00",
     "data_end": "2026-06-11T00:00:00+00:00",
     "dev_end": "2025-05-01T00:00:00+00:00",
     "holdout_start": "2025-05-01T00:00:00+00:00",
@@ -663,6 +663,6 @@
     ],
     "strategy_warmup_candles": 2,
     "min_tradeable_candles_per_block": 10,
-    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure."
+    "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
   }
 }
