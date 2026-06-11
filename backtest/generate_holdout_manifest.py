@@ -33,6 +33,7 @@ CLI usage (optional convenience):
 
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,18 @@ import pandas as pd
 
 import config
 from backtest.logs import append_jsonl
+
+
+def _get_git_commit() -> str:
+    """Short SHA for event attribution; mirrors holdout._get_git_commit."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
 
 
 # ── Module-level path configuration (override in tests via monkeypatch) ───────
@@ -161,17 +174,68 @@ def generate_initial() -> None:
     print(f"[generate_initial] Access log: {_ACCESS_LOG_PATH}")
 
 
-def regenerate_manifest(strategies: list[str] | None = None) -> None:
+# Caller convention for regeneration events (2026-06-11, work-order
+# item 7d).  Mirrors holdout.load_holdout's <phase>.<who>.<purpose>
+# convention with the purpose fixed to `manifest_regen`.  Before this,
+# regenerated=true events carried NO attribution — the 2026-05-08
+# AttentionMomentum access-flag reset ("Task 2") appears in
+# holdout_access.log with no caller, and an unattributed regeneration
+# silently resets BOTH the single-access invariant and the final-gate
+# guard.  See holdout._regen_resets_access for the enforcement side.
+_REGEN_CALLER_RE = re.compile(
+    r"^(phase3c|phase3d|phase4|phase5|manual)"
+    r"\.([A-Za-z][A-Za-z0-9_]*)"
+    r"\.manifest_regen$"
+)
+
+
+class InvalidRegenCaller(ValueError):
+    """regenerate_manifest caller/reason missing or malformed."""
+
+
+def regenerate_manifest(
+    strategies: list[str] | None = None,
+    *,
+    caller: str,
+    reason: str,
+) -> None:
     """Redraw the holdout split for specified strategies (all if None).
 
+    Args:
+      strategies: Strategy IDs to regenerate; None = all.
+      caller:     REQUIRED (2026-06-11). Structured attribution string
+                  `<phase>.<who>.manifest_regen`, e.g.
+                  `manual.kanin.manifest_regen`. Recorded on every
+                  regenerated=true event. holdout.py honours regen
+                  events written after 2026-06-11 as access-flag
+                  resets ONLY when they carry a caller — an
+                  unattributed regeneration no longer re-opens the
+                  holdout.
+      reason:     REQUIRED non-empty free-text justification, recorded
+                  on the event.
+
     For each strategy whose holdout_start changed:
-      - Appends a regenerated=true event to holdout_access.log (one per strategy).
+      - Appends a regenerated=true event to holdout_access.log (one per
+        strategy), carrying caller + reason + git_commit.
     If any strategy changed:
       - Prints a STALE DSR warning to stderr naming affected strategies.
       - Appends one stale_dsr_warning event to holdout_access.log.
 
-    Raises FileNotFoundError if the manifest does not exist.
+    Raises:
+      FileNotFoundError   — manifest does not exist.
+      InvalidRegenCaller  — caller/reason missing or malformed.
     """
+    if _REGEN_CALLER_RE.match(caller or "") is None:
+        raise InvalidRegenCaller(
+            f"caller {caller!r} does not match "
+            "<phase>.<who>.manifest_regen "
+            "(phases: phase3c phase3d phase4 phase5 manual)."
+        )
+    if not isinstance(reason, str) or not reason.strip():
+        raise InvalidRegenCaller(
+            "reason must be a non-empty string explaining why the "
+            "split is being redrawn"
+        )
     if not _MANIFEST_PATH.exists():
         raise FileNotFoundError(
             f"Manifest not found at {_MANIFEST_PATH}. "
@@ -200,6 +264,10 @@ def regenerate_manifest(strategies: list[str] | None = None) -> None:
                 "regenerated": True,
                 "old_holdout_start": old_hs,
                 "new_holdout_start": new_hs,
+                # 2026-06-11 (item 7d): attribution is mandatory.
+                "caller": caller,
+                "reason": reason,
+                "git_commit": _get_git_commit(),
             })
 
         new_manifest[sid] = new_entry
@@ -240,12 +308,27 @@ if __name__ == "__main__":
         "strategies", nargs="*",
         help="Strategy IDs to regenerate (omit for all)",
     )
+    regen_p.add_argument(
+        "--caller", required=True,
+        help="Attribution string <phase>.<who>.manifest_regen "
+             "(e.g. manual.kanin.manifest_regen). Required since "
+             "2026-06-11 — unattributed regenerations no longer reset "
+             "the holdout single-access invariant.",
+    )
+    regen_p.add_argument(
+        "--reason", required=True,
+        help="Why the split is being redrawn (recorded on the event).",
+    )
     args = parser.parse_args()
 
     if args.cmd == "init":
         generate_initial()
     elif args.cmd == "regen":
-        regenerate_manifest(args.strategies if args.strategies else None)
+        regenerate_manifest(
+            args.strategies if args.strategies else None,
+            caller=args.caller,
+            reason=args.reason,
+        )
     else:
         parser.print_help()
         sys.exit(1)

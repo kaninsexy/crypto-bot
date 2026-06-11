@@ -396,11 +396,37 @@ def _get_git_commit() -> str:
         return "unknown"
 
 
+# Regeneration events appended after this instant must carry a
+# non-empty `caller` field to reset the single-access flag (and the
+# final-gate guard in trials.py).  2026-06-11, work-order item 7d: the
+# 2026-05-08 AttentionMomentum access-flag reset was an unattributed
+# regenerated=true event (no caller, old==new holdout_start) — an
+# append-path with no caller validation that silently re-opened the
+# holdout.  Historical events at or before the cutoff are
+# grandfathered (they were legitimate, just unattributed); the
+# write-side counterpart is generate_holdout_manifest.regenerate_
+# manifest, which now requires caller + reason.
+_REGEN_ATTRIBUTION_REQUIRED_AFTER: str = "2026-06-11T00:00:00+00:00"
+
+
+def _regen_resets_access(event: dict) -> bool:
+    """True iff a regenerated=true event is honoured as a reset of the
+    single-access flag / final-gate guard.  Grandfathers pre-cutoff
+    events; post-cutoff events must carry a non-empty caller."""
+    ts = event.get("ts")
+    if isinstance(ts, str) and ts <= _REGEN_ATTRIBUTION_REQUIRED_AFTER:
+        return True
+    caller = event.get("caller")
+    return isinstance(caller, str) and bool(caller.strip())
+
+
 def _has_prior_access(strategy_id: str) -> bool:
     """Return True if strategy has an uncleared access in the log.
 
-    Scans events in file order (chronological).  A regenerated=true event
-    clears the flag; a normal access event sets it.
+    Scans events in file order (chronological).  A regenerated=true
+    event clears the flag — IF it passes `_regen_resets_access`
+    (attributed, or grandfathered pre-2026-06-11); a normal access
+    event sets it.
     """
     has_access = False
     for event in iter_jsonl_filtered(
@@ -408,7 +434,8 @@ def _has_prior_access(strategy_id: str) -> bool:
         lambda e: e.get("strategy_id") == strategy_id,
     ):
         if event.get("regenerated") is True:
-            has_access = False
+            if _regen_resets_access(event):
+                has_access = False
         else:
             has_access = True
     return has_access

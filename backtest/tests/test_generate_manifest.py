@@ -208,7 +208,7 @@ def test_regenerate_appends_events_for_changed_strategies_only():
     manifest["VWAP"]["holdout_start"] = "2020-01-01T00:00:00+00:00"
     gen._MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    gen.regenerate_manifest()
+    gen.regenerate_manifest(caller="manual.testharness.manifest_regen", reason="unit test")
 
     events = list(logs.read_jsonl(gen._ACCESS_LOG_PATH))
     regen_events = [e for e in events if e.get("regenerated") is True]
@@ -229,7 +229,7 @@ def test_regenerate_event_contains_old_and_new_holdout_start():
     manifest["VWAP"]["holdout_start"] = old_hs_str
     gen._MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    gen.regenerate_manifest()
+    gen.regenerate_manifest(caller="manual.testharness.manifest_regen", reason="unit test")
 
     events = list(logs.read_jsonl(gen._ACCESS_LOG_PATH))
     regen_event = next(
@@ -257,7 +257,7 @@ def test_regenerate_warning_lists_only_changed_strategies(capsys):
     manifest["DualMomentum"]["holdout_start"] = "2020-01-01T00:00:00+00:00"
     gen._MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    gen.regenerate_manifest()
+    gen.regenerate_manifest(caller="manual.testharness.manifest_regen", reason="unit test")
 
     stderr = capsys.readouterr().err
     assert "STALE DSR" in stderr
@@ -270,7 +270,7 @@ def test_regenerate_no_warning_when_nothing_changed(capsys):
     """No STALE DSR message on stderr when all holdout_starts are already current."""
     gen.generate_initial()
 
-    gen.regenerate_manifest()
+    gen.regenerate_manifest(caller="manual.testharness.manifest_regen", reason="unit test")
 
     stderr = capsys.readouterr().err
     assert "STALE DSR" not in stderr
@@ -319,7 +319,7 @@ def test_regenerate_subset_only_updates_listed_strategies():
     gen._MANIFEST_PATH.write_text(json.dumps(manifest_before, indent=2))
 
     # Regenerate only DualMomentum — BearShort should remain corrupted in the file.
-    gen.regenerate_manifest(strategies=["DualMomentum"])
+    gen.regenerate_manifest(strategies=["DualMomentum"], caller="manual.testharness.manifest_regen", reason="unit test")
 
     manifest_after = json.loads(gen._MANIFEST_PATH.read_text())
     assert manifest_after["BearShort"]["holdout_start"] == "2020-01-01T00:00:00+00:00", (
@@ -332,3 +332,50 @@ def test_regenerate_subset_only_updates_listed_strategies():
     exp_dm_hs = _expected_holdout_start(exp_dm_start, exp_dm_end)
     dm_hs = pd.Timestamp(manifest_after["DualMomentum"]["holdout_start"])
     assert abs(dm_hs - exp_dm_hs) < pd.Timedelta(seconds=1)
+
+
+# ── 2026-06-11 (work-order item 7d): regen attribution ───────────────────────
+
+def test_regenerate_requires_valid_caller():
+    """Unattributed or malformed callers are rejected before any
+    manifest write or access-log append."""
+    gen.generate_initial()
+    with pytest.raises(gen.InvalidRegenCaller, match="manifest_regen"):
+        gen.regenerate_manifest(caller="", reason="x")
+    with pytest.raises(gen.InvalidRegenCaller, match="manifest_regen"):
+        gen.regenerate_manifest(caller="kanin", reason="x")
+    with pytest.raises(gen.InvalidRegenCaller, match="manifest_regen"):
+        gen.regenerate_manifest(
+            caller="phase99.kanin.manifest_regen", reason="x",
+        )
+    with pytest.raises(gen.InvalidRegenCaller, match="reason"):
+        gen.regenerate_manifest(
+            caller="manual.kanin.manifest_regen", reason="  ",
+        )
+    # Nothing was appended to the access log by the rejected calls.
+    assert not gen._ACCESS_LOG_PATH.exists() or not [
+        e for e in logs.read_jsonl(gen._ACCESS_LOG_PATH)
+        if e.get("regenerated") is True
+    ]
+
+
+def test_regenerate_records_caller_and_reason():
+    """Every regenerated=true event carries the attribution fields."""
+    gen.generate_initial()
+    # Corrupt VWAP's holdout_start to force a "change" on regen (same
+    # pattern as test 4 above).
+    manifest = json.loads(gen._MANIFEST_PATH.read_text())
+    manifest["VWAP"]["holdout_start"] = "2020-01-01T00:00:00+00:00"
+    gen._MANIFEST_PATH.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    gen.regenerate_manifest(
+        caller="manual.testharness.manifest_regen",
+        reason="bounds moved in unit test",
+    )
+    events = list(logs.read_jsonl(gen._ACCESS_LOG_PATH))
+    regen_events = [e for e in events if e.get("regenerated") is True]
+    assert regen_events, "expected at least one regenerated=true event"
+    for e in regen_events:
+        assert e["caller"] == "manual.testharness.manifest_regen"
+        assert e["reason"] == "bounds moved in unit test"
+        assert "git_commit" in e

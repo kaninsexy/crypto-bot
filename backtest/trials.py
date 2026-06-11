@@ -487,6 +487,11 @@ def _has_prior_final_gate(strategy_id: str) -> bool:
             and e.get("regenerated") is True
         ),
     ):
+        # 2026-06-11 (item 7d): unattributed post-cutoff regen events
+        # do not reset the final-gate guard, mirroring the
+        # single-access flag in holdout._has_prior_access.
+        if not _holdout._regen_resets_access(ev):
+            continue
         ts = ev.get("ts")
         if isinstance(ts, str):
             last_regen_ts = ts

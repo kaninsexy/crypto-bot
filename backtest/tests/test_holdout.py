@@ -701,3 +701,67 @@ def test_load_symbol_df_picks_highest_month_count(tmp_path, monkeypatch):
     assert loaded.index.max() >= df_12.index.max(), (
         "Expected the 36mo file, which covers a longer period, to be selected"
     )
+
+
+# ── 2026-06-11 (work-order item 7d): unattributed regen no longer resets ─────
+
+def test_regen_resets_access_grandfathers_pre_cutoff_events():
+    """Historical (pre-2026-06-11) regenerated=true events without a
+    caller keep resetting the flag — they were legitimate, just
+    unattributed (e.g. the 2026-05-08 AttentionMomentum 429-retry
+    reset)."""
+    assert holdout._regen_resets_access({
+        "ts": "2026-05-08T03:12:05.743402+00:00", "regenerated": True,
+    }) is True
+
+
+def test_regen_resets_access_requires_caller_post_cutoff():
+    assert holdout._regen_resets_access({
+        "ts": "2026-07-01T00:00:00+00:00", "regenerated": True,
+    }) is False
+    assert holdout._regen_resets_access({
+        "ts": "2026-07-01T00:00:00+00:00", "regenerated": True,
+        "caller": "   ",
+    }) is False
+    assert holdout._regen_resets_access({
+        "ts": "2026-07-01T00:00:00+00:00", "regenerated": True,
+        "caller": "manual.kanin.manifest_regen",
+    }) is True
+
+
+def test_has_prior_access_ignores_unattributed_post_cutoff_regen(
+    tmp_path, monkeypatch,
+):
+    """An unattributed post-cutoff regenerated=true event must NOT
+    re-open the holdout; an attributed one must."""
+    import json as _json
+    log = tmp_path / "access.log"
+    monkeypatch.setattr(holdout, "_ACCESS_LOG_PATH", log)
+
+    def _append(ev):
+        with log.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(ev) + "\n")
+
+    _append({
+        "ts": "2026-06-20T00:00:00+00:00", "strategy_id": "X",
+        "caller": "phase4.X.final_dsr", "reason": "r",
+        "git_commit": "abc", "n_rows": 1, "regenerated": False,
+    })
+    assert holdout._has_prior_access("X") is True
+
+    # Unattributed reset attempt: flag stays set.
+    _append({
+        "ts": "2026-06-21T00:00:00+00:00", "strategy_id": "X",
+        "regenerated": True,
+        "old_holdout_start": "s", "new_holdout_start": "s",
+    })
+    assert holdout._has_prior_access("X") is True
+
+    # Attributed regeneration: flag clears.
+    _append({
+        "ts": "2026-06-22T00:00:00+00:00", "strategy_id": "X",
+        "regenerated": True, "caller": "manual.kanin.manifest_regen",
+        "reason": "redraw", "old_holdout_start": "s",
+        "new_holdout_start": "t",
+    })
+    assert holdout._has_prior_access("X") is False

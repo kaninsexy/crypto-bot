@@ -168,6 +168,13 @@ _RUNTIME_DEFAULTS: dict = {
     "build_attempts": 0,
     "run_attempts": 0,
     "scripter_attempts": 0,
+    # Structural-CPCVError rerun counter (2026-06-11 fix). The
+    # 2026-05-08/09 ExchangeListingDrift incident produced 8 duplicate
+    # CPCVError trials.log rows because needs_rerun items were
+    # re-selected every batch with no cap and the classifier
+    # mis-labelled a sparse-signal failure as structural. Bounded to
+    # MAX_STRUCTURAL_RERUNS below.
+    "rerun_attempts": 0,
 }
 
 
@@ -176,6 +183,15 @@ _RUNTIME_DEFAULTS: dict = {
 # the orchestrator requeues the item once before the standard
 # error path fires. Keeps transient flakes from polluting the queue.
 TRIAL_AUTO_RETRY_MAX = 1
+
+# Cap on structural-CPCVError reruns per item (2026-06-11). Each rerun
+# appends a fresh trials.log row (the trial script records its row
+# before the orchestrator classifies), so an uncapped needs_rerun loop
+# pollutes the multiple-testing record — the 2026-05-08/09
+# ExchangeListingDrift incident appended 7 duplicate rows overnight.
+# One rerun is enough: the pre-run gate either fixes the warmup
+# mismatch on the first retry or it never will.
+MAX_STRUCTURAL_RERUNS = 1
 
 # Data-layer blocker keywords. The auto-scripter pass skips items
 # whose `error` field references unavailable data infrastructure
@@ -1732,12 +1748,14 @@ def _select_runnable(queue_data: dict) -> list[dict]:
     ]
 
 
-# Task 3: post-trial CPCVError classifier. Reads keywords from the
-# error message; cross-checks the manifest's strategy_warmup_candles
-# against the harness's _ENGINE_WARM_UP_CANDLES (50) to decide whether
-# a manifest-aware re-run with TRIAL_WARM_UP_CANDLES would have
-# cleared the tradeable-bar floor.
-_CPCV_STRUCTURAL_KEYWORDS = ("warm", "block", "candle")
+# Task 3 (rewritten 2026-06-11): post-trial CPCVError classifier.
+# Cross-checks the manifest's strategy_warmup_candles against the
+# harness's _ENGINE_WARM_UP_CANDLES (50) to decide whether a
+# manifest-aware re-run with TRIAL_WARM_UP_CANDLES would change
+# anything.  The pre-2026-06-11 keyword heuristic is gone: every
+# CPCVError message contains "block", so it classified everything as
+# structural (root cause of the ExchangeListingDrift duplicate-row
+# incident).
 
 
 def _classify_cpcv_error(
@@ -1745,47 +1763,59 @@ def _classify_cpcv_error(
 ) -> str:
     """Return one of "structural" / "sparse" / "unknown".
 
-      - "structural": message names a block-size / warmup / candle
-        constraint AND the manifest's strategy_warmup_candles would
-        leave the per-block tradeable budget at >= 30 trades. The
-        next pass should requeue the item under the pre-run gate.
+      - "structural": the pre-run gate's injection condition holds
+        (harness-default warmup starves the per-block tradeable
+        budget below 30 while the manifest warmup leaves >= 30), so a
+        rerun under TRIAL_WARM_UP_CANDLES can actually change the
+        outcome.
       - "sparse":     headline-run trade count was 0 (genuinely no
-        signal to backtest), OR n_trades_total == 0 in the summary.
+        signal to backtest) AND n_trades_total == 0 in the summary.
       - "unknown":    everything else; caller falls through to the
         standard retire row.
     """
-    msg_lc = (cpcv_err_msg or "").lower()
-    has_struct_kw = any(k in msg_lc for k in _CPCV_STRUCTURAL_KEYWORDS)
+    # 2026-06-11 fix: the keyword check alone is useless as a
+    # structural signal — EVERY CPCVError message contains the word
+    # "block" ("more than 50% of blocks have insufficient ..."), so
+    # has_struct_kw was always True and the sparse branch was
+    # unreachable. That mis-classified the 2026-05-08
+    # ExchangeListingDrift sparse-signal failure as structural and
+    # looped it through needs_rerun 8 times (audit §1 row census).
+    # "Structural" now requires the EXACT condition under which the
+    # pre-run gate in _worker_run_trial changes anything on a rerun:
+    # the harness-default warmup (50) starves the per-block tradeable
+    # budget below 30 while the manifest warmup leaves >= 30
+    # (tradeable_global < 30 <= tradeable_safe). If the gate would
+    # not inject TRIAL_WARM_UP_CANDLES, a rerun is a guaranteed
+    # duplicate CPCVError row, never a fix.
+    try:
+        import json as _json
+        with open(QUEUE_PATH.parent / "holdout_manifest.json", "r", encoding="utf-8") as f:
+            manifest = _json.load(f)
+        entry = manifest.get(str(item.get("strategy_id") or ""), {})
+        strategy_warmup = int(entry.get("strategy_warmup_candles", 50))
+        ds = entry.get("data_start"); de = entry.get("dev_end")
+        tf = (entry.get("timeframe") or "1d").lower()
+        tf_hours = {"1h": 1, "4h": 4, "1d": 24}.get(tf, 24)
+        if ds and de:
+            from datetime import datetime as _dt
+            span_h = (
+                _dt.fromisoformat(de) - _dt.fromisoformat(ds)
+            ).total_seconds() / 3600.0
+            dev_bars = int(span_h / tf_hours)
+            n_blocks = int(item.get("n_blocks", 10))
+            if n_blocks > 0:
+                block_size = dev_bars // n_blocks
+                tradeable_global = block_size - 50  # harness default
+                tradeable_safe = block_size - strategy_warmup
+                if tradeable_global < 30 <= tradeable_safe:
+                    return "structural"
+    except Exception:  # noqa: BLE001
+        pass
 
     n_trades_headline = int(summary.get("n_trades_headline") or 0)
     n_trades_total = int(summary.get("n_trades_total") or 0)
-    if n_trades_headline == 0 and n_trades_total == 0 and not has_struct_kw:
+    if n_trades_headline == 0 and n_trades_total == 0:
         return "sparse"
-
-    if has_struct_kw:
-        try:
-            import json as _json
-            with open(QUEUE_PATH.parent / "holdout_manifest.json", "r", encoding="utf-8") as f:
-                manifest = _json.load(f)
-            entry = manifest.get(str(item.get("strategy_id") or ""), {})
-            strategy_warmup = int(entry.get("strategy_warmup_candles", 50))
-            ds = entry.get("data_start"); de = entry.get("dev_end")
-            tf = (entry.get("timeframe") or "1d").lower()
-            tf_hours = {"1h": 1, "4h": 4, "1d": 24}.get(tf, 24)
-            if ds and de:
-                from datetime import datetime as _dt
-                span_h = (
-                    _dt.fromisoformat(de) - _dt.fromisoformat(ds)
-                ).total_seconds() / 3600.0
-                dev_bars = int(span_h / tf_hours)
-                n_blocks = int(item.get("n_blocks", 10))
-                if n_blocks > 0:
-                    block_size = dev_bars // n_blocks
-                    tradeable_safe = block_size - strategy_warmup
-                    if tradeable_safe >= 30:
-                        return "structural"
-        except Exception:  # noqa: BLE001
-            pass
 
     return "unknown"
 
@@ -1896,21 +1926,37 @@ def process_batch_results(
         if summary is not None and isinstance(summary.get("cpcv_error"), str):
             cpcv_err_msg = str(summary.get("cpcv_error") or "")
             cls = _classify_cpcv_error(item, summary, cpcv_err_msg)
-            if cls == "structural":
+            rerun_attempts = int(item.get("rerun_attempts", 0))
+            if cls == "structural" and rerun_attempts < MAX_STRUCTURAL_RERUNS:
+                # 2026-06-11: bounded by MAX_STRUCTURAL_RERUNS — each
+                # rerun appends a fresh trials.log row, so an uncapped
+                # loop pollutes the multiple-testing record (the
+                # 2026-05-08/09 ExchangeListingDrift incident).
                 item["status"] = "needs_rerun"
+                item["rerun_attempts"] = rerun_attempts + 1
                 item["error"] = (
                     f"CPCV structural mismatch (warmup vs block size); "
-                    f"will rerun via pre-run gate. {cpcv_err_msg}"
+                    f"will rerun via pre-run gate "
+                    f"(attempt {rerun_attempts + 1}/{MAX_STRUCTURAL_RERUNS}). "
+                    f"{cpcv_err_msg}"
                 )[:500]
                 item["finished_at"] = finished_at
                 save_queue(queue_data)
                 print(
                     f"[queue] STRUCTURAL CPCVError {item_id}: "
-                    "queued for rerun (status=needs_rerun)"
+                    "queued for rerun (status=needs_rerun, "
+                    f"attempt {rerun_attempts + 1}/{MAX_STRUCTURAL_RERUNS})"
                 )
                 continue
-            # "sparse" or "unknown" -> fall through to the standard
-            # full_cpcv retire row already recorded by the trial.
+            if cls == "structural":
+                print(
+                    f"[queue] STRUCTURAL CPCVError {item_id}: rerun cap "
+                    f"({MAX_STRUCTURAL_RERUNS}) exhausted; falling through "
+                    "to the recorded retire row"
+                )
+            # "sparse" / "unknown" / cap-exhausted "structural" ->
+            # fall through to the standard full_cpcv retire row
+            # already recorded by the trial.
 
         if returncode != 0 or summary is None:
             # Auto-remediation (Task 3): parse structured TRIAL_ERROR
