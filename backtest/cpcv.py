@@ -275,6 +275,13 @@ def run_cpcv(
 
     # 1. Load dev data and split into blocks.
     dev_df = _holdout.load_dev(strategy_id)
+    if is_multi_symbol and config.block_mode == "event":
+        raise CPCVError(
+            "block_mode='event' is single-symbol only this iteration "
+            "(multi-symbol basket event alignment is a separate "
+            f"design); manifest entry for '{strategy_id}' is "
+            "multi-symbol."
+        )
     if is_multi_symbol:
         blocks_multi = _split_blocks_multi(dev_df, config.n_blocks, symbols)
         _validate_block_sizes_multi(blocks_multi)
@@ -288,7 +295,17 @@ def run_cpcv(
             warm_up_candles=warm_up_candles,
         )
     else:
-        blocks_single = _split_blocks(dev_df, config.n_blocks)
+        if config.block_mode == "event":
+            # Gate spec v2 (2026-06-11): equal-signal-event blocks.
+            # The splitter enforces ≥ 5 blocks of ≥ 5 events and may
+            # downshift the block count below config.n_blocks.
+            from backtest.cpcv_common import _split_blocks_event
+            event_positions = config.locate_signal_events(dev_df)
+            blocks_single = _split_blocks_event(
+                dev_df, event_positions, config.n_blocks,
+            )
+        else:
+            blocks_single = _split_blocks(dev_df, config.n_blocks)
         _validate_block_sizes_single(blocks_single)
         candle_duration_h = _infer_candle_hours(dev_df)
         engine_results = _run_engine_per_block(
@@ -354,7 +371,10 @@ def run_cpcv(
     distribution = summarize(valid_sharpes)
 
     return CPCVResult(
-        n_paths=config.n_blocks,
+        # Realized block count: equals config.n_blocks in calendar
+        # mode; event mode may downshift (equal-event blocks with the
+        # ≥5-events-per-block floor).
+        n_paths=len(block_sharpes),
         sharpe_distribution=distribution,
         per_path_sharpes=block_sharpes,
         trades_per_path=trade_counts,

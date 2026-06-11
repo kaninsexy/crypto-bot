@@ -134,8 +134,41 @@ class CPCVConfig:
         default=None, compare=False, repr=False,
     )
 
+    # Event-based block sizing (gate spec v2, 2026-06-11 — additive
+    # optional fields; "calendar" default preserves every existing
+    # caller bit-for-bit).
+    #
+    # block_mode="event" sizes blocks by EQUAL SIGNAL-EVENT COUNT
+    # instead of equal rows.  Motivation: the 2026-06 audit's
+    # CPCVError section — 8 sparse event-driven designs died because
+    # calendar deciles concentrated their few events into one or two
+    # blocks; event-sized blocks give each block exactly the per-block
+    # event floor.  `locate_signal_events` receives the single-symbol
+    # dev frame and returns sorted integer ROW POSITIONS of the
+    # strategy's ex-ante observable signal events.  The splitter
+    # enforces a minimum of 5 blocks (each holding
+    # `_MIN_EVENTS_PER_BLOCK` events); fewer total events than
+    # 5 × _MIN_EVENTS_PER_BLOCK = 25 raises CPCVError.  Event mode is
+    # single-symbol only this iteration (multi-symbol basket event
+    # alignment is a separate design; run_cpcv raises).
+    block_mode: str = "calendar"
+    locate_signal_events: Optional[Callable] = field(
+        default=None, compare=False, repr=False,
+    )
+
     def validate(self) -> None:
         """Raise ValueError if any field is out of its admissible range."""
+        if self.block_mode not in ("calendar", "event"):
+            raise ValueError(
+                f"block_mode must be 'calendar' or 'event'; "
+                f"got {self.block_mode!r}"
+            )
+        if self.block_mode == "event" and self.locate_signal_events is None:
+            raise ValueError(
+                "block_mode='event' requires a locate_signal_events "
+                "callable (dev_df -> sorted integer row positions of "
+                "signal events)"
+            )
         if self.n_blocks < 4:
             raise ValueError(
                 f"n_blocks must be ≥ 4; got {self.n_blocks}"
@@ -300,6 +333,77 @@ def _split_blocks_multi(
         }
         blocks.append(block_per_symbol)
     return blocks
+
+
+# Event mode requires at least this many blocks (work-order item 5,
+# 2026-06-11): fewer event-sized blocks than this produce a Sharpe
+# distribution too thin for DSR.
+_MIN_EVENT_BLOCKS: int = 5
+
+
+def _split_blocks_event(
+    df: pd.DataFrame,
+    event_positions,
+    max_blocks: int,
+) -> list[pd.DataFrame]:
+    """Split `df` into contiguous blocks containing an EQUAL number of
+    signal events each (gate spec v2 event mode).
+
+    Args:
+      df:               Single-symbol dev frame.
+      event_positions:  Sorted integer row positions of signal events
+                        (output of CPCVConfig.locate_signal_events).
+      max_blocks:       Upper bound on the block count
+                        (CPCVConfig.n_blocks); the splitter downshifts
+                        so each block holds ≥ `_MIN_EVENTS_PER_BLOCK`
+                        events.
+
+    Returns:
+      List of contiguous DataFrame slices covering every row of `df`
+      exactly once.  Block i's boundary falls immediately after its
+      quota's last event, so each block holds exactly
+      total_events // n_blocks events (the last absorbs remainder).
+
+    Raises:
+      CPCVError: positions out of range / unsorted; fewer than
+                 `_MIN_EVENT_BLOCKS × _MIN_EVENTS_PER_BLOCK` total
+                 events; events so clustered that two block
+                 boundaries coincide.
+    """
+    ev = np.asarray(event_positions, dtype=int)
+    n_rows = len(df)
+    if ev.size > 0 and (ev.min() < 0 or ev.max() >= n_rows):
+        raise CPCVError(
+            f"event positions out of range [0, {n_rows}): "
+            f"min={ev.min()} max={ev.max()}"
+        )
+    if not np.all(np.diff(ev) >= 0):
+        raise CPCVError("event positions must be sorted ascending")
+
+    total = int(ev.size)
+    n_blocks = min(int(max_blocks), total // _MIN_EVENTS_PER_BLOCK)
+    if n_blocks < _MIN_EVENT_BLOCKS:
+        raise CPCVError(
+            f"event-based blocking needs ≥ {_MIN_EVENT_BLOCKS} blocks "
+            f"of ≥ {_MIN_EVENTS_PER_BLOCK} events (≥ "
+            f"{_MIN_EVENT_BLOCKS * _MIN_EVENTS_PER_BLOCK} total); got "
+            f"{total} events → {n_blocks} feasible block(s)"
+        )
+
+    epb = total // n_blocks
+    cuts: list[int] = [0]
+    for i in range(1, n_blocks):
+        cut = int(ev[i * epb - 1]) + 1
+        if cut <= cuts[-1]:
+            raise CPCVError(
+                f"signal events too clustered for event-based "
+                f"blocking: block boundary {i} collapses onto the "
+                f"previous one (cut={cut})"
+            )
+        cuts.append(cut)
+    cuts.append(n_rows)
+
+    return [df.iloc[cuts[i]:cuts[i + 1]] for i in range(n_blocks)]
 
 
 def _validate_block_sizes_single(blocks: list[pd.DataFrame]) -> None:
