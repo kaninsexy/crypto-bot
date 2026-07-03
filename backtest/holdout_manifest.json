@@ -664,5 +664,68 @@
     "strategy_warmup_candles": 2,
     "min_tradeable_candles_per_block": 10,
     "notes": "2026-06-11 extended-window regen: holdout_start moved EARLIER (2025-05-01 vs old 2025-09-12/22), so the new holdout's first ~4.5 months were inside the OLD dev window that every pre-2026-06-11 trial read freely. No new-holdout verdict is on fully unseen data. See docs/bot_status.md 'Holdout regeneration 2026-06-11' for the full disclosure. | BNB/USDT 2021-01-01->2022-12-21 sourced from Binance (backtest substrate only; execution venue remains OKX); splice + seam check (max close divergence 0.13% over 31d overlap) documented in backtest/cache/ohlcv/BNB-USDT_1d_66mo.provenance.json. data_start recomputed 2026-06-11 after the cross-venue backfill."
+  },
+  "VolumeProfileAcceptance": {
+    "timeframe": "1h",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/volume-profile-acceptance-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "LiquiditySweepReversal": {
+    "timeframe": "15m",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/liquidity-sweep-reversal-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "LVNTraversal": {
+    "timeframe": "15m",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/lvn-traversal-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "HVNMeanReversion": {
+    "timeframe": "1h",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/hvn-mean-reversion-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "DeltaDivergence": {
+    "timeframe": "15m",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/delta-divergence-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "VWAPInstitutionalBand": {
+    "timeframe": "15m",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/vwap-institutional-band-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "BreakoutDeltaConfirmed": {
+    "timeframe": "1h",
+    "data_start": "2021-01-01T00:00:00+00:00",
+    "data_end": "2026-05-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/breakout-delta-confirmed-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
   }
 }

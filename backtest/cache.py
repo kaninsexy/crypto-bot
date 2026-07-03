@@ -269,3 +269,121 @@ def _apply_until_and_enforce(
             )
 
     return df
+
+
+# ── Binance Vision 1m substrate (Phase 4.E microstructure) ────────────────────
+#
+# The Phase 4.E microstructure family reads a genuinely different substrate:
+# free Binance Vision 1m klines (with the taker buy/sell split) rather than
+# the OKX OHLCV cache above.  Its manifest entries carry the Binance
+# concatenated ticker form ("BTCUSDT") as their `symbol`, which — because
+# every OKX entry uses the "BASE/QUOTE" form — is the unambiguous dispatch
+# signal used by holdout._load_substrate_df.  The engine iterates at the
+# strategy's signal timeframe; the volume-profile features are computed from
+# the 1m data (see data/microstructure_features.build_signal_frame) so the
+# locked "1m profile" gate is honoured while the engine stays at signal
+# cadence.
+#
+# The built signal frame is expensive (a rolling daily volume profile over
+# the whole history), so it is parquet-cached under
+# backtest/cache/binance_vision/_features/ and rebuilt only when the
+# underlying 1m month files are newer than the cached frame.  This path does
+# NOT go through load_or_download_ohlcv: it performs no network I/O (reads
+# only already-downloaded 1m parquet) and is reached solely via
+# holdout.load_dev / holdout.load_holdout, which own the single-access and
+# audit-log guarantees.
+
+_BINANCE_VISION_CACHE_DIR: Path = Path("backtest/cache/binance_vision")
+
+
+def _bv_symbol(symbol: str) -> str:
+    """Manifest symbol → Binance Vision cache/ticker form (BTCUSDT)."""
+    return symbol.upper().replace("/", "").replace("-", "")
+
+
+def _bv_cached_month_range(sym: str, interval: str = "1m") -> "tuple[str, str]":
+    """Min/max cached month ('YYYY-MM') for a Binance Vision symbol.
+
+    Reads the on-disk 1m cache only — never the network — so callers get
+    exactly the locally available range.  Raises FileNotFoundError when the
+    symbol has no cached months (the substrate must be fetched first via
+    scripts/fetch_binance_1m.py).
+    """
+    d = _BINANCE_VISION_CACHE_DIR / sym / interval
+    months = sorted(p.stem for p in d.glob("*.parquet"))
+    if not months:
+        raise FileNotFoundError(
+            f"No Binance Vision 1m cache for {sym} in {d}. "
+            "Run scripts/fetch_binance_1m.py first."
+        )
+    return months[0], months[-1]
+
+
+def _bv_newest_month_mtime(sym: str, interval: str = "1m") -> float:
+    d = _BINANCE_VISION_CACHE_DIR / sym / interval
+    return max((p.stat().st_mtime for p in d.glob("*.parquet")), default=0.0)
+
+
+def load_binance_vision_signal_frame(
+    symbol: str,
+    timeframe: str,
+    cache_dir: Path = _BINANCE_VISION_CACHE_DIR,
+) -> pd.DataFrame:
+    """Return the enriched signal-timeframe frame for a Binance Vision symbol.
+
+    Resamples the cached 1m klines to `timeframe` and attaches the
+    microstructure feature columns (delta/cum_delta + daily volume-profile
+    poc/vah/val/hvn_prices/lvn_prices) via
+    data.microstructure_features.build_signal_frame.  Backward-looking by
+    construction (see that module).
+
+    The full-history frame is parquet-cached under
+    `{cache_dir}/_features/{SYM}_{params_id}.parquet` and reused unless a 1m
+    month file is newer than the cached frame.  Returns the FULL cached
+    range; callers (holdout._build_df) filter to the dev/holdout window.
+    """
+    # Local imports keep the data package off cache.py's import-time graph
+    # (mirrors holdout._load_perp_df's local import of data.okx_perp).
+    from data.binance_vision import load_klines
+    from data.microstructure_features import (
+        DEFAULT_MIN_REL_PROMINENCE,
+        DEFAULT_N_BINS,
+        DEFAULT_PROFILE_DAYS,
+        DEFAULT_SMOOTH_BINS,
+        DEFAULT_VALUE_AREA_PCT,
+        build_signal_frame,
+        params_id,
+    )
+
+    sym = _bv_symbol(symbol)
+    pid = params_id(
+        timeframe, DEFAULT_PROFILE_DAYS, DEFAULT_N_BINS,
+        DEFAULT_SMOOTH_BINS, DEFAULT_MIN_REL_PROMINENCE,
+        DEFAULT_VALUE_AREA_PCT,
+    )
+    feat_dir = cache_dir / "_features"
+    feat_dir.mkdir(parents=True, exist_ok=True)
+    feat_path = feat_dir / f"{sym}_{pid}.parquet"
+
+    if feat_path.exists():
+        if feat_path.stat().st_mtime >= _bv_newest_month_mtime(sym):
+            try:
+                return pd.read_parquet(feat_path)
+            except Exception as e:  # corrupted cache → rebuild
+                logger.warning(
+                    f"[BV] Failed to read feature cache {feat_path.name}: "
+                    f"{e}. Rebuilding."
+                )
+
+    start_month, end_month = _bv_cached_month_range(sym)
+    klines_1m = load_klines(sym, start_month, end_month, interval="1m")
+    frame = build_signal_frame(klines_1m, timeframe)
+    try:
+        frame.to_parquet(feat_path)
+        logger.info(
+            f"[BV] Built + cached signal frame {sym} {timeframe} "
+            f"({len(frame)} bars) -> {feat_path.name}"
+        )
+    except Exception as e:
+        logger.warning(f"[BV] Failed to write feature cache {feat_path.name}: {e}")
+    return frame

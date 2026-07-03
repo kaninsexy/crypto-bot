@@ -73,7 +73,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from backtest.cache import _holdout_bypass_ctx
+from backtest.cache import _holdout_bypass_ctx, load_binance_vision_signal_frame
 from backtest.logs import append_jsonl, iter_jsonl_filtered
 
 
@@ -293,6 +293,27 @@ def _load_perp_df(symbol_manifest: str, timeframe: str) -> pd.DataFrame:
     return pd.read_parquet(best)
 
 
+def _load_substrate_df(symbol: str, timeframe: str) -> pd.DataFrame:
+    """Load the raw substrate frame for a symbol, dispatching by substrate.
+
+    Manifest symbols in "BASE/QUOTE" form (every OKX entry) use the OKX
+    OHLCV parquet cache via `_load_symbol_df`.  Symbols in the Binance
+    concatenated ticker form — no "/", e.g. "BTCUSDT" — use the Phase 4.E
+    Binance Vision 1m substrate (resampled to the signal timeframe and
+    enriched with microstructure features) via
+    `cache.load_binance_vision_signal_frame`.
+
+    Because EVERY existing manifest entry uses the "/" form, the "/" test is
+    an unambiguous substrate discriminator that requires no new manifest
+    schema field.  The two symbol spaces never collide, so cache.py's
+    per-symbol holdout enforcement (`_earliest_holdout_start`) sees the two
+    substrates as disjoint and existing OKX enforcement is unchanged.
+    """
+    if "/" in symbol:
+        return _load_symbol_df(symbol, timeframe)
+    return load_binance_vision_signal_frame(symbol, timeframe)
+
+
 def _build_df(symbols: list[str], timeframe: str, after_ts: pd.Timestamp | None,
               before_ts: pd.Timestamp | None) -> pd.DataFrame:
     """Load and filter OHLCV for one or more symbols.
@@ -303,7 +324,7 @@ def _build_df(symbols: list[str], timeframe: str, after_ts: pd.Timestamp | None,
     """
     frames = []
     for sym in symbols:
-        part = _load_symbol_df(sym, timeframe)
+        part = _load_substrate_df(sym, timeframe)
         if after_ts is not None:
             part = part[part.index >= after_ts]
         if before_ts is not None:
