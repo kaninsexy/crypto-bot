@@ -97,10 +97,13 @@ the verdict is retire (Gate 1).
 
 | Run | Taker fee (per side) | Market slippage (per side) | Source |
 |-----|----------------------|----------------------------|--------|
-| Standard | 0.0400% (`FEE_MARKET` = 0.0004) | 0.0500% (`SLIPPAGE_MARKET` = 0.0005) | `paper_trading.simulator` / `backtest.engine` |
-| 2x fees | 0.0800% (`FEE_MARKET` x2 = 0.0008) | 0.0500% (unchanged) | Gate 1 "2x fees" |
+| Standard | 0.1000% (0.0010) | 0.0500% (`SLIPPAGE_MARKET` = 0.0005) | OKX spot regular-user taker, verified 2026-07-03 |
+| 2x fees | 0.2000% (0.0020) | 0.0500% (unchanged) | Gate 1 "2x fees" stress |
 
-Round-trip standard cost ~= 0.18% (2 x (0.04% + 0.05%)); round-trip 2x-fee
-cost ~= 0.26%. Fees are `paper_trading.simulator` module globals read at
-fill time, so the 2x run is applied by doubling them around the evaluation;
-slippage is unchanged per the verbatim "2x fees" gate wording.
+Round-trip standard cost ~= 0.30% (2 x (0.10% + 0.05%)); round-trip 2x-fee
+cost ~= 0.50%. The taker fee is OKX spot regular-user 0.10% (verified
+2026-07-03); `paper_trading.simulator`'s module default (0.04%) understates
+it 2.5x, so scripts/phase4e_trial_common.py overrides the base rate
+explicitly to the OKX rate rather than mutating the simulator globals.
+Slippage is unchanged across the two runs per the verbatim "2x fees" gate
+wording.

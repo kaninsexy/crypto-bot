@@ -19,13 +19,18 @@ What it does per strategy:
   4. Persist the per-bar return series (gate spec v2 per-bar store) and
      append one full_cpcv row to trials.log.
 
-Fee model (documented in each research/<strategy>-literature.md):
-  standard taker fee  = FEE_MARKET  = 0.0004 (0.04%)   [paper_trading.simulator]
+Fee model (OKX spot regular-user, verified 2026-07-03; documented in each
+research/<strategy>-literature.md):
+  standard taker fee  = 0.0010 (0.10%)                   [OKX spot taker]
   standard slippage   = SLIPPAGE_MARKET = 0.0005 (0.05%) [backtest.engine]
-  2x-fee run          = FEE_MARKET x2 = 0.0008 (0.08%); slippage unchanged.
-Strategy entries/exits are market (taker) orders, so FEE_MARKET is the
-relevant fee.  Fees are simulator module globals read at fill time, so the
-2x run is applied by temporarily doubling them around the evaluation.
+  2x-fee stress run   = 0.0020 (0.20%); slippage unchanged.
+Strategy entries/exits are market (taker) orders, so the taker fee is the
+binding cost.  paper_trading.simulator's module default (0.04%) understates
+OKX spot cost 2.5x, so the runner OVERRIDES it explicitly to the OKX rate via
+the set/restore mechanism WITHOUT mutating the simulator's globals (the
+simulator default is a separately-flagged paper-trading realism question).
+Fees are simulator module globals read at fill time, so the override + 2x
+stress are applied by setting them around the evaluation and restoring after.
 
 CPCVError handling (mandatory, verbatim per .claude/rules/backtest.md):
 Every call to run_cpcv_multi()/run_cpcv() is wrapped in try/except CPCVError.
@@ -137,21 +142,33 @@ PARAMS: dict[str, dict] = {
     },
 }
 
-# Standard cost model (documented in the literature files).
-_BASE_FEE_MARKET = _sim.FEE_MARKET   # 0.0004
-_BASE_FEE_LIMIT = _sim.FEE_LIMIT     # 0.0002
+# OKX spot regular-user fees (verified 2026-07-03): taker 0.10%, maker 0.08%.
+# All Phase 4.E orders are taker market orders, so PHASE4E_TAKER_FEE is the
+# binding cost.  The runner overrides the simulator's understated module
+# default (0.04%) to the OKX rate explicitly rather than mutating the
+# simulator globals; the simulator default is flagged separately as a
+# paper-trading realism question and is out of scope here.
+PHASE4E_TAKER_FEE = 0.0010
+PHASE4E_MAKER_FEE = 0.0008
+
+# Captured simulator defaults, restored after each evaluation so the override
+# never leaks past the Phase 4.E runner.
+_ORIG_FEE_MARKET = _sim.FEE_MARKET
+_ORIG_FEE_LIMIT = _sim.FEE_LIMIT
 
 
 def _set_fee_multiplier(mult: float) -> None:
-    """Scale the simulator taker/maker fees (read as module globals at fill
-    time, so this affects run_cpcv's internally-built engines)."""
-    _sim.FEE_MARKET = _BASE_FEE_MARKET * mult
-    _sim.FEE_LIMIT = _BASE_FEE_LIMIT * mult
+    """Apply the OKX Phase 4.E taker/maker base fees scaled by `mult`
+    (1.0 = standard 0.10% taker, 2.0 = stress 0.20% taker).  Fees are read
+    as simulator module globals at fill time, so this affects run_cpcv's
+    internally-built engines."""
+    _sim.FEE_MARKET = PHASE4E_TAKER_FEE * mult
+    _sim.FEE_LIMIT = PHASE4E_MAKER_FEE * mult
 
 
 def _restore_fees() -> None:
-    _sim.FEE_MARKET = _BASE_FEE_MARKET
-    _sim.FEE_LIMIT = _BASE_FEE_LIMIT
+    _sim.FEE_MARKET = _ORIG_FEE_MARKET
+    _sim.FEE_LIMIT = _ORIG_FEE_LIMIT
 
 
 def _build_feature_kwargs(kind: str, symbol: str, timeframe: str,
@@ -343,9 +360,10 @@ def run(strategy_id: str) -> int:
         f"{symbol} {timeframe}, long-only). Substrate Binance spot 1m via "
         "data/binance_vision.py; execution venue OKX (cross-venue provenance "
         "per 2026-06-11 BNB precedent). FEE-REALISM GATE (Gate 1): standard "
-        f"taker fee 0.04% + slippage 0.05% -> verdict {std['verdict'].verdict} "
-        f"(sr {std['sr_observed']:.4f}); 2x fee 0.08% -> verdict "
-        f"{dbl['verdict'].verdict} (sr {dbl['sr_observed']:.4f}); edge "
+        "OKX spot taker fee 0.10% + slippage 0.05% -> verdict "
+        f"{std['verdict'].verdict} (sr {std['sr_observed']:.4f}); 2x fee "
+        f"0.20% -> verdict {dbl['verdict'].verdict} "
+        f"(sr {dbl['sr_observed']:.4f}); edge "
         f"survives both = {survives_both}. See research/{slug}-literature.md."
     )
     event = {
