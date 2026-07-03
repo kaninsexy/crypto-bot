@@ -15,14 +15,27 @@ import numpy as np
 import pandas as pd
 
 
+# Wilder RMA converges geometrically: the seed's weight after k bars is
+# ((period-1)/period)^k, so a bounded tail reproduces the full-history ATR to
+# far below signal precision (for period=14, a 250-bar tail leaves the seed at
+# ~(13/14)^236 ~= 4e-8).  Bounding the window keeps per-bar ATR O(1) instead
+# of O(n) -- without it, the engine's growing-slice loop is O(n^2) and a
+# 150k-bar dev window would trip the 4-hour compute circuit breaker.
+_ATR_MAX_TAIL: int = 250
+
+
 def wilder_atr(df: pd.DataFrame, period: int = 14) -> Optional[float]:
     """Latest Wilder ATR value over `period` bars, or None if insufficient.
 
     True range = max(high-low, |high-prev_close|, |low-prev_close|);
-    ATR is the Wilder (RMA / alpha=1/period) moving average of TR.
+    ATR is the Wilder (RMA / alpha=1/period) moving average of TR.  Computed
+    from at most the last `_ATR_MAX_TAIL` bars (see note above) so the value
+    is stable and the cost is bounded per call.
     """
     if len(df) < period + 1:
         return None
+    if len(df) > _ATR_MAX_TAIL:
+        df = df.iloc[-_ATR_MAX_TAIL:]
     high = df["high"].to_numpy(dtype=float)
     low = df["low"].to_numpy(dtype=float)
     close = df["close"].to_numpy(dtype=float)
