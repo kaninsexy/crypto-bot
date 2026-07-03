@@ -1,7 +1,50 @@
 # Bot Status
 
-Last updated: 2026-06-11 (holdout regeneration + gate-spec-v2 re-run batch)
+Last updated: 2026-07-03 (Phase 4.E microstructure batch — closed, 0 passers)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
+
+## Phase 4.E — Microstructure / Order-Flow batch (dev CPCV, 2026-07-03)
+
+New family cluster `microstructure-orderflow` on the Binance Vision spot 1m
+substrate (research substrate; execution venue OKX — cross-venue provenance
+per the 2026-06-11 BNB precedent). Single-pair BTCUSDT, long-only, dev window
+2021-01-01 → 2025-05-01 (holdout untouched, no holdout access this batch).
+Fee-realism gate (Gate 1): each trial evaluated at OKX spot taker 0.10% +
+slippage 0.05% AND at 2x fee 0.20% — retire unless the edge survives BOTH.
+Gross-of-fee extrapolation = 2*sr_1x − sr_2x.
+
+Batch **stopped on the 3-consecutive-failure escalation** (VolumeProfileAcceptance,
+LiquiditySweepReversal, LVNTraversal all retired). Human decision 2026-07-03:
+run VWAPInstitutionalBand only (the one distinct mean-reversion signal), close
+the batch for HVNMeanReversion / DeltaDivergence / BreakoutDeltaConfirmed. Skips
+write **NO trials.log row** (a skip is not a statistical draw and must not
+inflate the family multiple-testing count — 2026-06-11 precedent).
+
+| Strategy | TF | Verdict | net sr (1x / 2x) | gross (2sr1x−sr2x) | DSR (1x) | n_trades | Status |
+|---|---|---|---|---|---|---|---|
+| VolumeProfileAcceptance | 1h | **retire** | −0.87 / −1.74 | ~0.00 | 0.036 | 607 | run |
+| LiquiditySweepReversal | 15m | **retire** | −4.73 / −7.73 | −1.73 | ~0 | 1576 | run |
+| LVNTraversal | 15m | **retire** | −7.75 / −11.43 | −4.07 | ~0 | 1384 | run |
+| VWAPInstitutionalBand | 15m | **retire** | −2.87 / −4.39 | −1.35 | ~0 | 338 | run |
+| HVNMeanReversion | 1h | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+| DeltaDivergence | 15m | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+| BreakoutDeltaConfirmed | 1h | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+
+Diagnosis — **not merely cost-buried**: the gross-of-fee extrapolation shows
+two of three run displacement strategies wrong-signed BEFORE fees (VPA ~0.00,
+LSR −1.73, LVN −4.07), and the distinct VWAP mean-reversion signal is also
+wrong-signed gross (−1.35). Buy-and-hold dev Sharpe is +0.49 (dev spans the
+2022 bear — not a bull-window artifact), so every strategy massively
+underperforms a passive long. The long-only microstructure/ICT entry
+vocabulary has no positive gross expectancy on BTC spot at 15m–1h; realistic
+0.10% taker cost then buries the high-turnover churn (607–1576 trades / 4y).
+None borderline (DSR ≪ 0.95, outside ±0.05) — no borderline-consult triggered.
+
+4 full_cpcv rows appended to trials.log (VPA, LSR, LVN, VWAP); per-bar series
+persisted. 3 hypotheses pre-registered but not run. Follow-up: add the
+`microstructure-orderflow` cluster to `backtest/strategy_families.json` — the
+4 trials ran with the conservative V[SR]=1.0 per-strategy fallback (warning
+surfaced; verdicts unaffected since all are deeply sub-threshold).
 
 ## Holdout regeneration 2026-06-11 (extended window) — DISCLOSURE
 

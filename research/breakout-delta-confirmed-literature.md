@@ -111,3 +111,18 @@ it 2.5x, so scripts/phase4e_trial_common.py overrides the base rate
 explicitly to the OKX rate rather than mutating the simulator globals.
 Slippage is unchanged across the two runs per the verbatim "2x fees" gate
 wording.
+
+## Outcome (Variation #1)
+
+**PRE-REGISTERED, NOT RUN.** The Phase 4.E batch stopped on the
+3-consecutive-failure escalation (VolumeProfileAcceptance,
+LiquiditySweepReversal, LVNTraversal all retired) and was closed for this
+hypothesis by human decision 2026-07-03. Gross-of-fee extrapolation on the run
+strategies showed two of three displacement strategies wrong-signed BEFORE fees
+(VPA ~0.00, LSR -1.73, LVN -4.07), and VWAPInstitutionalBand (run as the one
+distinct mean-reversion signal) was also wrong-signed gross (-1.35): the shared
+long-only ICT-displacement / profile-delta-confirmation signal vocabulary shows
+no positive gross expectancy on BTC spot at 15m-1h. This hypothesis shares that
+vocabulary and is skipped on that evidence. NO trials.log row was written -- a
+skip is not a statistical draw and must not inflate the family multiple-testing
+count (2026-06-11 precedent).

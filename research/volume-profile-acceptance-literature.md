@@ -110,3 +110,22 @@ it 2.5x, so scripts/phase4e_trial_common.py overrides the base rate
 explicitly to the OKX rate rather than mutating the simulator globals.
 Slippage is unchanged across the two runs per the verbatim "2x fees" gate
 wording.
+
+## Outcome (Variation #1 -- dev CPCV, 2026-07-03)
+
+**Verdict: RETIRE** -- fails the fee-realism gate (Gate 1); the edge survives
+neither fee run and is wrong-signed / flat gross-of-fee.
+
+| Fee run | Net dev Sharpe | DSR |
+|---|---|---|
+| Standard (OKX taker 0.10% + slippage 0.05%) | -0.8733 | 0.0363 |
+| 2x fee (0.20%) | -1.7416 | 1.8e-04 |
+
+- Gross-of-fee extrapolation (2*sr_1x - sr_2x): -0.005
+- n_trades (dev CPCV): 607
+- Buy-and-hold dev Sharpe: +0.49 (the strategy massively underperforms the
+  passive long; dev spans the 2022 bear, so this is not a bull-window artifact).
+- Not borderline (DSR << 0.95 threshold; outside the +/-0.05 borderline margin).
+- trials.log: one full_cpcv row (trial_id fcbd3dc729a14ad19fc922f389fd19a6); per-bar return series persisted.
+
+Interpretation: Flat gross expectancy (~0.00): acceptance above the value area shows no continuation edge on BTC 1h; cost drag then turns it negative.
