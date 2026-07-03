@@ -1,6 +1,13 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-05-08 (autonomy expansion landed -- paper deploy,
+Last updated: 2026-07-03 (Phase 4.E Microstructure/Order-Flow batch
+added as a new strategy category. Human pre-authorization: Kanin
+explicitly approved the addition in chat 2026-07-03 ("Yes, start
+now") after reviewing docs/redesign_proposal_microstructure_2026-07-03.md
+and confirming the data substrate is free. Data recon verified:
+Binance Vision monthly 1m klines with taker buy/sell split download
+and parse correctly back to 2021.)
+Previously 2026-05-08 (autonomy expansion landed -- paper deploy,
 MASTER_PLAN.md outcome rows, paper-mode capital sweeps moved from
 Human-only to Agent-decides per CLAUDE.md "Human only" / "Agent
 decides" 2026-05-08 update; cron orchestrator switched from --once
@@ -371,6 +378,60 @@ re-decided **with data**, not before:
 **Sequencing.** Phase 4.D Phase A runs in parallel with Phase 4.B/4.C exploration — analyst overlay is shadow-only and doesn't touch live strategies, so it doesn't gate anything else. Phase 4.D Phase B gate decision is independent of Phase 4.C branch decision; both can resolve in any order. Phase 4.D Phase C wiring depends only on its own gate, not on Phase 4.A/4.B/4.C outcomes.
 
 **Why this is added.** TradingAgents repo (chat 099a169c, 2026-05-03) was reviewed and pivot-adapted: its analyst-layer pattern adapts to crypto with discrete strategy enable/disable + binary risk flags (overlay v3), not full TradingAgents-style trade execution. This adds market context to the autonomous research loop's direction-finding (Phase 4.C continuation) and provides regime-aware sizing inputs for surviving strategies (if Phase 4.B/4.C produces survivors).
+
+#### Phase 4.E — Microstructure / Order-Flow batch (added 2026-07-03, human pre-authorized)
+
+**Full design: `docs/redesign_proposal_microstructure_2026-07-03.md`
+(canonical for this phase). Summary:**
+
+**Scope.** A new strategy family cluster `microstructure-orderflow`
+fed by genuinely new input data: 1m volume-at-price (volume profile)
+and per-candle taker buy/sell aggressor volume (order-flow delta).
+Seven pre-registered starting hypotheses: VolumeProfileAcceptance,
+LiquiditySweepReversal, LVNTraversal, HVNMeanReversion,
+DeltaDivergence, VWAPInstitutionalBand, BreakoutDeltaConfirmed.
+Concepts sourced from practitioner literature (volume profile /
+order flow / ICT), mechanized into exact rules in per-strategy
+literature files BEFORE any trial runs, per the no-p-hacking rule's
+written-hypothesis path.
+
+**Statistical rationale.** MinTRL is calendar-bound: ~2.7y validates
+only true SR ≥ 1.0. Intraday microstructure is the only strategy
+class whose plausible true SR (1.2–1.5+ net) sits inside the
+validatable zone on available data. New family cluster ⇒ family-layer
+multiple-testing null starts fresh (legitimate because the data
+substrate is genuinely new, not a re-slice of daily closes).
+
+**Data substrate.** Binance Vision free public data (spot monthly 1m
+klines incl. taker buy volume; optionally aggTrades later). Research
+substrate is Binance; execution venue remains OKX. Cross-venue
+provenance disclosure per the 2026-06-11 BNB-backfill precedent.
+Verified 2026-07-03: BTCUSDT-1m-2021-01 downloads, parses, taker
+split present; ~2.4 MB/month zipped; total basket cost $0.
+
+**Batch-specific gate (locked).** Every trial runs at standard taker
+fees + slippage AND at 2× fees; edge must survive both or the
+verdict is retire. Intraday cost realism is the known killer of this
+strategy class.
+
+**Discipline.** Existing rules unchanged: 7 enumerated starting
+hypotheses, 20-variation cap per strategy, 3-consecutive-failure
+batch stop, every trial appends to trials.log, no grid searches.
+Timeframe per strategy (expected default: 15m–1h signal bars on 1m
+profile data).
+
+**Sequencing.** (1) Data layer (`data/binance_vision.py`,
+`data/microstructure.py`) + tests — agent-autonomous infrastructure.
+(2) Literature files with locked pre-trial gates for all 7. (3)
+Manifest entries — rides on the open dev/holdout boundary question
+(docs/project_diagnosis_2026-07-02.md §4); new substrate rows need
+their own dev/holdout split decision (human). (4) Trials through the
+unchanged harness.
+
+**Relation to parked work.** The four near-misses (CSMom,
+AltcoinSeason, NewsSent, AttentionMom) stay parked; their trial
+budget is not spent during 4.E. Paper trading stays deferred per
+Kanin 2026-07-03 until a backtest survivor exists.
 
 #### Phase 4 (paper deploy) — applies only if Phase 4.C produces ≥1 deployable strategy
 
