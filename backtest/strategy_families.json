@@ -8,6 +8,7 @@
     "seasonality",
     "sentiment-attention",
     "microstructure-flow",
+    "microstructure-orderflow",
     "other"
   ],
   "CrossSectionalMomentum": {"family": "cs-momentum-rotation"},
@@ -51,6 +52,13 @@
   "ExchangeListingDrift": {"family": "microstructure-flow"},
   "IlliquidityPremium": {"family": "microstructure-flow"},
   "ExchangeNetflowReversal": {"family": "microstructure-flow"},
+  "VolumeProfileAcceptance": {"family": "microstructure-orderflow"},
+  "LiquiditySweepReversal": {"family": "microstructure-orderflow"},
+  "LVNTraversal": {"family": "microstructure-orderflow"},
+  "HVNMeanReversion": {"family": "microstructure-orderflow"},
+  "DeltaDivergence": {"family": "microstructure-orderflow"},
+  "VWAPInstitutionalBand": {"family": "microstructure-orderflow"},
+  "BreakoutDeltaConfirmed": {"family": "microstructure-orderflow"},
   "CrossSectionalSkewness": {"family": "other"},
   "DCA": {"family": "other"},
   "GridTrading": {"family": "other"}
