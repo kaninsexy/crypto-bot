@@ -89,3 +89,22 @@ Strategy-specific locked gates:
 8. Signal timeframe 1h; R=24; W=100; q75 threshold; b=3.0; trail
    a=2.0; time-stop 48 bars. Any change is a variation #2 requiring a
    fresh written hypothesis (Gate 2).
+
+
+## Cost model (locked -- documented before any trial per Gate 1)
+
+Entries and exits are market (taker) orders filled at the signal bar's
+close, so the taker fee and market slippage apply. The trial runner
+(scripts/phase4e_trial_common.py) runs the full headline + CPCV + DSR +
+verdict evaluation under BOTH cost regimes; the edge must survive both or
+the verdict is retire (Gate 1).
+
+| Run | Taker fee (per side) | Market slippage (per side) | Source |
+|-----|----------------------|----------------------------|--------|
+| Standard | 0.0400% (`FEE_MARKET` = 0.0004) | 0.0500% (`SLIPPAGE_MARKET` = 0.0005) | `paper_trading.simulator` / `backtest.engine` |
+| 2x fees | 0.0800% (`FEE_MARKET` x2 = 0.0008) | 0.0500% (unchanged) | Gate 1 "2x fees" |
+
+Round-trip standard cost ~= 0.18% (2 x (0.04% + 0.05%)); round-trip 2x-fee
+cost ~= 0.26%. Fees are `paper_trading.simulator` module globals read at
+fill time, so the 2x run is applied by doubling them around the evaluation;
+slippage is unchanged per the verbatim "2x fees" gate wording.
