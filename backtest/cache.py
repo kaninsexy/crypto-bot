@@ -331,39 +331,27 @@ def load_binance_vision_signal_frame(
 ) -> pd.DataFrame:
     """Return the enriched signal-timeframe frame for a Binance Vision symbol.
 
-    Resamples the cached 1m klines to `timeframe` and attaches the
-    microstructure feature columns (delta/cum_delta + daily volume-profile
-    poc/vah/val/hvn_prices/lvn_prices) via
-    data.microstructure_features.build_signal_frame.  Backward-looking by
-    construction (see that module).
+    Resamples the cached 1m klines to `timeframe` and attaches the cheap
+    per-bar order-flow delta columns (delta/delta_ratio/cum_delta) via
+    data.microstructure_features.build_signal_frame.  This is the substrate
+    the engine iterates; the volume-profile features are built separately by
+    the trial script (build_profile_features) and injected into the strategy
+    via its constructor, so they are NOT on this frame.
 
     The full-history frame is parquet-cached under
-    `{cache_dir}/_features/{SYM}_{params_id}.parquet` and reused unless a 1m
-    month file is newer than the cached frame.  Returns the FULL cached
+    `{cache_dir}/_features/{SYM}_{timeframe}_sig.parquet` and reused unless a
+    1m month file is newer than the cached frame.  Returns the FULL cached
     range; callers (holdout._build_df) filter to the dev/holdout window.
     """
     # Local imports keep the data package off cache.py's import-time graph
     # (mirrors holdout._load_perp_df's local import of data.okx_perp).
     from data.binance_vision import load_klines
-    from data.microstructure_features import (
-        DEFAULT_MIN_REL_PROMINENCE,
-        DEFAULT_N_BINS,
-        DEFAULT_PROFILE_DAYS,
-        DEFAULT_SMOOTH_BINS,
-        DEFAULT_VALUE_AREA_PCT,
-        build_signal_frame,
-        params_id,
-    )
+    from data.microstructure_features import build_signal_frame
 
     sym = _bv_symbol(symbol)
-    pid = params_id(
-        timeframe, DEFAULT_PROFILE_DAYS, DEFAULT_N_BINS,
-        DEFAULT_SMOOTH_BINS, DEFAULT_MIN_REL_PROMINENCE,
-        DEFAULT_VALUE_AREA_PCT,
-    )
     feat_dir = cache_dir / "_features"
     feat_dir.mkdir(parents=True, exist_ok=True)
-    feat_path = feat_dir / f"{sym}_{pid}.parquet"
+    feat_path = feat_dir / f"{sym}_{timeframe}_sig.parquet"
 
     if feat_path.exists():
         if feat_path.stat().st_mtime >= _bv_newest_month_mtime(sym):
