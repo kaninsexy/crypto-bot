@@ -55,6 +55,30 @@ WINDOW_END = "2025-05-01"     # dev/holdout boundary, respected
 
 CACHE = _REPO / "backtest" / "cache" / "ohlcv"
 
+# I3 robustness substrate. Binance SPOT daily klines reach back to 2017, so the
+# March 2020 crash -- the V-shaped case a 200-day-MA overlay handles WORST, and
+# the case the OKX window excludes by accident -- becomes reachable. Same
+# instrument class as the pre-registration (spot), different venue; the
+# cross-venue provenance precedent is the 2026-06-11 BNB backfill.
+#
+# NOTHING about the RULE changes across substrates: same 200-day MA, same 20 %
+# vol target, same 1.0x cap, same monthly rebalance, same cost. Only the price
+# series and therefore the available window differ.
+BINANCE_SYMBOLS = {"BTC-USDT": "BTCUSDT", "ETH-USDT": "ETHUSDT"}
+
+
+def load_prices_binance(start_month: str = "2019-06") -> pd.DataFrame:
+    """Wide daily close panel from the Binance spot archive (cache-first)."""
+    from data.binance_vision import load_klines
+
+    cols = {}
+    for okx_sym, bn_sym in BINANCE_SYMBOLS.items():
+        df = load_klines(bn_sym, start_month, "2025-05", interval="1d")
+        cols[okx_sym] = df["close"].astype(float)
+    px = pd.DataFrame(cols).sort_index()
+    px = px[px.index <= pd.Timestamp(WINDOW_END, tz="UTC")]
+    return px.dropna(how="any")
+
 
 def load_prices() -> pd.DataFrame:
     """Wide daily close panel for the overlay assets, from the OKX cache.
@@ -150,6 +174,45 @@ def metrics(equity: pd.Series, net: pd.Series, weights: pd.DataFrame | None,
     }
 
 
+def diagnostics(equity: pd.Series, weights: pd.DataFrame) -> dict:
+    """Robustness diagnostics (I3): whipsaws, round trips, drawdown episodes.
+
+    `max_dd_date` matters more than it looks: if the deepest drawdown is not in
+    the crash the window was extended to include, then that crash is not what
+    the headline rests on -- and the reader should be told which episode is.
+    """
+    dd = equity / equity.cummax() - 1.0
+    in_mkt = (weights.sum(axis=1) > 1e-9).astype(int)
+    chg = in_mkt.diff().fillna(0)
+    entries = list(in_mkt.index[chg == 1])
+    exits = list(in_mkt.index[chg == -1])
+
+    whipsaw = {}
+    for e in entries:
+        nxt = [x for x in exits if x > e]
+        if nxt and (nxt[0] - e).days <= 30:      # in and back out inside a month
+            whipsaw[e.year] = whipsaw.get(e.year, 0) + 1
+
+    episodes, inside, trough = [], False, 0.0
+    for v in dd.to_numpy():
+        if v < -0.05:
+            inside, trough = True, min(trough, v)
+        elif inside and v > -0.005:              # recovered to within 0.5 %
+            episodes.append(trough)
+            inside, trough = False, 0.0
+    if inside:
+        episodes.append(trough)
+
+    return {
+        "max_dd_date": str(dd.idxmin().date()),
+        "round_trips": len(entries),
+        "whipsaws_by_year": {str(k): v for k, v in whipsaw.items()},
+        "whipsaws_total": sum(whipsaw.values()),
+        "drawdown_episodes_over_5pct": len(episodes),
+        "episode_depths": [round(float(e) * 100, 1) for e in episodes],
+    }
+
+
 def _pct(x: float) -> str:
     return "n/a" if not np.isfinite(x) else f"{x * 100:+.2f} %"
 
@@ -235,14 +298,29 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", default=None)
     ap.add_argument("--chart", default=None)
+    ap.add_argument("--substrate", choices=("okx", "binance"), default="okx",
+                    help="okx = the pre-registered OKX spot cache (window from "
+                         "2021-05-30); binance = the I3 robustness substrate, "
+                         "Binance spot, which reaches March 2020. The RULE is "
+                         "identical either way.")
+    ap.add_argument("--window-start", default=None,
+                    help="override the first scored date (default: the "
+                         "substrate's first date with a valid 200d signal)")
     args = ap.parse_args(argv[1:])
 
     print("NOTE: A.6 fallback deliverable. NOT an alpha claim; writes NO "
           "trials.log row; scored outside the verdict tree.")
-    px = load_prices()
+    if args.substrate == "binance":
+        px = load_prices_binance()
+        default_start = str((px.index[0] + pd.Timedelta(days=MA_WINDOW)).date())
+    else:
+        px = load_prices()
+        default_start = WINDOW_START
+    start = args.window_start or default_start
+    print(f"substrate: {args.substrate}; scoring from {start}")
     weights = build_weights(px)
 
-    live = px.index >= pd.Timestamp(WINDOW_START, tz="UTC")
+    live = px.index >= pd.Timestamp(start, tz="UTC")
     px_w, w_w = px[live], weights[live]
     if len(px_w) < 400:
         raise SystemExit(f"only {len(px_w)} bars in the scoring window")
@@ -259,6 +337,14 @@ def main(argv: list[str]) -> int:
     print(render(ov, bh))
     print(f"\ndrawdown reduction vs buy & hold: "
           f"{verdict['drawdown_reduction'] * 100:.1f} % (relative)")
+
+    diag = diagnostics(eq_ov, w_w)
+    print("\nrobustness diagnostics:")
+    print(f"  deepest drawdown occurred    : {diag['max_dd_date']}")
+    print(f"  round trips (flat<->long)    : {diag['round_trips']}")
+    print(f"  whipsaws (<=30d round trip)  : {diag['whipsaws_total']}")
+    print(f"  drawdown episodes over 5 %   : "
+          f"{diag['drawdown_episodes_over_5pct']}  {diag['episode_depths']}")
     print("\npre-committed failure checks:")
     for name, (ok, detail) in verdict["checks"].items():
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}: {detail}")
@@ -270,6 +356,7 @@ def main(argv: list[str]) -> int:
             {"window": [str(px_w.index[0].date()), str(px_w.index[-1].date())],
              "overlay": ov, "buy_and_hold": bh,
              "drawdown_reduction": verdict["drawdown_reduction"],
+             "diagnostics": diag,
              "checks": {k: v[0] for k, v in verdict["checks"].items()},
              "passes": verdict["passes"]}, indent=2), encoding="utf-8")
         print(f"\n[json] {args.json}")

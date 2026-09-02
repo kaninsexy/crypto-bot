@@ -1,0 +1,56 @@
+{
+  "window": [
+    "2019-12-18",
+    "2025-05-01"
+  ],
+  "overlay": {
+    "total_return": 1.4216744117010731,
+    "ann_return": 0.17908265935366008,
+    "ann_vol": 0.17289416988513912,
+    "max_drawdown": -0.1597924916025517,
+    "calmar": 1.1207201136777338,
+    "worst_rolling_12m": -0.12257881938480408,
+    "time_in_market": 0.6982670744138634,
+    "total_cost_paid": 0.00831413543184029,
+    "years": 5.368925393566051
+  },
+  "buy_and_hold": {
+    "total_return": 14.725462120525442,
+    "ann_return": 0.670612692502667,
+    "ann_vol": 0.7070200524360465,
+    "max_drawdown": -0.7625369100009564,
+    "calmar": 0.8794494846181622,
+    "worst_rolling_12m": -0.7592500657646543,
+    "time_in_market": 1.0,
+    "total_cost_paid": 0.001,
+    "years": 5.368925393566051
+  },
+  "drawdown_reduction": 0.7904462203641378,
+  "diagnostics": {
+    "max_dd_date": "2023-03-10",
+    "round_trips": 6,
+    "whipsaws_by_year": {},
+    "whipsaws_total": 0,
+    "drawdown_episodes_over_5pct": 12,
+    "episode_depths": [
+      -11.6,
+      -8.1,
+      -5.9,
+      -5.0,
+      -13.1,
+      -16.0,
+      -11.1,
+      -6.2,
+      -8.8,
+      -11.0,
+      -12.3,
+      -12.9
+    ]
+  },
+  "checks": {
+    "drawdown_reduced_20pct": true,
+    "calmar_improved": true,
+    "time_in_market_50pct": true
+  },
+  "passes": true
+}

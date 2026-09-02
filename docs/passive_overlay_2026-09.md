@@ -90,17 +90,19 @@ indicates a favourable window rather than a better rule. See below.
 
 ## What this cannot tell us — the limitations that matter
 
-**One drawdown episode.** The whole drawdown result rests on the 2022 bear.
-A 3.92-year window contains one major decline, so "79 % drawdown reduction" is
-a statement about 2022, not an estimate of what the rule does in general. The
-sample size for the headline metric is effectively **one**.
+**~~One drawdown episode.~~ CORRECTED 2026-09-02 — see Robustness below.**
+This paragraph claimed the result rested on the 2022 bear and that the
+effective sample was one episode. Both were wrong. There are **8 distinct
+drawdown episodes deeper than 5 %** on this window and **12** on the longer
+Binance one, and the deepest is **2023-03-10**, not 2022. The original claim
+was an assumption stated as a finding.
 
-**The window excludes the case this rule is worst at.** Trend overlays fail on
-sharp V-shaped crashes: they exit after the fall and re-enter after the
-recovery, converting a round trip into a realised loss. March 2020 is exactly
-that case, and it is outside this window because the OKX cache starts
-2020-11-11. The 2022 bear was slow and trending — the case trend rules suit.
-So the window is, by accident, favourable to the rule being tested.
+**~~The window excludes the case this rule is worst at.~~ TESTED 2026-09-02 —
+see Robustness below.** This correctly identified March 2020 as the missing
+case. It has now been run on Binance spot, which reaches it: the rule
+**survived**, taking −11.6 % against buy-and-hold's −58.0 %. The reason is not
+the one this paragraph assumed — the vol target had already cut the position
+to ~10 % of notional, so the trend filter was barely the operative part.
 
 **Publication bias applies even though no search was run.** The 200-day MA is
 among the most published rules in existence. This run fitted nothing, but the
@@ -157,9 +159,12 @@ mode is not a bad month; it is the rule ceasing to do its one job.
 3. **Number of round trips per year.** A rise signals whipsaw — repeated
    exit-then-re-enter — which is how a trend overlay bleeds. More than ~6
    round trips in a year deserves investigation.
-4. **The V-shaped-crash case.** The first sharp single-week crash after
-   deployment is the real test, because this window never contained one.
-   Record what the rule did; it is the most informative observation available.
+4. **The V-shaped-crash case.** Updated 2026-09-02: this window did not
+   contain one, but the longer Binance window does (March 2020) and the rule
+   handled it — via the vol target, not the trend filter. So watch the
+   POSITION SIZE going into a crash, not just the flat/long flag: if realised
+   vol has not risen before the drop, the overlay enters it at full weight and
+   the March 2020 result will not repeat.
 
 ## Provenance
 
@@ -167,3 +172,98 @@ mode is not a bad month; it is the rule ceasing to do its one job.
 - Run at the commit recorded in `docs/passive_overlay_2026-09.json`.
 - No `trials.log` row; no `load_holdout` call; `paper_mode` unchanged.
 - Reproduce: `python scripts/run_passive_overlay.py --json out.json --chart out.svg`
+
+---
+
+## Robustness — I3, 2026-09-02. **The rule survives March 2020.**
+
+The original report above rested on one bear market and started 2021-05-30
+because the OKX spot cache begins 2020-11-11. It carried a caveat that the
+window "by accident excludes March 2020 — the sharp V-shaped crash trend
+overlays handle WORST".
+
+That caveat has now been tested rather than asserted, on the **Binance spot**
+archive (same instrument class, different venue; the cross-venue precedent is
+the 2026-06-11 BNB backfill), which reaches back to 2017. **Not one parameter
+of the rule changed** — same 200-day MA, 20 % vol target, 1.0× cap, monthly
+rebalance, 0.10 % per side. Only the price source, and therefore the window.
+
+Reproduce: `python scripts/run_passive_overlay.py --substrate binance`
+
+| metric | **Binance, 2019-12-18 → 2025-05-01 (5.37 y)** | | OKX, 2021-05-30 → 2025-05-01 (3.92 y) | |
+|---|---:|---:|---:|---:|
+| | overlay | buy & hold | overlay | buy & hold |
+| Annualised return | +17.91 % | +67.06 % | +5.19 % | +11.92 % |
+| Annualised volatility | 17.29 % | 70.70 % | 15.55 % | 61.98 % |
+| **Max drawdown** | **−15.98 %** | −76.25 % | **−15.97 %** | −76.26 % |
+| **Calmar** | **1.12** | 0.88 | **0.33** | 0.16 |
+| Worst rolling 12m | −12.26 % | −75.93 % | −12.25 % | −75.93 % |
+| Time in market | 69.8 % | 100 % | 63.8 % | 100 % |
+| **Drawdown reduction** | **79.0 %** | | **79.1 %** | |
+
+All three pre-committed conditions pass on the longer window too.
+
+### It survived — and NOT for the reason you would guess
+
+The overlay was **not** flat through March 2020. It was invested, and it took
+the hit — a small one:
+
+| date | BTC weight | ETH weight | total |
+|---|---|---|---|
+| 2020-02-01 | 0.171 | 0.131 | 0.302 |
+| 2020-03-01 | **0.000** | 0.105 | **0.105** |
+| 2020-04-01 | 0.000 | 0.000 | 0.000 |
+
+Drawdown through 2020-02-15 → 2020-04-15: **overlay −11.61 %, buy-and-hold
+−57.95 %.** Worst single overlay day in March 2020: −4.66 %.
+
+**The vol target did the work, not the 200-day MA.** By February 2020 realised
+volatility had already cut the position to ~30 % of notional, and to ~10 % by
+1 March. The trend filter had only removed BTC. So the protection in the one
+episode this rule was theoretically worst at came from the Barroso &
+Santa-Clara component, not the Faber component — which is worth knowing,
+because it means the two parts are not interchangeable and dropping the vol
+scaling to "simplify" would remove the half that mattered here.
+
+### Two corrections to the original report
+
+**1. "The result rests on ONE episode" was wrong.** On the longer window there
+are **12 distinct drawdown episodes deeper than 5 %** (−16.0, −13.1, −12.9,
+−12.3, −11.6, −11.1, −11.0, −8.8, −8.1, −6.2, −5.9, −5.0 %), and 8 on the
+original window. The headline is not a single-episode artifact.
+
+**2. The deepest drawdown is not in 2022, and not in March 2020 — it is
+2023-03-10, on BOTH windows.** That is why the two max-drawdown figures are
+almost identical (−15.98 % vs −15.97 %): the binding episode lies in the
+overlap, so extending the window backwards did not find anything worse. The
+original report attributed the drawdown result to "the 2022 bear"; that was an
+assumption, and it was wrong.
+
+### What got worse, and it is the honest headline
+
+**The return sacrifice is far larger on the longer window: +17.91 % vs
++67.06 % — the overlay gives up 73 % of buy-and-hold's return**, against 57 %
+on the shorter one. The extra years are the 2020–21 bull run, exactly the
+regime a trend-and-vol overlay is worst-positioned for, and the vol target in
+particular caps participation precisely when returns are highest.
+
+Read the two windows together: the overlay's drawdown protection is stable
+(79 % on both), and its cost is not — it depends heavily on how much bull
+market the window contains. **Anyone extrapolating the Calmar of 1.12 should
+notice it is flattered by a start date near the December 2019 low.**
+
+### Whipsaw: zero
+
+**0 whipsaws** (flat → long → flat inside 30 days) across 5.37 years, with 6
+round trips total. The monthly rebalance suppresses the failure mode that
+usually bleeds trend overlays. Total cost paid over the whole period: 0.83 %.
+
+### What still cannot be claimed
+
+- One venue pair, two assets, one rule, one parameterisation.
+- 200-day MA overlays remain among the most published rules in existence, so
+  aggregate publication bias applies even though this ran no search.
+- 2019-12 → 2025-05 contains one full cycle. Two would be better.
+- Still **not** an alpha claim, still **no** `trials.log` row, and it would
+  still fail gate v2 by construction — more decisively on this window, since
+  it gives up 73 % of the return.

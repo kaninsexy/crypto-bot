@@ -26,6 +26,23 @@
     "years": 3.920602327173169
   },
   "drawdown_reduction": 0.7905787508632617,
+  "diagnostics": {
+    "max_dd_date": "2023-03-10",
+    "round_trips": 5,
+    "whipsaws_by_year": {},
+    "whipsaws_total": 0,
+    "drawdown_episodes_over_5pct": 8,
+    "episode_depths": [
+      -7.7,
+      -16.0,
+      -11.2,
+      -6.2,
+      -8.8,
+      -11.0,
+      -12.3,
+      -12.9
+    ]
+  },
   "checks": {
     "drawdown_reduced_20pct": true,
     "calmar_improved": true,
