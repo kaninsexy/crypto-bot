@@ -1,0 +1,35 @@
+{
+  "window": [
+    "2021-05-30",
+    "2025-05-01"
+  ],
+  "overlay": {
+    "total_return": 0.21956485249800117,
+    "ann_return": 0.051932001620015544,
+    "ann_vol": 0.15550515564521697,
+    "max_drawdown": -0.15969867782509917,
+    "calmar": 0.32518742376121046,
+    "worst_rolling_12m": -0.12252955637386043,
+    "time_in_market": 0.6378227494766224,
+    "total_cost_paid": 0.006251312661967546,
+    "years": 3.920602327173169
+  },
+  "buy_and_hold": {
+    "total_return": 0.5548599742816007,
+    "ann_return": 0.11916295176291425,
+    "ann_vol": 0.6198075043345838,
+    "max_drawdown": -0.7625715083039467,
+    "calmar": 0.15626462628789708,
+    "worst_rolling_12m": -0.7592704348673046,
+    "time_in_market": 1.0,
+    "total_cost_paid": 0.001,
+    "years": 3.920602327173169
+  },
+  "drawdown_reduction": 0.7905787508632617,
+  "checks": {
+    "drawdown_reduced_20pct": true,
+    "calmar_improved": true,
+    "time_in_market_50pct": true
+  },
+  "passes": true
+}

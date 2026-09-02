@@ -438,6 +438,51 @@ Kanin 2026-07-03 until a backtest survivor exists.
 
 #### Phase 4.F — Perp-structural batch (added 2026-09-02, human pre-authorized)
 
+> ## CLOSED 2026-09-02 — 0 of 3 families testable, 0 confirmation trials run
+>
+> **Not three kills. Three families the sealed discovery window could not
+> resolve at the effect sizes their own kill tests pre-registered.** That
+> distinction is the outcome of this phase, and it is a finding about the
+> experiment rather than about the market.
+>
+> | family | statistic | t | MDE at t>3 | bar | outcome |
+> |---|---|---|---|---|---|
+> | funding_dispersion_carry | +0.2748 %/day | 2.94 | 0.2805 %/day | 0.15 %/day | untestable |
+> | listing_flow | −7.05 % CAR | −2.42 | 8.73 % | 3.0 % | untestable |
+> | deleveraging_reversal | −1.71 % | −1.78 | 2.62 % | 1.5 % | untestable (REFUSED by the power gate) |
+>
+> In every case the minimum detectable effect exceeds the pre-registered
+> threshold, so a "killed" verdict would have recorded the sample size rather
+> than the substrate. None is fixable by widening: funding needs ~10 years of
+> rebalance days against a 3-year window; listing_flow's kill test assumed
+> ~900 listings where the archive holds 166; deleveraging needs ~674 events
+> where the entire pre-2023 perp universe yields 220.
+>
+> **`backtest/trials.log` gained ZERO rows.** Discovery screens write ledger
+> rows, not trials (`research/discovery/*.md`); N_disc = 1 per family. The
+> holdout was never read.
+>
+> **One powered observation is recorded as a LEAD, not a result, and was not
+> acted on:** deleveraging at +1 day shows −6.28 %, t = −7.78, MDE 2.42 % —
+> significant, adequately powered, and the OPPOSITE sign to the hypothesis
+> (cascades continue rather than revert). It is not the pre-registered
+> horizon. Testing it is a NEW pre-registered screen with N_disc = 2, and a
+> human decision. See `research/discovery/deleveraging_reversal.md`.
+>
+> **Standing deliverable:** the §A.6 fallback (passive BTC/ETH + trend/vol
+> overlay) is built and documented at `docs/passive_overlay_2026-09.md`. It
+> is risk management, not alpha — no trials.log row, scored outside the
+> verdict tree. Drawdown −15.97 % vs −76.26 % buy-and-hold (79 % relative
+> reduction), Calmar 0.33 vs 0.16, at the cost of 57 % of the return. Awaiting
+> a human decision on direction.
+>
+> **What the phase actually established:** the Binance UM discovery window
+> (2020-01→2022-12, and effectively 2021-12→2022-12 for anything
+> cross-sectional in open interest) is too small to test structural effects at
+> the 1.5–3 % scale. Future perp work on this substrate should either
+> pre-register much larger effect sizes, or accept that confirmation must
+> carry the statistical weight the discovery window cannot.
+
 **Authorization:** Kanin pre-authorized this category in the 2026-09-02
 megaloop prompt AUTONOMY block (`docs/MASTER_PLAN.md` named explicitly)
 and reaffirmed it in session. Proposal text:
