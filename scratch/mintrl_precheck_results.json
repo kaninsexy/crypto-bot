@@ -1,0 +1,47 @@
+{
+  "CrossSectionalMomentum": {
+    "available_bars": 1581,
+    "min_trl": 985.0381049070172,
+    "avail_years": 4.328542094455853,
+    "need_years": 2.6968873508747904,
+    "testable": true,
+    "skew": 0.15080770464400842,
+    "kurt": 6.375892064994074
+  },
+  "AltcoinSeasonRotation": {
+    "available_bars": 1581,
+    "min_trl": 985.0381049070172,
+    "avail_years": 4.328542094455853,
+    "need_years": 2.6968873508747904,
+    "testable": true,
+    "skew": 0.15080770464400842,
+    "kurt": 6.375892064994074
+  },
+  "NewsSentimentMomentum": {
+    "available_bars": 1581,
+    "min_trl": 985.0381049070172,
+    "avail_years": 4.328542094455853,
+    "need_years": 2.6968873508747904,
+    "testable": true,
+    "skew": 0.15080770464400842,
+    "kurt": 6.375892064994074
+  },
+  "AttentionMomentum": {
+    "available_bars": 1460,
+    "min_trl": 993.8785666995635,
+    "avail_years": 3.997262149212868,
+    "need_years": 2.7210912161521246,
+    "testable": true,
+    "skew": -0.022800827448818936,
+    "kurt": 6.17434961592334
+  },
+  "FundingRateHarvest_BTC": {
+    "available_bars": 32112,
+    "min_trl": 23745.79311987972,
+    "avail_years": 3.6632443531827517,
+    "need_years": 2.708851599347447,
+    "testable": true,
+    "skew": -0.07121144376862558,
+    "kurt": 15.726075825978132
+  }
+}
