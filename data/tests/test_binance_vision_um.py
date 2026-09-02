@@ -187,7 +187,7 @@ def test_universe_table_delisted_logic(monkeypatch, cache):
     row = df.set_index("symbol")
     assert row.loc["BTCUSDT", "first_month"] == "2020-01"
     assert row.loc["BTCUSDT", "last_month"] == "2026-08"
-    assert bool(row.loc["BTCUSDT", "delisted"]) is False   # 2026-08 == cutoff
+    assert bool(row.loc["BTCUSDT", "delisted"]) is False   # 2026-08 >= cutoff (2026-07)
     assert row.loc["LUNAUSDT", "last_month"] == "2022-05"
     assert bool(row.loc["LUNAUSDT", "delisted"]) is True
     assert (cache / "universe.parquet").exists()
@@ -210,6 +210,98 @@ def test_universe_table_uses_cache(monkeypatch, cache):
     first = calls["n"]
     um.universe_table(force=False, cache_dir=cache)
     assert calls["n"] == first  # second call served from parquet
+
+
+def test_universe_table_delisted_slack_two_months(monkeypatch, cache):
+    """Archive fix: month M's files land partway through month M+1, so an
+    ACTIVE symbol's last_month can legitimately be two months behind
+    "now" (recon_binance_um_2026-09.md §1: on 2026-09-02 all 229 pre-2023
+    symbols had last_month=2026-07 and were mis-flagged delisted under the
+    old one-month cutoff). last_month == current_month - 2 must NOT be
+    delisted; last_month == current_month - 3 must be."""
+    keys = {
+        "ACTIVEUSDT": ["2020-01", "2026-06", "2026-07"],   # current - 2 -> alive
+        "GONEUSDT": ["2020-01", "2026-05", "2026-06"],      # current - 3 -> delisted
+    }
+    monkeypatch.setattr(um, "list_symbols", lambda session=None: sorted(keys))
+    monkeypatch.setattr(um, "_LIST_SLEEP", 0.0)
+    monkeypatch.setattr(um, "_current_month", lambda: pd.Period("2026-09", freq="M"))
+
+    def fake_list_keys(prefix, session=None):
+        sym = prefix[len(um.KLINES_PREFIX):].split("/")[0]
+        return [f"{prefix}{sym}-1d-{m}.zip" for m in keys[sym]]
+
+    monkeypatch.setattr(um, "list_keys", fake_list_keys)
+    df = um.universe_table(force=True, cache_dir=cache).set_index("symbol")
+    assert bool(df.loc["ACTIVEUSDT", "delisted"]) is False
+    assert bool(df.loc["GONEUSDT", "delisted"]) is True
+
+
+# ─────────────────────────────────────────────── universe: perp_only ──
+
+PERP_ONLY_KEYS = {
+    "BTCUSDT": ["2020-01", "2026-07"],                # keep: plain USDT perp
+    "ETHUSDT": ["2020-01", "2026-07"],                # keep: plain USDT perp
+    "BTCUSDT_210326": ["2021-01", "2021-03"],         # drop: quarterly delivery
+    "BNXUSDTSETTLED": ["2022-04", "2022-12"],         # drop: settled duplicate
+    "ICPUSDT_SETTLED": ["2021-05", "2022-06"],        # drop: settled + underscore
+    "BTCBUSD": ["2021-01", "2022-11"],                # drop: BUSD-margined dup
+}
+
+
+def _perp_only_universe(monkeypatch, cache, force=True, **kwargs):
+    monkeypatch.setattr(um, "list_symbols", lambda session=None: sorted(PERP_ONLY_KEYS))
+    monkeypatch.setattr(um, "_LIST_SLEEP", 0.0)
+    monkeypatch.setattr(um, "_current_month", lambda: pd.Period("2026-09", freq="M"))
+
+    def fake_list_keys(prefix, session=None):
+        sym = prefix[len(um.KLINES_PREFIX):].split("/")[0]
+        return [f"{prefix}{sym}-1d-{m}.zip" for m in PERP_ONLY_KEYS[sym]]
+
+    monkeypatch.setattr(um, "list_keys", fake_list_keys)
+    return um.universe_table(force=force, cache_dir=cache, **kwargs)
+
+
+def test_universe_table_perp_only_default_excludes_junk(monkeypatch, cache):
+    df = _perp_only_universe(monkeypatch, cache)
+    assert sorted(df["symbol"]) == ["BTCUSDT", "ETHUSDT"]
+
+
+def test_universe_table_perp_only_false_keeps_raw(monkeypatch, cache):
+    df = _perp_only_universe(monkeypatch, cache, perp_only=False)
+    assert sorted(df["symbol"]) == sorted(PERP_ONLY_KEYS)
+
+
+def test_universe_table_perp_only_variants_share_one_cache(monkeypatch, cache):
+    """The parquet cache must store the RAW table; perp_only/quote filter
+    on read so filtered and unfiltered calls don't collide or force a
+    redundant network rebuild."""
+    calls = {"n": 0}
+    monkeypatch.setattr(um, "list_symbols", lambda session=None: sorted(PERP_ONLY_KEYS))
+    monkeypatch.setattr(um, "_LIST_SLEEP", 0.0)
+    monkeypatch.setattr(um, "_current_month", lambda: pd.Period("2026-09", freq="M"))
+
+    def fake_list_keys(prefix, session=None):
+        calls["n"] += 1
+        sym = prefix[len(um.KLINES_PREFIX):].split("/")[0]
+        return [f"{prefix}{sym}-1d-{m}.zip" for m in PERP_ONLY_KEYS[sym]]
+
+    monkeypatch.setattr(um, "list_keys", fake_list_keys)
+    um.universe_table(force=True, cache_dir=cache)  # perp_only=True, builds + caches raw
+    built_calls = calls["n"]
+
+    filtered = um.universe_table(force=False, cache_dir=cache, perp_only=True)
+    raw = um.universe_table(force=False, cache_dir=cache, perp_only=False)
+    assert calls["n"] == built_calls  # both served from the one cached raw parquet
+    assert sorted(filtered["symbol"]) == ["BTCUSDT", "ETHUSDT"]
+    assert sorted(raw["symbol"]) == sorted(PERP_ONLY_KEYS)
+
+
+def test_universe_table_quote_param(monkeypatch, cache):
+    # quote="BUSD" keeps the plain BUSD-margined perp and drops the
+    # USDT-quoted ones -- perp_only and quote are independent filters.
+    df = _perp_only_universe(monkeypatch, cache, quote="BUSD")
+    assert list(df["symbol"]) == ["BTCBUSD"]
 
 
 # ────────────────────────────────────────────────────────── klines ──

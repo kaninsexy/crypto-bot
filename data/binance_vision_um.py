@@ -50,7 +50,8 @@ Public API
 list_prefixes(prefix)                 -> list[str]
 list_keys(prefix)                     -> list[str]
 list_symbols()                        -> list[str]
-universe_table(force=False)           -> DataFrame[symbol, first_month,
+universe_table(force=False, perp_only=True, quote="USDT")
+                                       -> DataFrame[symbol, first_month,
                                                    last_month, delisted]
 fetch_klines(symbol, interval, start, end, until=None)  -> DataFrame
 fetch_funding(symbol, start, end, until=None)           -> DataFrame
@@ -340,17 +341,73 @@ def _months_from_keys(keys) -> list:
     return sorted(set(months))
 
 
+# Delisting slack: the archive publishes month M's monthly zip files
+# partway through month M+1 (observed lag, not documented by Binance),
+# so on any given day the most recent monthly file for a symbol that is
+# still actively trading can legitimately be TWO calendar months behind
+# "now" (e.g. on 2026-09-02 the 2026-08 files are not yet published, so
+# an active symbol's last_month is 2026-07).  A one-month cutoff flags
+# the entire live universe as delisted every month until the new files
+# land; recon_binance_um_2026-09.md Â§1 caught this (all 229 pre-2023
+# symbols in a fresh universe_table() showed delisted=True on 2026-09-02
+# with last_month=2026-07).  Two months of slack absorbs the publish lag
+# while still catching symbols that stopped shipping files entirely.
+_DELISTED_SLACK_MONTHS = 2
+
+_SETTLED_SUFFIX = "SETTLED"
+
+
+def _is_perp_symbol(symbol: str, quote: str) -> bool:
+    """True for a plain USDT-margined perpetual, per recon_binance_um_2026-09.md §2.
+
+    Excludes:
+      - quarterly delivery contracts and other underscore-suffixed
+        variants (e.g. ``BTCUSDT_210326``, ``ICPUSDT_SETTLED``) — the
+        archive names these with an ``_`` separator regardless of what
+        follows it.
+      - settled/delisted marker duplicates without an underscore
+        (e.g. ``BNXUSDTSETTLED``, ``TLMUSDTSETTLED``).
+      - other-quote duplicates of a USDT perp (e.g. ``BTCBUSD``) —
+        excluded by the ``quote`` suffix check, not a separate rule.
+    """
+    if "_" in symbol:
+        return False
+    if symbol.endswith(_SETTLED_SUFFIX):
+        return False
+    return symbol.endswith(quote)
+
+
+def _filter_universe(df: pd.DataFrame, perp_only: bool, quote: str) -> pd.DataFrame:
+    if not perp_only or len(df) == 0:
+        return df.reset_index(drop=True)
+    mask = df["symbol"].map(lambda s: _is_perp_symbol(s, quote))
+    return df.loc[mask].sort_values("symbol").reset_index(drop=True)
+
+
 def universe_table(
     force: bool = False,
     cache_dir=DEFAULT_CACHE_DIR,
     symbols=None,
     session=None,
+    perp_only: bool = True,
+    quote: str = "USDT",
 ) -> pd.DataFrame:
     """Per-symbol listing/delisting table built from the 1d kline keys.
 
     Columns: symbol, first_month, last_month, delisted.  ``delisted`` is
-    True when ``last_month`` is older than the previous calendar month
-    (i.e. the symbol stopped producing monthly archives).
+    True when ``last_month`` is older than
+    ``current_month - _DELISTED_SLACK_MONTHS`` (see the module-level
+    comment on ``_DELISTED_SLACK_MONTHS`` for why two months of slack
+    are required, not one).
+
+    ``perp_only`` (default True) drops quarterly-delivery / SETTLED /
+    non-``quote``-margined duplicate instruments so the table reflects
+    the tradeable perp universe — see ``_is_perp_symbol``.  The cache on
+    disk always stores the RAW (unfiltered) table; filtering is applied
+    on every read (cached or freshly built) so ``perp_only=True`` and
+    ``perp_only=False`` calls never collide over the same parquet file.
+    Pass ``perp_only=False`` to get the raw table including delivery
+    contracts and settled duplicates.
 
     ~990 listing calls on a cold run; cached to
     ``backtest/cache/binance_um/universe.parquet``.
@@ -359,7 +416,7 @@ def universe_table(
     if not force:
         cached = _read_parquet_if_exists(cache_path)
         if cached is not None:
-            return cached
+            return _filter_universe(cached, perp_only, quote)
 
     syms = list(symbols) if symbols is not None else list_symbols(session=session)
     logger.info("binance_um: building universe table for {} symbols", len(syms))
@@ -381,7 +438,7 @@ def universe_table(
         time.sleep(_LIST_SLEEP)
 
     df = pd.DataFrame(rows, columns=["symbol", "first_month", "last_month"])
-    cutoff = _current_month() - 1
+    cutoff = _current_month() - _DELISTED_SLACK_MONTHS
     if len(df) > 0:
         df["delisted"] = df["last_month"].map(lambda m: pd.Period(m, freq="M") < cutoff)
     else:
@@ -391,10 +448,10 @@ def universe_table(
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(cache_path)
     logger.info(
-        "binance_um: universe table {} symbols ({} delisted) -> {}",
+        "binance_um: universe table (raw) {} symbols ({} delisted) -> {}",
         len(df), int(df["delisted"].sum()) if len(df) > 0 else 0, cache_path,
     )
-    return df
+    return _filter_universe(df, perp_only, quote)
 
 
 # ────────────────────────────────────────────────────────── klines ──

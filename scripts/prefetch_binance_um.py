@@ -77,7 +77,11 @@ def _resolve_symbols(args) -> list:
     if args.symbols:
         return [normalise_symbol(s) for s in args.symbols.split(",") if s.strip()]
 
-    uni = universe_table(force=args.force, cache_dir=args.cache_dir)
+    # perp_only=True (default) drops quarterly-delivery contracts, SETTLED
+    # duplicates, and BUSD-margined duplicates of the USDT perp -- see
+    # data/binance_vision_um.py:_is_perp_symbol and
+    # docs/recon_binance_um_2026-09.md §2.
+    uni = universe_table(force=args.force, cache_dir=args.cache_dir, perp_only=True)
     live = uni.loc[~uni["delisted"].astype(bool), "symbol"].tolist()
     if args.all:
         return live
