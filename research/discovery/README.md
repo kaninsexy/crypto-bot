@@ -12,13 +12,28 @@ surviving screen; it writes exactly one `trials.log` row and carries
 the ledger's `N_disc` into its pre-registration as an additional
 Bonferroni-style haircut on the confirmation DSR.
 
-> **Status (2026-09-02):** the discovery / confirmation split is
-> **proposed, not approved**. The rule text lives in
-> `docs/proposed_backtest_rule_discovery_2026-09.md` and requires human
-> pre-authorization to land in `.claude/rules/backtest.md` (sacred
-> doc). Until it lands, the screens in `scripts/discovery_*.py` may be
-> run with `--selftest` only. No real-data screen, and therefore no
-> ledger row, is authorised yet.
+> **Status (2026-09-02, updated later the same day):** the discovery /
+> confirmation split is **APPROVED and IN FORCE**. The rule text landed
+> verbatim in `.claude/rules/backtest.md` § "Discovery / confirmation
+> split" at commit `6a564ec`, under the human pre-authorization in the
+> 2026-09-02 megaloop prompt's AUTONOMY section (CLAUDE.md
+> "Pre-authorization exception"). Real-data screens and ledger rows are
+> therefore authorised.
+>
+> The paragraph this replaces said the opposite — screens `--selftest`
+> only, no ledger row authorised — because it was written a few hours
+> before the rule landed. It is corrected rather than left standing:
+> a README that contradicts the sacred rule file is worse than either
+> one alone, since the next reader cannot tell which is current.
+>
+> One detail the rule's wording leaves implicit. It applies to
+> "substrates whose manifest entry declares a `discovery_end`". The
+> three Phase 4.F entries declare it inside `notes`
+> (`discovery_end=2023-01-01`), not as a top-level field, for the same
+> reason they carry `substrate=binance_um` there: adding a manifest
+> field is a schema change and human-only. The screens enforce the
+> window from their own `DISCOVERY_END` constant and hard-assert it, so
+> the seal does not depend on the manifest being parsed for it.
 
 ## Hard rules for every row
 

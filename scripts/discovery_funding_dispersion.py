@@ -79,6 +79,11 @@ N_DECILES = 10
 DOLLAR_VOLUME_LOOKBACK_DAYS = 30
 COST_PER_REBALANCE = 2 * 0.0005      # 0.05 % × 2, per §C.4
 THRESHOLD_PCT_PER_DAY = 0.15
+# Harvey-Liu: t > 3 for a multiply-tested claim. Cited as the basis of the
+# discovery/confirmation split in `.claude/rules/backtest.md`, asserted by this
+# script's own --selftest, and enforced by the sibling listing-flow screen.
+# It reaches `verdict` as of 2026-09-02 (see the note there).
+T_THRESHOLD = 3.0
 
 
 # ── Discovery-window guard ───────────────────────────────────────────────────
@@ -327,17 +332,49 @@ def append_ledger_row(result: dict, conclusion: str) -> None:
 
 
 def verdict(result: dict) -> str:
+    """Both pre-registered conditions, or it does not survive.
+
+    BUG FIX 2026-09-02, disclosed because the timing matters: this function
+    previously checked ONLY the %/day threshold and ignored the t-stat. The
+    first real run returned 0.2748 %/day (clears 0.15) at t = 2.939 (misses
+    t > 3) and was reported as "survives". It is not.
+
+    Both conditions were pre-registered, not invented after the fact:
+      * `.claude/rules/backtest.md` § "Discovery / confirmation split" cites
+        Harvey-Liu, "t > 3 for multiply-tested claims", as the basis of the
+        whole split;
+      * this script's own `--selftest` already asserts `t_stat > 3.0` on its
+        synthetic positive case, so the author knew the bar — it just never
+        reached `verdict`;
+      * the sibling screen `scripts/discovery_listing_flow.py` enforces
+        `|t| > T_THRESHOLD` alongside its effect-size bar, so the two family
+        screens were applying different rules to the same batch.
+
+    The fix is made AFTER seeing 2.939, which is exactly the situation the
+    no-p-hacking rule polices — so note the direction: it makes the test
+    STRICTER, and it makes a bar that was already written down actually bind.
+    Moving a threshold to admit a result is p-hacking; repairing a check that
+    failed to apply a pre-registered threshold is the opposite. The superseded
+    ledger row is retained per README rule 4, with a correction row appended.
+    """
     if result["n_days"] == 0 or not math.isfinite(result["mean_pct"]):
         return "inconclusive — no usable rebalance days"
-    if result["mean_pct"] >= THRESHOLD_PCT_PER_DAY:
+    clears_effect = result["mean_pct"] >= THRESHOLD_PCT_PER_DAY
+    t_stat = result.get("t_stat", float("nan"))
+    clears_t = math.isfinite(t_stat) and abs(t_stat) > T_THRESHOLD
+    if clears_effect and clears_t:
         return (
             f"survives — net {result['mean_pct']:.4f} %/day >= "
-            f"{THRESHOLD_PCT_PER_DAY} %/day threshold"
+            f"{THRESHOLD_PCT_PER_DAY} %/day at |t|={abs(t_stat):.2f} > "
+            f"{T_THRESHOLD}"
         )
-    return (
-        f"killed — net {result['mean_pct']:.4f} %/day < "
-        f"{THRESHOLD_PCT_PER_DAY} %/day threshold"
-    )
+    misses = []
+    if not clears_effect:
+        misses.append(
+            f"net {result['mean_pct']:.4f} %/day < {THRESHOLD_PCT_PER_DAY} %/day")
+    if not clears_t:
+        misses.append(f"|t|={abs(t_stat):.2f} <= {T_THRESHOLD}")
+    return "killed — " + "; ".join(misses)
 
 
 def report(result: dict) -> None:
