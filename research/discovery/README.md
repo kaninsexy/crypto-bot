@@ -83,6 +83,68 @@ Append rows with the screens' own `--append-ledger` flag rather than by
 hand, so the script/commit provenance and the date cannot drift from
 the numbers.
 
+## Dependence-corrected significance — DECISION RULE, pre-committed 2026-09-02
+
+**Written and committed BEFORE any clustered number was computed.** The
+commit order is the point: a dependence correction decided after seeing its
+own output is not a correction, it is a selection.
+
+### Why
+
+All three 2026-09-02 screens computed ordinary standard errors, which assume
+observations are independent. They are not, and in each case the dependence is
+structural rather than incidental:
+
+- **deleveraging_reversal** — liquidation cascades hit every coin on the same
+  few days. A "220-event" sample is really a much smaller number of market-wide
+  episodes observed across many symbols.
+- **listing_flow** — listings cluster in bull markets, and the [+0,+20] day CAR
+  windows of nearby listings physically overlap, so their abnormal returns
+  share the same market path.
+- **funding_dispersion_carry** — the daily 10-1 spread is a time series with
+  substantial rank persistence; consecutive days are not fresh draws.
+
+Ordinary standard errors are therefore too small and every recorded t-stat is
+overstated by an unknown factor. This is a defect the pre-flight power gate
+does NOT catch: the gate fixes sample SIZE, and says nothing about whether the
+observations in that sample are independent.
+
+### Method, fixed before running
+
+For each screen, recompute the significance of the **already-recorded**
+statistic. Same signal, same universe, same horizon, same window, same point
+estimate — only the standard error changes.
+
+| family | correction |
+|---|---|
+| deleveraging_reversal (+3d headline **and** the +1d lead) | cluster by EVENT DATE (all symbols sharing a UTC date = one cluster); plus a by-episode variant merging dates within 5 calendar days |
+| listing_flow | cluster by listing DATE; plus a non-overlapping variant using one CAR per calendar month |
+| funding_dispersion_carry | Newey–West HAC on the daily 10-1 spread, lag 10; report lag 5 and 20 for sensitivity |
+
+Report for each: the number of clusters `G`, the clustered t, and the
+**design-effect ratio** `t_ordinary / t_clustered`. Use `G − 1` degrees of
+freedom and state the small-G caveat when `G < 30`.
+
+### Decision rule — fixed now, before the numbers exist
+
+1. **A screen already recorded as "untestable" stays untestable.** Clustering
+   can only widen an interval. Nothing in this exercise can revive a family,
+   and no result here may be read as doing so.
+2. **The +1d deleveraging LEAD (BK-0016) survives only if BOTH hold:**
+   clustered `|t| > 3`, **AND** the clustered MDE (`3 × clustered SE`) remains
+   below the observed `|effect|`. If either fails, BK-0016 is closed as
+   *clustered away* and Phase 4.F has **no live lead**.
+3. **No other outcome unlocks anything.** There is no branch of this analysis
+   that authorises a confirmation trial, a new screen, or a parameter change.
+
+### N_disc is UNCHANGED by this exercise
+
+This is not a new screen. It re-computes the standard error of a statistic
+already in the ledger — the same class of correction as the 2026-09-02
+`funding_dispersion` verdict fix, and like that one it can only make a test
+**stricter**. Every family's `N_disc` stays at its current value, and the
+appended notes say so explicitly.
+
 ## Files
 
 | file | family | screen |
