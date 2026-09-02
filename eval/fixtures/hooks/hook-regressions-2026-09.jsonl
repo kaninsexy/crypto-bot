@@ -1,0 +1,30 @@
+# Regressions found by USING the guard layer on 2026-09-02, the day it was
+# installed. Both are the same failure class, and it is not the obvious one: a
+# guard that false-blocks routine work gets disabled by whoever hits it, which
+# is a slower way of failing open than exiting 127. Pinned here so neither can
+# come back.
+#
+# BK-0011 — no-secrets-in-bash.py: the Resend key pattern was
+#   re_[a-zA-Z0-9_-]{20,}  with no left boundary, so it matched INSIDE the
+#   ordinary path scripts/pre_commit_backlog_check.sh (the 20 characters after
+#   "re_" being "commit_backlog_check"). It blocked every Bash command naming
+#   that script, including the commit message describing the fix.
+#   Fixed to (?<![A-Za-z0-9_-])re_[A-Za-z0-9]{20,} .
+#
+# commit-guard.py: the invocation test was re.search(r"\bgit\s+commit\b") over
+#   the RAW command, so a `python - <<'PY' ... PY` call whose source merely
+#   quoted a git-commit command was treated as a commit — and its PYTHON body
+#   was then validated as a commit message and refused. Fixed to strip heredoc
+#   bodies, tokenize into pipeline segments, and require argv0 == git with the
+#   first non-flag argument == commit.
+{"desc": "BK-0011: an ordinary path whose basename contains 're_' is NOT a Resend key", "hook": "no-secrets-in-bash.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "bash scripts/pre_commit_backlog_check.sh"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "BK-0011: the same path inside a commit-message body is NOT a Resend key", "hook": "no-secrets-in-bash.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -F - <<'EOF'\nfix(gate): tidy\n\nsee scripts/pre_commit_backlog_check.sh for the gate\nEOF"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "BK-0011: the fix NARROWED the pattern, it did not delete it — a real Resend key still blocks", "hook": "no-secrets-in-bash.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "curl -H 'Authorization: Bearer re_AbCdEfGhIjKlMnOpQrStUv' https://api.resend.com/emails"}, "session_id": "tier1"}, "expect_exit": 2, "expect_stderr_contains": "BLOCKED"}
+{"desc": "BK-0011: a Resend key at the very start of the command still blocks (lookbehind, not \\b)", "hook": "no-secrets-in-bash.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "re_AbCdEfGhIjKlMnOpQrStUv"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "commit-guard: a python heredoc that merely QUOTES a git-commit command is not a commit", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "python - <<'PY'\nfixture = \"git commit -F - <<'EOF'\\nported the hooks\\nEOF\"\nprint(fixture)\nPY"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "commit-guard: a chained `git add -A && git commit` IS still gated (the fix must not wave chains past)", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git add -A && git commit -F - <<'EOF'\nported the hooks\n\nbody\nEOF"}, "session_id": "tier1"}, "expect_exit": 2, "expect_stderr_contains": "conventional format"}
+{"desc": "commit-guard: a chained commit with a conventional subject passes", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git add -A && git commit -F - <<'EOF'\nfix(hooks): narrow the resend pattern\n\nbody\nEOF"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "commit-guard: a commit reached after two other git segments is still gated", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git add -A && git status && git commit -F - <<'EOF'\nported the hooks\n\nbody\nEOF"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "commit-guard: `git -C /tmp status` is not a commit", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git -C /tmp status"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "commit-guard: `git add -A` alone is not a commit", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git add -A"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "commit-guard: `echo git commit` is not a commit invocation", "hook": "commit-guard.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "echo git commit"}, "session_id": "tier1"}, "expect_exit": 0}

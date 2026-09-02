@@ -48,7 +48,14 @@ PATTERNS: tuple[str, ...] = (
     r"sk-ant-[a-zA-Z0-9_-]{20,}",          # Anthropic
     r"sk-or-[a-zA-Z0-9_-]{20,}",           # OpenRouter
     r"sk-[a-zA-Z0-9]{32,}",                # OpenAI
-    r"re_[a-zA-Z0-9_-]{20,}",              # Resend (notifier agent)
+    # Resend (notifier agent). The left lookbehind and the alnum-only body are
+    # both load-bearing: the first draft was `re_[a-zA-Z0-9_-]{20,}`, which
+    # matched INSIDE the ordinary path `scripts/p<re_>commit_backlog_check.sh`
+    # (the 20 chars after `re_` being `commit_backlog_check`) and blocked every
+    # Bash command that named it, commit messages included. A guard that
+    # false-blocks routine work gets disabled by whoever hits it, which is a
+    # slower way of failing open. Real Resend keys are `re_` + base62.
+    r"(?<![A-Za-z0-9_-])re_[A-Za-z0-9]{20,}",
     r"xoxb-[A-Za-z0-9-]{20,}",             # Slack bot token
     r"AKIA[0-9A-Z]{16}",                   # AWS access key id
     r"AIza[0-9A-Za-z_-]{35}",              # Google / Gemini

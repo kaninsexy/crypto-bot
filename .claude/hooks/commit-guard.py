@@ -44,7 +44,21 @@ except Exception:  # pragma: no cover - defensive; recorder is best-effort
     def _write_block_record(*_a: object, **_k: object) -> None:
         return None
 
-_GIT_COMMIT_RE = re.compile(r"\bgit\s+commit\b")
+# Shared, quote-aware Bash parsing. Guarded like every other cross-hook import:
+# an ImportError at load exits 1, which Claude Code treats as NON-blocking, so
+# it must never escape.
+try:
+    from bash_targets import strip_heredoc_bodies as _strip_bodies
+    from bash_targets import tokenize_segments as _tokenize
+    _PARSE_IMPORT_ERROR: Exception | None = None
+except Exception as _e:  # pragma: no cover - defensive
+    _PARSE_IMPORT_ERROR = _e
+
+    def _strip_bodies(cmd: str) -> str:  # type: ignore[misc]
+        return cmd
+
+    def _tokenize(cmd: str):  # type: ignore[misc]
+        return []
 _AMEND_RE = re.compile(r"--amend\b")
 _DASH_M_RE = re.compile(r"(?:^|\s)-m\b")
 _HEREDOC_OPEN_RE = re.compile(
@@ -70,6 +84,51 @@ HEREDOC_HELP = """[commit-guard] BLOCKED: git commit message must be heredoc-emb
 
 A literal -m message is refused because a message typed outside the command
 is the failure mode that produced empty commits twice."""
+
+
+def _is_real_git_commit(cmd: str) -> bool:
+    """True only when the command actually INVOKES ``git commit``.
+
+    Not a regex over the raw string. Heredoc bodies are stripped first (they
+    are data), then the command is tokenized into pipeline segments and each
+    segment's argv is inspected: argv0 must be ``git`` and the first non-flag
+    argument must be ``commit``.
+
+    Why the care. The first draft used ``re.search(r"\\bgit\\s+commit\\b")`` on
+    the raw command, which blocked a ``python - <<'PY' ... PY`` call whose
+    Python source merely CONTAINED the string ``git commit -F -`` inside a test
+    fixture. It then validated the PYTHON heredoc as if it were a commit
+    message and refused it for a non-conventional subject. Same failure class
+    as BK-0011: a guard that false-blocks routine work gets disabled by
+    whoever hits it, which is a slower way of failing open.
+
+    This also gets ``git log --grep commit`` right for free (``--grep`` is a
+    flag, ``commit`` is its value, so the first NON-flag arg is ``commit``…
+    which is why the value-of-a-flag case is excluded explicitly below).
+    """
+    for seg in _tokenize(_strip_bodies(cmd)):
+        if not seg or seg[0].rsplit("/", 1)[-1] != "git":
+            continue
+        skip_next = False
+        for tok in seg[1:]:
+            if skip_next:
+                skip_next = False
+                continue
+            if tok.startswith("-"):
+                # `--grep commit` / `-C dir`: a flag's VALUE is not the
+                # subcommand. `--flag=value` carries its value inline.
+                if "=" not in tok:
+                    skip_next = True
+                continue
+            if tok == "commit":
+                return True
+            # Some OTHER git subcommand in this segment. Keep scanning the
+            # remaining segments — `git add -A && git commit ...` is the
+            # canonical form in this repo, and returning False on the first
+            # git segment would wave every chained commit straight past the
+            # gate.
+            break
+    return False
 
 
 def _extract_heredoc_bodies(cmd: str) -> list[str]:
@@ -119,9 +178,9 @@ def main() -> int:
         return 0
 
     cmd = (payload.get("tool_input") or {}).get("command", "") or ""
-    if not cmd or not _GIT_COMMIT_RE.search(cmd):
+    if not cmd or not _is_real_git_commit(cmd):
         return 0
-    if _AMEND_RE.search(cmd):
+    if _AMEND_RE.search(_strip_bodies(cmd)):
         return 0
 
     session_id = payload.get("session_id") or "unknown"
@@ -130,7 +189,7 @@ def main() -> int:
     bodies = _extract_heredoc_bodies(cmd)
 
     # --- SHAPE: -m without a heredoc is the archived commit-heredoc rule. ---
-    if _DASH_M_RE.search(cmd) and not bodies:
+    if _DASH_M_RE.search(_strip_bodies(cmd)) and not bodies:
         return _block(HEREDOC_HELP, tool_name, session_id, "COMMIT_NO_HEREDOC")
 
     if not bodies:
