@@ -239,6 +239,16 @@ multi-hour download estimate as a signal to fix the fetcher, never as a reason
 to shrink the universe: shrinking the universe to fit a slow fetcher is
 precisely how item 5's underpowered null gets created.
 
+**7. Data-defects registry.** Any screen or trial reading a substrate must
+first consult that substrate's data-defects registry and apply its guards; a
+defect list that exists but is not applied is the same failure as no list.
+Registry for the Binance UM archive: `docs/data_defects_binance_um.md`
+(guards: `data.binance_vision_um.clean_metrics`, `defect_report`). This is
+item 7 because run 2's deleveraging screen was about to count feed gaps as
+liquidation events, and the defect was ALREADY documented in the recon — it
+was caught only because someone remembered reading it. Memory is not a
+control.
+
 **What this does NOT relax.** The 20-variation cap, the
 3-consecutive-failure escalation, the no-p-hacking rule for
 confirmation-stage variations, the archive-by-default rule, the

@@ -315,9 +315,14 @@ def load_discovery_panels(cache_dir=None, max_symbols=None, symbols=None) -> dic
             #    the sample would not be reproducible from the repo. Prefetch
             #    is a separate, explicit step
             #    (scripts/prefetch_um_metrics_fast.py).
+            # clean=True applies the registry's D1 guard
+            # (docs/data_defects_binance_um.md): zero sum_open_interest is a
+            # feed gap, and an unguarded one fabricates a -100 % 24h OI change.
+            # Using the shipped guard rather than an inline copy is the point of
+            # the registry -- one implementation, one place to fix.
             m = um.fetch_metrics(
                 sym, METRICS_START, "2022-12-31",
-                until=DISCOVERY_END, max_days=0, **kwargs)
+                until=DISCOVERY_END, max_days=0, clean=True, **kwargs)
         except Exception as exc:                       # noqa: BLE001
             print(f"  skip {sym}: {exc.__class__.__name__}: {exc}")
             continue
@@ -345,10 +350,7 @@ def load_discovery_panels(cache_dir=None, max_symbols=None, symbols=None) -> dic
         # daily `last` fall back to the day's last VALID reading, and a day
         # with no valid reading yields NaN, which produces no event. Repairing
         # by interpolation would invent open interest that was never observed.
-        m = m.copy()
-        if "sum_open_interest" in m.columns:
-            m.loc[m["sum_open_interest"] <= 0, "sum_open_interest"] = np.nan
-
+        # (the zero-OI mask now arrives via fetch_metrics(clean=True) above)
         daily = um.resample_metrics(m, "1D")
         if "sum_open_interest" in daily.columns and len(daily) > 0:
             oi_col = daily["sum_open_interest"]

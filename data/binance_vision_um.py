@@ -632,6 +632,80 @@ def resample_metrics(df: pd.DataFrame, freq: str = "1h") -> pd.DataFrame:
     return df.resample(freq).last().dropna(how="all")
 
 
+# ── Data-defects registry (I5, 2026-09-02) ──────────────────────────────────
+#
+# Registry: docs/data_defects_binance_um.md. The rule
+# (.claude/rules/backtest.md, discovery split) is that any screen or trial
+# reading this substrate must consult the registry and APPLY its guards -- a
+# defect list that exists but is not applied is the same failure as no list.
+#
+# This exists because run 2 tripped on the zero-open-interest glitch that the
+# recon had ALREADY documented, and caught it only because someone remembered.
+# Memory is not a control.
+
+#: Known defect kinds. Keep in step with docs/data_defects_binance_um.md.
+DEFECT_KINDS = ("metrics", "klines", "funding")
+
+
+def defect_report(df: "pd.DataFrame", kind: str) -> dict:
+    """Count known defects in a loaded frame. Never mutates, never raises.
+
+    Args:
+      df:   a frame from fetch_metrics / fetch_klines / fetch_funding.
+      kind: one of DEFECT_KINDS.
+
+    Returns a dict of counts; `{}` for an empty frame. Callers log it or assert
+    on it -- the point is that the numbers are cheap to obtain, so there is no
+    excuse for not looking.
+    """
+    if kind not in DEFECT_KINDS:
+        raise ValueError(f"kind must be one of {DEFECT_KINDS}; got {kind!r}")
+    out: dict = {"rows": int(len(df))}
+    if len(df) == 0:
+        return out
+    if kind == "metrics":
+        if "sum_open_interest" in df.columns:
+            oi = df["sum_open_interest"]
+            out["zero_open_interest"] = int((oi <= 0).sum())
+            out["nan_open_interest"] = int(oi.isna().sum())
+    elif kind == "klines":
+        if "volume" in df.columns:
+            out["zero_volume_bars"] = int((df["volume"] <= 0).sum())
+        if "close" in df.columns:
+            out["nonpositive_close"] = int((df["close"] <= 0).sum())
+    elif kind == "funding":
+        if "funding_interval_hours" in df.columns:
+            iv = df["funding_interval_hours"].dropna()
+            out["distinct_funding_intervals"] = sorted(
+                float(v) for v in iv.unique())
+            out["non_8h_settlements"] = int((iv != 8).sum())
+    return out
+
+
+def clean_metrics(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Apply the documented metrics guards. Returns a COPY.
+
+    Guard 1 -- zero open interest. `sum_open_interest` drops to a hard 0 for a
+    few hours per symbol (41,956 rows across 169 symbols in the cached window).
+    BTC open interest does not go to zero and recover within the hour; it is a
+    feed gap. Left in place, a daily resample that lands on one makes the next
+    day's 24h OI change read -100 %, five times past a -20 % event threshold --
+    the screen then measures the reversal of feed gaps.
+
+    EXCLUDE rather than repair: NaN lets a daily `last` fall back to the day's
+    last VALID reading, and a day with none yields NaN, which produces no
+    event. Interpolating would invent open interest that was never observed.
+    """
+    out = df.copy()
+    if "sum_open_interest" in out.columns:
+        out.loc[out["sum_open_interest"] <= 0, "sum_open_interest"] = float("nan")
+    if "sum_open_interest_value" in out.columns:
+        out.loc[out["sum_open_interest_value"] <= 0,
+                "sum_open_interest_value"] = float("nan")
+    return out
+
+
+
 def fetch_metrics(
     symbol: str,
     start_date,
@@ -641,6 +715,7 @@ def fetch_metrics(
     cache_dir=DEFAULT_CACHE_DIR,
     force: bool = False,
     session=None,
+    clean: bool = False,
 ) -> pd.DataFrame:
     """Daily UM metrics archives (5-minute OI / long-short / taker ratios).
 
@@ -697,4 +772,5 @@ def fetch_metrics(
     lo = pd.Timestamp(days[0]).tz_localize("UTC")
     hi = pd.Timestamp(days[-1]).tz_localize("UTC") + pd.Timedelta(days=1)
     out = cached.loc[(cached.index >= lo) & (cached.index < hi)]
-    return _apply_until(out, until)
+    out = _apply_until(out, until)
+    return clean_metrics(out) if clean else out
