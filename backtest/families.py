@@ -43,6 +43,7 @@ _VALID_FAMILIES: frozenset[str] = frozenset({
     "sentiment-attention",
     "microstructure-flow",
     "microstructure-orderflow",
+    "perp-structural",
     "other",
 })
 

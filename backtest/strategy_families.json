@@ -9,6 +9,7 @@
     "sentiment-attention",
     "microstructure-flow",
     "microstructure-orderflow",
+    "perp-structural",
     "other"
   ],
   "CrossSectionalMomentum": {"family": "cs-momentum-rotation"},
@@ -59,6 +60,9 @@
   "DeltaDivergence": {"family": "microstructure-orderflow"},
   "VWAPInstitutionalBand": {"family": "microstructure-orderflow"},
   "BreakoutDeltaConfirmed": {"family": "microstructure-orderflow"},
+  "FundingDispersionCarry": {"family": "perp-structural", "neutral": true},
+  "DeleveragingReversal": {"family": "perp-structural"},
+  "ListingFlow": {"family": "perp-structural"},
   "CrossSectionalSkewness": {"family": "other"},
   "DCA": {"family": "other"},
   "GridTrading": {"family": "other"}

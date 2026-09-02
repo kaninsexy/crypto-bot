@@ -1,0 +1,49 @@
+{
+  "_proposal": {
+    "status": "PROPOSED — NOT APPLIED. backtest/holdout_manifest.json is a sacred-harness file (CLAUDE.md 'Core principles'); this file stages the three Phase 4.F rows for human review and is never read by the harness.",
+    "created": "2026-09-02",
+    "authority": "docs/research_revival_2026-09.md §C.2 (windows) and §C.4 (families); docs/proposed_backtest_rule_discovery_2026-09.md (rule text).",
+    "how_to_apply": "Merge the three key/value pairs under 'entries' into the top-level object of backtest/holdout_manifest.json. Do NOT copy this '_proposal' key — holdout_manifest.json has no underscore-prefixed keys and every top-level key there is a strategy_id.",
+    "shape_choice": "The manifest schema (backtest/holdout.py _MANIFEST_SUBSTRATE_FIELDS) admits exactly one of 'symbol' | 'symbols' | 'legs' per entry, and none of the three can express a DYNAMIC universe (listings/delistings inside the window). Per the CC-2 work order these entries therefore use the single-'symbol' shape with symbol='BTCUSDT' as the DEV/HOLDOUT BOUNDARY ANCHOR only, and carry the real universe by reference in notes ('universe_ref'). Field set and ordering match the existing 9-key single-symbol entries (e.g. CrossSectionalMomentum) exactly: timeframe, data_start, data_end, dev_end, holdout_start, symbol, strategy_warmup_candles, min_tradeable_candles_per_block, notes.",
+    "open_questions_for_the_human": [
+      "backtest/holdout.py:_load_substrate_df branches on whether the manifest symbol contains '/': a symbol WITHOUT a slash routes to load_binance_vision_signal_frame (the Binance Vision SPOT 1m substrate), not to data/binance_vision_um.py. 'BTCUSDT' as written would take that branch. Either the loader needs a binance_um branch (schema-stable code change, needs approval) or these rows need a different anchor convention. Flagged, not decided.",
+      "Timestamps use the '+00:00' offset form that every existing entry uses; the work order wrote dev_end/holdout_start as '2025-05-01T00:00:00Z', which is the same instant in a different spelling. Pick one before pasting.",
+      "The 5-minute 'metrics' archive (open interest) starts 2020-09-01, so DeleveragingReversal has no OI for the first ~8 months of its declared data_start. Either narrow its data_start to 2020-09-01 or accept the ragged start."
+    ]
+  },
+  "entries": {
+    "FundingDispersionCarry": {
+      "timeframe": "1d",
+      "data_start": "2020-01-01T00:00:00+00:00",
+      "data_end": "2026-08-31T00:00:00+00:00",
+      "dev_end": "2025-05-01T00:00:00+00:00",
+      "holdout_start": "2025-05-01T00:00:00+00:00",
+      "symbol": "BTCUSDT",
+      "strategy_warmup_candles": 30,
+      "min_tradeable_candles_per_block": 30,
+      "notes": "Phase 4.F perp-structural, family 1 (docs/research_revival_2026-09.md §C.4 row 1). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 is the sealed discovery window; screens write research/discovery/funding_dispersion_carry.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 is genuinely virgin for this substrate (no prior trial read Binance UM data). universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: top-150 by trailing 30d quote volume, Binance-listed n OKX-listed at signal time, applied ex ante); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only, not the traded instrument, because the manifest schema has no dynamic-universe specifier. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural with \"neutral\": true (PSR-vs-0 verdict baseline). Gate: must survive standard fees AND 2x fee stress."
+    },
+    "DeleveragingReversal": {
+      "timeframe": "1h",
+      "data_start": "2020-01-01T00:00:00+00:00",
+      "data_end": "2026-08-31T00:00:00+00:00",
+      "dev_end": "2025-05-01T00:00:00+00:00",
+      "holdout_start": "2025-05-01T00:00:00+00:00",
+      "symbol": "BTCUSDT",
+      "strategy_warmup_candles": 720,
+      "min_tradeable_candles_per_block": 30,
+      "notes": "Phase 4.F perp-structural, family 2 (docs/research_revival_2026-09.md §C.4 row 2). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 sealed; screens write research/discovery/deleveraging_reversal.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 genuinely virgin for this substrate. universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: all UM symbols with both klines and 5-minute metrics in window, Binance-listed n OKX-listed at signal time); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only. strategy_warmup_candles=720 is the 30-day trailing-sigma window at 1h bars. CAVEAT: the metrics (open-interest) archive begins 2020-09-01, so OI is absent for the first ~8 months of data_start. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural, directional. Gate: must survive standard fees AND 2x fee stress."
+    },
+    "ListingFlow": {
+      "timeframe": "1d",
+      "data_start": "2020-01-01T00:00:00+00:00",
+      "data_end": "2026-08-31T00:00:00+00:00",
+      "dev_end": "2025-05-01T00:00:00+00:00",
+      "holdout_start": "2025-05-01T00:00:00+00:00",
+      "symbol": "BTCUSDT",
+      "strategy_warmup_candles": 25,
+      "min_tradeable_candles_per_block": 30,
+      "notes": "Phase 4.F perp-structural, family 3 (docs/research_revival_2026-09.md §C.4 row 3). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 sealed; screens write research/discovery/listing_flow.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 genuinely virgin for this substrate. universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: every UM listing and delisting event in window, first_month/last_month/delisted columns; Binance-listed n OKX-listed at signal time); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only. strategy_warmup_candles=25 is the -5..+20 day event window. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural, directional. Gate: must survive standard fees AND 2x fee stress."
+    }
+  }
+}
