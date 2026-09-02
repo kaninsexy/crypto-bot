@@ -1,6 +1,6 @@
 # Strategies — Per-Strategy Status and Diagnostic Reference
 
-Last updated: 2026-05-08
+Last updated: 2026-09-02
 
 Authoritative state per strategy. For strategies, two pieces of evidence
 matter: (a) the Phase 3c dev_cpcv verdict (the validation gate); (b) the
@@ -472,10 +472,68 @@ baseline +1.6337.
 
 ---
 
+## Gate-spec-v2 re-run outcomes (2026-06-11)
+
+Source: `docs/bot_status.md` "Gate-spec-v2 re-run batch 2026-06-11b —
+post-BNB-backfill results" (BNB cross-venue backfill unblocked the four
+MinTRL-skipped candidates; dev only, same variation_ids, gate spec v2).
+
+| Strategy | MinTRL pre-check | Dev verdict | Gate numbers | orig vs re-test sharpe |
+|---|---|---|---|---|
+| CrossSectionalMomentum | TESTABLE (1,581 >= 985) | **retire** (DSR floor) | alpha +0.89/yr p=0.0153 PASS; IR 0.525 PASS; DSR 0.787 < 0.95 FAIL (family sr_zero 0.61) | +1.6423 -> +0.9443 |
+| AltcoinSeasonRotation | TESTABLE | **retire** (DSR floor) | alpha +0.88/yr p=0.0155 PASS; IR 0.512 PASS; DSR 0.690 FAIL | +1.6767 -> +0.8359 |
+| NewsSentimentMomentum | TESTABLE | **under_tested** | MinTRL 1,876 > 1,571 bars; DSR(forensic) 0.051. VOLUME PROVENANCE CAVEAT: sentiment proxy consumes market volume; BNB segment is Binance volume | +1.4838 -> +0.7185 |
+| AttentionMomentum | TESTABLE (1,460 >= 994) | **under_tested** | MinTRL 1,666 > 1,450 bars; DSR(forensic) 0.081 | +2.1057 -> +0.7691 |
+
+CSMom + AltcoinSeason were the first trials to PASS the v2 directional
+baseline gate (significant NW alpha AND IR >= 0.5 vs BTC B&H), retired
+purely on the multiple-testing floor. Every re-test sharpe is roughly
+half its bull-window original.
+
+## Phase 4.E outcomes (2026-07-03)
+
+Source: `docs/bot_status.md` "Phase 4.E — Microstructure / Order-Flow
+batch". New family cluster `microstructure-orderflow` on Binance Vision
+spot 1m (research substrate; execution venue OKX), single-pair BTCUSDT,
+long-only, dev window 2021-01-01 -> 2025-05-01. Batch stopped on the
+3-consecutive-failure escalation; closed 0/4.
+
+| Strategy | TF | Verdict | net sr (1x / 2x) | gross (2sr1x−sr2x) | DSR (1x) | n_trades | Status |
+|---|---|---|---|---|---|---|---|
+| VolumeProfileAcceptance | 1h | **retire** | −0.87 / −1.74 | ~0.00 | 0.036 | 607 | run |
+| LiquiditySweepReversal | 15m | **retire** | −4.73 / −7.73 | −1.73 | ~0 | 1576 | run |
+| LVNTraversal | 15m | **retire** | −7.75 / −11.43 | −4.07 | ~0 | 1384 | run |
+| VWAPInstitutionalBand | 15m | **retire** | −2.87 / −4.39 | −1.35 | ~0 | 338 | run |
+| HVNMeanReversion | 1h | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+| DeltaDivergence | 15m | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+| BreakoutDeltaConfirmed | 1h | — | — | — | — | — | PRE-REGISTERED, NOT RUN (batch closed) |
+
+Two of three run displacement strategies are wrong-signed BEFORE fees
+(gross-of-fee extrapolation), and the distinct VWAP mean-reversion
+signal is also wrong-signed gross — not merely cost-buried. Buy-and-
+hold dev Sharpe is +0.49 over the same window.
+
 ## Summary
 
-9 RETIRE + 1 UNDER_TESTED. Zero strategies cleared the deploy gate.
-Phase 4 branch decision pending per `docs/open_questions.md`.
+~44 designs tested end-to-end since Phase 3c (`docs/research_revival_2026-09.md`
+§0); zero strategies have cleared the holdout gate. `backtest/trial_queue.json`
+tally (reconciled against `trial_queue_state.json` 2026-09-02): 25 retired,
+2 under_tested (DailyCrossSectionalReversal sq-026, CryptoDualMomentum
+sq-032), 2 dropped (VRPHarvesting sq-015, PapersSsrnCom/weekend-effect
+sq-007), 2 done-status (MeanReversion_BTC_Residual sq-000 — retire verdict;
+AttentionMomentum sq-018 — dev-keep, did not clear holdout, see
+Gate-spec-v2 table above), and **7 parked** pending the Phase 4.F decision
+(`docs/research_revival_2026-09.md` §E): OnChainMetricModels (sq-001),
+TheSystematicChangeInCryptocur / us-hours-close-momentum (sq-006),
+InterExchangeVolumeFlowAnalysi / exchange-netflow-reversal (sq-008),
+XGBoostPCA (sq-017), MarketStateConditionedMomentum (sq-031),
+ExchangeNetflowReversal (sq-034), ExchangeListingDrift (sq-037).
+FundingRateHarvest_BTC (Phase 4.B, retired and archived 2026-06-11) and
+the Phase 4.E microstructure cluster above (4 run, all retire; 3 never
+run) are both included in the ~44. The Phase 4 branch decision in
+`docs/open_questions.md` is superseded by the 2026-09-02 Phase 4.F
+proposal — see `docs/research_revival_2026-09.md` and
+`docs/revival_handoff_2026-09-02.md`.
 
 ## Historical reference: 2026-04-19 3-year backtest
 

@@ -33,8 +33,8 @@ the evidence says.
    directional trading. This single fact should end the debate about
    "which anomaly next".
 3. **A materially better substrate exists, free, and was never used:**
-   Binance USDT-M perpetuals public archive — 987 symbols with klines,
-   953 with 8h funding history from 2020-01, 5-minute open-interest and
+   Binance USDT-M perpetuals public archive — 986 symbols with klines,
+   952 with 8h funding history from 2020-01, 5-minute open-interest and
    long/short/taker-ratio metrics from 2020-09, delisted names retained
    (LUNA, FTT, SRM, …). That is a survivorship-bias-free, 6.7-year
    cross-section with funding and positioning data, none of which has
@@ -337,14 +337,24 @@ rule. The harness code does not change.
   `strategy_families.json` (`perp-structural`); manifest rows per §C.2.
 - Execution mapping: OKX 443 USDT swaps; universe = Binance-listed ∩
   OKX-listed at signal time (disclosed as a filter, applied ex ante).
+- **Recon results (2026-09-02, descriptive only)** — no forward returns,
+  no spreads, no Sharpe; full detail in `docs/recon_binance_um_2026-09.md`:
+  average 108 symbols/day with funding in 2020–22; cross-sectional
+  daily-funding p50 0.065 %/day (~24 %/yr), p90 0.116 %/day, p10
+  −0.021 %/day; p90−p10 dispersion 4–39 bp/day, cooling through 2022;
+  rank persistence Spearman 0.64/0.47/0.38 at 1/3/7 days, mean
+  top-decile stay 1.6 days (→ smooth the signal, do not rebalance raw
+  deciles daily); 67 clean OI-collapse (≥20 %/24h) events across 10
+  symbols, alt metrics only from 2021-12, a zero-OI feed glitch must be
+  masked; 226 listings / 24 delistings with ≥60 d of data.
 
 ### C.4 First batch — three mechanism families, ≤ 5 confirmation trials total
 
 | # | Family | Mechanism / counterparty | Discovery kill test (sandbox) | Confirmation design if it survives |
 |---|---|---|---|---|
-| 1 | Funding-dispersion carry | Leveraged longs in small/mid-cap perps pay funding; desks can't scale into them | Daily decile sort on trailing 3×8h funding, top-150 by dollar volume: is (funding accrued − next-day price spread) > 0 net of 0.05 %×2 per rebalance, 2020–22? Threshold: net ≥ 0.15 %/day on the 10-1 spread | Long bottom / short top decile, vol-scaled, beta-hedged with BTC perp, 8h or daily rebalance, hard stop on any short leg at +15 % |
-| 2 | Deleveraging reversal | Forced liquidations sell at any price; counterparty is the liquidated long (or short) | Event = 24h OI drop ≥ 20 % with price move ≥ 2σ; measure 1–5-day forward return vs unconditional, 2020–22, ≥ 100 events across the universe. Threshold: mean 3-day reversal ≥ 1.5 % with t > 3 | Enter against the move at event close, exit at 3 days or OI recovery; market-neutral variant hedged with BTC |
-| 3 | Listing / delisting flow | Price-insensitive flows around Binance perp listing (attention, index/market-maker inventory) and delisting (forced closure) | ~900 listings + all delistings 2020–22: abnormal return −5…+20 days around the event vs matched names. Threshold: |CAR| ≥ 3 % with t > 3 in a pre-specified window | Trade the window that survived, one rule, universe-wide |
+| 1 | Funding-dispersion carry | Leveraged longs in small/mid-cap perps pay funding; desks can't scale into them | Daily decile sort on trailing 3×8h funding, top-150 by dollar volume: is (funding accrued − next-day price spread) > 0 net of 0.05 %×2 per rebalance, 2020–22? Threshold: net ≥ 0.15 %/day on the 10-1 spread | Long bottom / short top decile, vol-scaled, beta-hedged with BTC perp, 8h or daily rebalance, hard stop on any short leg at +15 % — *recon note: control for liquidity, funding vs trailing-30d volume rank is −0.09 (Spearman)* |
+| 2 | Deleveraging reversal | Forced liquidations sell at any price; counterparty is the liquidated long (or short) | Event = 24h OI drop ≥ 20 % with price move ≥ 2σ; measure 1–5-day forward return vs unconditional, 2020–22, ≥ 100 events across the universe. Threshold: mean 3-day reversal ≥ 1.5 % with t > 3 | Enter against the move at event close, exit at 3 days or OI recovery; market-neutral variant hedged with BTC — *recon note: alt (non-BTC) OI history only covers 13 months (2021-12→2022-12)* |
+| 3 | Listing / delisting flow | Price-insensitive flows around Binance perp listing (attention, index/market-maker inventory) and delisting (forced closure) | ~900 listings + all delistings 2020–22: abnormal return −5…+20 days around the event vs matched names. Threshold: |CAR| ≥ 3 % with t > 3 in a pre-specified window | Trade the window that survived, one rule, universe-wide — *recon note: delisting N is thin (24 qualifying events), treat as indicative not well-powered* |
 
 Budget: family `perp-structural`, at most 5 `full_cpcv` rows across the
 three (1 per family + 2 variation slots), 3-consecutive-failure stop,
@@ -447,7 +457,7 @@ data/binance_vision.py (which already handles spot monthly 1m zips).
    logic for a delisted symbol, no-network by default (network tests
    behind a marker).
 
-VERIFIED FACTS (2026-09-02): 987 symbols under monthly/klines, 953 under
+VERIFIED FACTS (2026-09-02): 986 symbols under monthly/klines, 952 under
 monthly/fundingRate; BTCUSDT funding 2020-01 -> 2026-08; BTCUSDT metrics
 2020-09-01 -> 2026-08-31; LUNAUSDT 1d klines 2021-01 -> 2022-05 (delisted,
 retained). UM liquidationSnapshot is EMPTY (only cm has it) — do not
@@ -611,7 +621,7 @@ Literature (with sample periods as stated by the source):
 - Prediction-market inefficiency reviews (secondary) — https://predictiontalk.org/d/14-ai-parsed-40-papers-on-pm-inefficiencies-here-are-5-im-going-to-trade/ ; https://www.tradetheoutcome.com/polymarket-accuracy-report-data/
 
 Data verified by direct download 2026-09-02:
-- Binance Vision S3 listing (futures/um): 987 klines symbols, 953 fundingRate symbols, 992 metrics symbols; BTCUSDT-fundingRate-2020-01 … 2026-08; BTCUSDT-metrics-2020-09-01 … 2026-08-31; LUNAUSDT-1d-2021-01 … 2022-05; UM liquidationSnapshot prefix empty — https://data.binance.vision/?prefix=data/futures/um/
+- Binance Vision S3 listing (futures/um): 986 klines symbols, 952 fundingRate symbols, 991 metrics symbols (corrected 2026-09-02: the raw S3 listing's top-level echoed `<Prefix>` element was being double-counted alongside the `<CommonPrefixes>` entries; `data/binance_vision_um.py` list_prefixes/list_symbols ignores it — see docs/recon_binance_um_2026-09.md); BTCUSDT-fundingRate-2020-01 … 2026-08; BTCUSDT-metrics-2020-09-01 … 2026-08-31; LUNAUSDT-1d-2021-01 … 2022-05; UM liquidationSnapshot prefix empty — https://data.binance.vision/?prefix=data/futures/um/
 - OKX public instruments: 459 swaps, 443 USDT-settled — https://www.okx.com/api/v5/public/instruments?instType=SWAP
 - OKX perpetual fees, regular user Lv1: maker 0.02 % / taker 0.05 % — https://www.okx.com/en-us/help/trading-fee-rules-faq
 

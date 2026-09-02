@@ -1,11 +1,63 @@
 # Open Questions
 
-Last updated: 2026-05-03
+Last updated: 2026-09-02
 
 Running list of items that are unresolved, blocked, or carried from earlier
 work. Entries are grouped by theme, not priority. When an item is resolved,
 move it to a "Resolved" section at the bottom (keep for reference for one
 revision cycle, then prune).
+
+## Mac/PC `trials.log` split (OPEN, 2026-09-02)
+
+`backtest/trials.log` is gitignored and moved from the Mac to the Windows
+PC around 2026-05-05. Every row before 2026-05-05 (Phase 3c incl. BearShort,
+Phase 4.A Supertrend/DualMomentum smoke + GridTrading + TrendFollowing_multi,
+IntradaySeasonalityEffects, the 4.B V1 chain) exists only on the Mac file,
+not the PC file this repo now reads from. The 2026-06 gate-recalibration
+audit ("38 rows") and gate-spec-v2 family variance/N were computed on the
+incomplete PC file, so the multiple-testing count is understated relative
+to full project history. Decide: merge the Mac file's pre-2026-05-05 rows
+into the PC file, or document the two-machine split as a permanent
+asterisk on every N-based statistic computed before the merge. See
+`docs/revival_handoff_2026-09-02.md` §2 item 1.
+
+## Fee-model caveat on pre-Phase-4.E trials (OPEN, 2026-09-02)
+
+Every trial before Phase 4.E used `paper_trading/simulator.py` defaults
+(`FEE_MARKET = 0.04%`, a Binance futures taker rate, + 0.05% slippage) on
+a spot substrate whose real taker fee is 0.10% (OKX/Binance spot). Phase
+4.E corrected this to 0.10% + a 2x stress. High-turnover pre-4.E rows
+(e.g. CrossSectionalReversal 1432 trades, NewsSent 2071 trades) are
+fee-optimistic and should be treated with that caveat until re-checked
+at 0.10%. See `docs/revival_handoff_2026-09-02.md` §2 item 4.
+
+## Holdout regeneration timing for NewsSent/AttentionMom (OPEN, 2026-09-02)
+
+Both under_tested strategies (NewsSentimentMomentum, AttentionMomentum)
+sit below the MinTRL floor by 7-10 months and, even if extended, land at
+SR ~0.75 — below the 52-month floor of 0.79 and far below anything
+forward-confirmable. Extending either requires a holdout regeneration
+(human-only; shrinks the virgin window for every other strategy).
+Recommendation per `docs/research_revival_2026-09.md` §A.4: **not worth
+a regen** — park both indefinitely, revisit only if a regen is triggered
+by something else. Recorded here as open rather than resolved because no
+human decision has been made to formally park them.
+
+## Binance UM recon data caveats (OPEN, 2026-09-02)
+
+Carried forward from `docs/recon_binance_um_2026-09.md` so future perp-
+substrate trial design doesn't rediscover these the hard way: (1) the
+`sum_open_interest` metrics feed drops to a hard 0 for ~10 hours per
+symbol (a feed glitch, not a real OI wipeout) — any 24h-OI-change feature
+must mask or repair these hours before use, or it will manufacture
+spurious collapse events; (2) alt (non-BTC) OI/L-S/taker-ratio metrics
+only start 2021-12, so a cross-sectional OI study before that date is
+BTC-only; (3) `funding_interval_hours` is not always 8h — 5 symbols show
+a 2h interval and 4 show 4h at some point (per-symbol regime changes,
+heaviest around Nov 2022: SOLUSDT/SOLBUSD/FTTUSDT/FTTBUSD show the
+largest settlement-count deviations from the standard 3/day that
+month, adjacent to the FTX collapse), so any funding-carry design must
+read the interval per settlement rather than assume 8h.
 
 ## `REGIME_PRIORS` — still empty
 

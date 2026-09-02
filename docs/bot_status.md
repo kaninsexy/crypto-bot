@@ -137,23 +137,34 @@ FRH re-test trial row: trial_id 2567dbd3eb9a442986a5f83a1ceddd7e
 per-bar series persisted; vol threshold recalibrated 0.4284 -> 0.5220
 by the pre-specified dev-median rule).
 
-## Current state
+## Current state (2026-09-02)
 
-- **Current commit:** `80fc2c9` — Phase 3b Chunks 1-6 stack pushed 
-  to `main` (6 commits on top of `f2d29cf`: holdout accessor + 
-  JSONL plumbing; manifest generator + initial manifest; cache 
-  enforcement + runner dev-only loading; validation_framework.md 
-  correction; `trials.py` writer + `cpcv.py` skeleton; `cpcv.py` 
-  block Sharpe distribution). Plus the earlier research 
-  consolidation commits (Phase 3a.1 vectorization, docs 
-  consolidation, milestone backtest reports, research_log 
-  Phase 1-3a findings).
-- **Working tree:** clean.
-- **Server deployment:** `kanin@104.248.145.189`, still on older commit `4a51f0b`
-  (pre-Phase 3a). The server has NOT been updated with Phase 3a changes yet.
-- **Bot state:** OKX paper mode. 10 strategies configured in code, of which
-  3 are genuinely working, 4 are broken (diagnosed), 3 are borderline
-  (need rescue or retire decision).
+- **Current commit:** `e5975b3` — fix(data): universe_table delisted
+  slack + perp-only filter (delivery/SETTLED/BUSD excluded). Local
+  `main`, not pushed (push is human-only per CLAUDE.md). This commit
+  is immediately followed by a docs/bookkeeping commit (recon report,
+  trial-queue reconciliation, this refresh) — see git log for the
+  current HEAD if it has moved past `e5975b3`.
+- **Working tree:** clean at commit time (no uncommitted changes
+  outside the two commits described above).
+- **Server deployment:** droplet `kanin@104.248.145.189` paused since
+  2026-04-29; `.cron-pause` present; no paper-trading process running.
+  Paper capital was reset to $100k on 2026-04-26. The server's checked-
+  out commit has not been advanced since the pause.
+- **Bot state:** OKX paper mode is the configured default (`paper_mode
+  = True`); nothing is currently deployed, paper or live. Phase 4.E
+  (microstructure/order-flow, 2026-07-03) closed at **0/4** — all four
+  run hypotheses (VolumeProfileAcceptance, LiquiditySweepReversal,
+  LVNTraversal, VWAPInstitutionalBand) retired wrong-signed gross of
+  fees; 3 pre-registered hypotheses were never run (batch closed on
+  the 3-consecutive-failure rule). Zero holdout passers across ~44
+  designs tested to date (see `docs/research_revival_2026-09.md` §0).
+- **Pending human decision:** a Phase 4.F proposal ("Perp-structural,
+  mechanism-first" on the Binance USDT-M perp archive substrate) is
+  awaiting approval — see `docs/research_revival_2026-09.md` §C/§E
+  (ranking, first batch, exit-ramp decision list) and
+  `docs/revival_handoff_2026-09-02.md` (verified state this proposal
+  was built on). No trial has run against this substrate yet.
 
 ## Per-strategy status — Phase 3c verdicts (2026-04-26)
 

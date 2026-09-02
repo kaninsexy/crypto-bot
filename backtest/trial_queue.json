@@ -532,11 +532,17 @@
       "added_by": "proposal-agent",
       "added_at": "2026-05-07T02:02:20.566782+00:00",
       "needs_trial_script": true,
-      "status": "queued"
+      "status": "retired",
+      "started_at": "2026-05-07T03:04:35.741051+00:00",
+      "finished_at": "2026-05-07T03:04:43.982210+00:00",
+      "trial_id": null,
+      "error": null,
+      "email_sent": true,
+      "verdict": "retire"
     },
     {
       "id": "sq-013",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "CrossSectionalReversal",
       "variation_id": "cs-short-term-reversal-loser-portfolio",
       "script_path": "scripts/run_cross_sectional_reversal_trial.py",
@@ -579,7 +585,7 @@
       "added_at": "2026-05-07T06:23:07.983350+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -689,7 +695,7 @@
     },
     {
       "id": "sq-016",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "CrossSectionalSkewness",
       "variation_id": "cs-expected-idio-skewness",
       "script_path": "scripts/run_cross_sectional_skewness_trial.py",
@@ -732,7 +738,7 @@
       "added_at": "2026-05-07T07:56:15.199861+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -791,7 +797,7 @@
     },
     {
       "id": "sq-018",
-      "status": "queued",
+      "status": "done",
       "strategy_id": "AttentionMomentum",
       "variation_id": "search-volume-momentum",
       "script_path": "scripts/run_attention_momentum_trial.py",
@@ -834,7 +840,7 @@
       "added_at": "2026-05-07T07:58:38.300256+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "keep",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -842,7 +848,7 @@
     },
     {
       "id": "sq-019",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "IntradayMomentumReversal",
       "variation_id": "intraday-conditional-momentum-reversal",
       "script_path": "scripts/run_intraday_momentum_reversal_trial.py",
@@ -885,7 +891,7 @@
       "added_at": "2026-05-07T08:00:23.939037+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -893,7 +899,7 @@
     },
     {
       "id": "sq-024",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "ShortTermCrossSectionalMomentum",
       "variation_id": "cs-short-term-mom-7d",
       "script_path": "scripts/run_short_term_cross_sectional_momentum_trial.py",
@@ -936,7 +942,7 @@
       "added_at": "2026-05-07T16:43:46.942323+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -944,7 +950,7 @@
     },
     {
       "id": "sq-021",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "VolatilityScaledTSMOM",
       "variation_id": "volatility-scaled-tsmom",
       "script_path": "scripts/run_volatility_scaled_tsmom_trial.py",
@@ -987,7 +993,7 @@
       "added_at": "2026-05-07T16:44:28.631162+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -995,7 +1001,7 @@
     },
     {
       "id": "sq-022",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "IntradayJumpReversal",
       "variation_id": "intraday-jump-reversal-zscore",
       "script_path": "scripts/run_intraday_jump_reversal_trial.py",
@@ -1038,7 +1044,7 @@
       "added_at": "2026-05-07T16:45:29.258213+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -1046,7 +1052,7 @@
     },
     {
       "id": "sq-023",
-      "status": "queued",
+      "status": "retired",
       "strategy_id": "OvernightSessionReversal",
       "variation_id": "us-session-overnight-reversal",
       "script_path": "scripts/run_overnight_session_reversal_trial.py",
@@ -1098,7 +1104,7 @@
       "added_at": "2026-05-08T03:02:51.735178+00:00",
       "started_at": null,
       "finished_at": null,
-      "verdict": null,
+      "verdict": "retire",
       "trial_id": null,
       "error": null,
       "email_sent": false,
@@ -1421,7 +1427,7 @@
     },
     {
       "id": "sq-031",
-      "status": "queued",
+      "status": "deferred",
       "strategy_id": "MarketStateConditionedMomentum",
       "variation_id": "market-state-conditioned-momentum",
       "script_path": "scripts/run_market_state_conditioned_momentum_trial.py",
@@ -1468,7 +1474,8 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": false
+      "needs_trial_script": false,
+      "deferred_reason": "parked 2026-09-02 pending Phase 4.F decision; see docs/research_revival_2026-09.md"
     },
     {
       "id": "sq-032",
@@ -1574,7 +1581,7 @@
     },
     {
       "id": "sq-034",
-      "status": "queued",
+      "status": "deferred",
       "strategy_id": "ExchangeNetflowReversal",
       "variation_id": "cs-exchange-netflow-reversal",
       "script_path": "scripts/run_exchange_netflow_reversal_trial.py",
@@ -1619,7 +1626,7 @@
       "finished_at": null,
       "verdict": null,
       "trial_id": null,
-      "error": null,
+      "error": "deferred: GLASSNODE_API_KEY not set -- on-chain data requires a paid Glassnode subscription (state: deferred_no_data)",
       "email_sent": false,
       "needs_trial_script": true
     },
@@ -1727,7 +1734,7 @@
     },
     {
       "id": "sq-037",
-      "status": "queued",
+      "status": "deferred",
       "strategy_id": "ExchangeListingDrift",
       "variation_id": "major-exchange-listing-announcement",
       "script_path": "scripts/run_exchange_listing_drift_trial.py",
@@ -1774,7 +1781,8 @@
       "trial_id": null,
       "error": null,
       "email_sent": false,
-      "needs_trial_script": true
+      "needs_trial_script": true,
+      "deferred_reason": "parked 2026-09-02 pending Phase 4.F decision; see docs/research_revival_2026-09.md"
     },
     {
       "id": "sq-038",
