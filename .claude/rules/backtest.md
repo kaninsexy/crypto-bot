@@ -150,6 +150,70 @@ consecutive failures, the agent stops the batch on that strategy and
 surfaces the failure pattern, regardless of how many starting-hypothesis
 slots remain.**
 
+## Discovery / confirmation split
+
+Adopted from `docs/research_revival_2026-09.md` §C.2, itself adapted
+from Harvey–Liu (t > 3 for multiply-tested claims) and
+Arnott–Harvey–Markowitz (2019) on pre-registration, trial documentation
+and OOS awareness. Applies to substrates whose manifest entry declares a
+`discovery_end`; every other strategy is unaffected and every existing
+rule in this file continues to bind.
+
+**1. Discovery window.** For a substrate with a declared discovery
+window (Binance UM: 2020-01-01 → 2022-12-31, sealed by manifest, never
+read by any prior trial), exploratory analysis is permitted WITHOUT a
+`trials.log` row, under three conditions:
+
+  (a) every screen run is logged in a discovery ledger,
+      `research/discovery/<family>.md` (signal, universe rule, horizon,
+      statistic, value, t-stat, N, data range, script + commit,
+      conclusion);
+  (b) the ledger's row count `N_disc` is carried into the confirmation
+      trial's pre-registration and applied as an additional
+      Bonferroni-style haircut on the confirmation DSR;
+  (c) discovery never reads 2023+ data. Screens hard-assert this and
+      abort on violation.
+
+A discovery screen writes NO trials.log row; the ledger row is its
+record. A confirmation trial writes exactly one full_cpcv row and
+carries N_disc from the ledger into its pre-registration, and the
+confirmation DSR is additionally haircut by N_disc.
+
+**2. Confirmation window.** Confirmation = 2023-01-01 → 2025-05-01
+(dev, counted in `trials.log` exactly as today) and holdout =
+2025-05-01 → 2026-08-31, never read until `final_gate`. For the Binance
+UM substrate the holdout is genuinely virgin — no prior trial touched
+Binance UM data — with the standing disclosure that the agents KNOW the
+2025-10-10 cascade happened and that this knowledge is not removable.
+
+**3. Pre-registration content.** Extends the literature-file template.
+Before a confirmation trial runs, `research/<strategy>-literature.md`
+must state: the mechanism in one paragraph; the counterparty and why
+they pay; the expected SR with the discovery number that supports it;
+turnover and cost at the OKX perp taker fee; the kill test and its
+threshold; and `N_disc`.
+
+**4. Forward stage.** Only designs whose dev SR makes the 12-month
+forward test decisive (SR ≥ 2) proceed. Paper deploy on OKX perps;
+success = PSR ≥ 0.9 after 12 months; fail-fast if realised SR < 0.5
+after 6.
+
+**What this does NOT relax.** The 20-variation cap, the
+3-consecutive-failure escalation, the no-p-hacking rule for
+confirmation-stage variations, the archive-by-default rule, the
+compute-budget circuit breaker, and the human-only push/deploy boundary
+all bind unchanged. Discovery screens may not be used to select a
+confirmation hypothesis after the fact by re-reading a screen's output
+window: the kill test, its threshold, and any pre-specified event
+window are frozen in the ledger's header before the screen runs, copied
+from the batch table in `docs/MASTER_PLAN.md`. Moving a threshold or a
+window after seeing the statistic is p-hacking regardless of which
+window the data came from.
+
+**Budget for the first batch.** Family `perp-structural`, at most 5
+`full_cpcv` rows across the three families (1 per family + 2 variation
+slots), 3-consecutive-failure stop.
+
 ## No p-hacking rule
 
 Agents may only propose parameter variations that have an explicit theoretical

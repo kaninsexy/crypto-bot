@@ -1,7 +1,9 @@
 # CLAUDE.md — Agent operating rules for crypto-bot
 FIRST ACTION EVERY CHAT: bash_tool on repomix-output.xml. Not project_knowledge_search.
 
-Last updated: 2026-05-06
+Last updated: 2026-09-02 (v2 — governance port from siamese-reconcile:
+agent-autonomous push of gated work, mega-loop posture, drift signal,
+Mandate L backlog discipline, discovery/confirmation pointer)
 
 This file is read by Claude Code and other agents when working in this repo.
 Read it before starting any task.
@@ -15,9 +17,10 @@ workflow that doesn't need to compete for attention in every chat.
 ## Project overview
 
 Cryptocurrency trading bot running on OKX paper mode. Multi-strategy portfolio with
-regime-aware Kelly sizing. Currently in Phase 4 (Phase 4.A Resurrection Batch + Phase 4.B
-Funding-Rate Harvest exploration; Branch C selected as default). See `docs/MASTER_PLAN.md`
-and `docs/bot_status.md` for current state.
+regime-aware Kelly sizing. Currently in **Phase 4.F — Perp-structural batch**
+(Binance USDT-M perpetual substrate; discovery/confirmation split). Phase 4.E
+Microstructure / Order-Flow **closed with 0 of 4 passers**. See
+`docs/MASTER_PLAN.md` and `docs/bot_status.md` for current state.
 
 ## Core principles
 
@@ -48,6 +51,12 @@ and `docs/bot_status.md` for current state.
 - **Every experiment counts.** Every backtest, every parameter variation,
   every exploratory test appends a row to `trials.log`. Multiple-testing
   correction via DSR uses this count. Do not bypass.
+- **Discovery screens are the one exception, and they are ledgered.**
+  On a substrate whose manifest declares a `discovery_end`, exploratory
+  screens inside the sealed discovery window write a
+  `research/discovery/<family>.md` row instead of a `trials.log` row,
+  and their count `N_disc` haircuts the confirmation DSR. See
+  `.claude/rules/backtest.md` § "Discovery / confirmation split".
 - **Trial intentionality.** Commits to the repo are the deliberate human
   act that marks a trial as "this is what I tested, this is the variation
   I am claiming." Autonomous test execution does not extend to autonomous
@@ -93,6 +102,15 @@ Agents never push or deploy autonomously.
   not grant themselves more autonomy.
 - **Paper-mode capital allocation experiments and risk-parameter sweeps**
   (added 2026-05-08). Live capital changes remain Human-only above.
+- **Push its own finished, gated work** (added 2026-09-02). CC pushes its
+  own finished, gated work: `bash scripts/post_commit_sync.sh` (no flag)
+  after a stage whose VERIFY is green (pytest green, eval/run_tier1.py
+  green, commit hooks clean, no sacred path staged without
+  SACRED_OVERRIDE_FILES). The PostToolUse hook runs the same script with
+  `--no-push`, so routine commits never push. Force-push, branch deletion,
+  pushing any branch but `main`, live deploy, and live capital remain
+  Human-only. (Owner direction 2026-09-02, ported from siamese-reconcile
+  §6 rule 1, owner direction there 2026-06-17.)
 
 ### Agent consults the human (present findings, wait for decision)
 
@@ -114,8 +132,8 @@ Updated 2026-05-08: autonomy expansion. The principle is
 corrupting ⇒ human.** Items moved to "Agent decides" are listed
 below in the next section.
 
-- Pushes to any remote
-- Force operations (force-push, hard reset on main, etc.)
+- Force operations (force-push, hard reset on main, etc.), branch
+  deletion, and pushing any branch other than `main`
 - Live deploy to production (real OKX API or any non-paper venue)
 - Live capital allocation or risk-parameter changes that affect
   real-money execution
@@ -216,20 +234,73 @@ pre-commit). The boundary moved at architecture.md commit
 embedding via hooks is safer than manual commit typing, which
 twice produced empty commits when humans skipped the editor.
 Agents commit autonomously — git add, git commit with heredoc
-message — and stop short of git push. The deliberate human
-act is the push, where remote state changes and audit exposure
-begin. This is the same boundary as mandate F: design decisions
-do not need sign-off, but the irreversible step (push, deploy)
-does.
+message. **Revised 2026-09-02 (owner direction):** the boundary
+moved again, from the push to the GATE. CC pushes its own finished,
+gated work via `bash scripts/post_commit_sync.sh` (no flag) once a
+stage's VERIFY block is green; the PostToolUse hook runs the same
+script with `--no-push`, so routine and intermediate commits never
+push. What makes a trial record interpretable is the green gate and
+the heredoc message, not a human typing `git push`. The genuinely
+irreversible steps — force-push, branch deletion, pushing any branch
+but `main`, live deploy, live capital — remain Human-only, which is
+the same boundary as mandate F drawn at the point where state
+actually becomes unrecoverable.
 
 Historical drift cases and worked examples: see
 `docs/drift_history.md` (do not load unless investigating a
 specific past failure pattern).
+
+## Mega-loop posture
+
+When CC runs a dispatcher-mode / megaloop prompt, **mega-loop is the
+default operating posture** unless the start prompt explicitly opts out.
+CC walks the enumerated stage list without per-stage human confirmation
+and halts on exactly three conditions:
+
+1. Kanin stops it (or sends any drift indicator — "stop", "wait", "let
+   me see", "you're spinning", "the diff doesn't match what you said").
+2. A tripwire in `.claude/rules/escalation.md` fires.
+3. CC hits a JUDGEMENT the project files cannot settle.
+
+On halt, CC appends a HUMAN NEEDED block to `.memory/_inbox/human_needed.md`,
+writes a status doc, commits, pushes, and exits. **Completion is
+deterministic, never self-assessed:** a stage is done only when its VERIFY
+block is green. "I think it's done" is not an exit. The harness here is
+`pytest`, `python eval/run_tier1.py`, and the trial verdict tree
+(`backtest/verdict.py` + CPCV/DSR) — not an LLM's opinion of its own work.
+Full rule body: `.claude/rules/escalation.md` §13. Loop framing:
+`.claude/rules/vertical_slice_loops.md`.
+
+## Drift signal — three speculative fixes in a row
+
+If CC has attempted three fixes for the same symptom and the symptom
+persists, **stop the speculation loop.** Run experiments instead: build a
+minimal reproducer, change one variable at a time, log what you observe,
+and write the observations to `docs/investigations/<date>-<slug>.md`
+BEFORE attempting a fourth fix. Three speculative fixes without controlled
+observation is a recognised failure mode, not diligence.
 
 ## Execution autonomy
 
 Claude Code proceeds without approval on everything in "Agent
 decides" above. Claude Code must not proceed without approval on
 everything in "Human only" above. When verification passes, commit
-autonomously with a heredoc message and stop; push remains
+autonomously with a heredoc message; push the finished, gated work with
+`bash scripts/post_commit_sync.sh` per the "Agent decides" list. Live
+deploy, live capital, force operations and non-`main` pushes remain
 human-only.
+
+## Update history
+
+- 2026-09-02: v2. Governance port from siamese-reconcile (HEAD 2f13045).
+  Push of finished, gated work moved Human-only → Agent-decides (mandate G
+  boundary moved from the push to the gate). Added mega-loop posture, the
+  three-speculative-fixes drift signal, the discovery/confirmation pointer
+  (Proposal 2), and Mandate L backlog discipline. New rules:
+  `.claude/rules/escalation.md`, `.claude/rules/vertical_slice_loops.md`,
+  `.claude/rules/enforcement.md`. Python hook layer replaces the
+  half-wired bash hooks (`.claude/hooks/_archive_bash_2026-09/`).
+  Supersedes `docs/playbooks_port_plan_2026-07-03.md`.
+- 2026-05-08: autonomy expansion (paper deploy, MASTER_PLAN outcome rows,
+  paper-mode capital sweeps moved Human-only → Agent-decides).
+- 2026-05-06: v1.

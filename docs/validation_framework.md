@@ -11,6 +11,20 @@ this project. Modifications require human approval (see `CLAUDE.md`).
 
 ## Gate spec v2 (2026-06-11)
 
+> **Fee-model caveat on pre-Phase-4.E trials (recorded 2026-09-02).** Every
+> trial recorded before Phase 4.E was costed with `paper_trading/simulator.py`
+> defaults — `FEE_MARKET = 0.04%`, which is a Binance *futures* taker rate,
+> plus 0.05% slippage — while running on a *spot* substrate whose real taker
+> fee is 0.10% (OKX / Binance spot). Phase 4.E corrected this to 0.10% plus a
+> 2× stress, and Phase 4.F uses the OKX perp taker rate (0.05%) + 0.05%
+> slippage with the same 2× stress. Consequence: high-turnover pre-4.E rows
+> (e.g. CrossSectionalReversal at 1432 trades, NewsSent at 2071 trades) are
+> **fee-optimistic**, and their verdicts should be read with that caveat until
+> re-checked at the corrected rate. This paragraph records the caveat; it does
+> not re-score any recorded trial. Tracked in `docs/open_questions.md`
+> § "Fee-model caveat on pre-Phase-4.E trials" and
+> `docs/revival_handoff_2026-09-02.md` §2 item 4.
+
 The 2026-06 gate-recalibration audit
 (`docs/gate_recalibration_audit_2026-06.md`) found five defects in the
 v1 gates; this section is the canonical record of the corrections.

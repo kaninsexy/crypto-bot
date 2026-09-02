@@ -12,6 +12,9 @@ Before any response that asks the user to do something, run this
 
 - First tool call: bash_tool on repomix-output.xml. Not
   project_knowledge_search. Always more current than standalone uploads.
+- Read `.memory/_inbox/human_needed.md`. Any unresolved block there is a
+  standing question to the human; do not re-derive it, and do not start
+  work that depends on its answer.
 - When reading a specific file from repomix, always run
   grep -n to find its CURRENT line position first. Never use a
   line number carried from a previous chat or repomix version.
@@ -136,8 +139,12 @@ When drafting a Claude Code prompt from a chat handoff:
    still pauses on non-edit actions; pre-authorization is what
    keeps the agent unblocked.
 4. Do not write prompts requiring user approval mid-execution
-   unless the action is on CLAUDE.md "Human only" list (commit /
-   push / deploy / sacred-harness).
+   unless the action is on CLAUDE.md "Human only" list. **Revised
+   2026-09-02:** commit AND push of finished, gated work are
+   agent-autonomous (`bash scripts/post_commit_sync.sh`, no flag).
+   Human-only is now: live deploy, live capital, force operations,
+   branch deletion, pushing any branch but `main`, and sacred-harness
+   schema changes.
 
 ## Deliberation handoffs
 
@@ -155,8 +162,9 @@ F. Auto-calibrate via probe; the detection signal IS the value.
 by another name. Wrong-looking output means probe design is wrong
 (statistic, window); fix the design. Picking the statistic
 (median / p95 / max) is an agent call — anchor on what the
-structural hypothesis names. Sign-off remains commit / push /
-deploy / sacred-harness only.
+structural hypothesis names. Sign-off remains live deploy / live
+capital / force operations / sacred-harness schema only — commit and
+push of gated work are agent-autonomous as of 2026-09-02.
 
 ## Response format after Claude Code output
 

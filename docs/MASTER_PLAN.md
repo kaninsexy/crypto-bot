@@ -1,6 +1,9 @@
 # MASTER PLAN — Crypto Trading Bot
 
-Last updated: 2026-07-03 (Phase 4.E Microstructure/Order-Flow batch
+Last updated: 2026-09-02 (Phase 4.F Perp-structural batch added as a new
+strategy category, human pre-authorized in the 2026-09-02 megaloop prompt
+AUTONOMY block. Phase 4.E closed with 0 of 4 passers.)
+Previously 2026-07-03 (Phase 4.E Microstructure/Order-Flow batch
 added as a new strategy category. Human pre-authorization: Kanin
 explicitly approved the addition in chat 2026-07-03 ("Yes, start
 now") after reviewing docs/redesign_proposal_microstructure_2026-07-03.md
@@ -432,6 +435,78 @@ unchanged harness.
 AltcoinSeason, NewsSent, AttentionMom) stay parked; their trial
 budget is not spent during 4.E. Paper trading stays deferred per
 Kanin 2026-07-03 until a backtest survivor exists.
+
+#### Phase 4.F — Perp-structural batch (added 2026-09-02, human pre-authorized)
+
+**Authorization:** Kanin pre-authorized this category in the 2026-09-02
+megaloop prompt AUTONOMY block (`docs/MASTER_PLAN.md` named explicitly)
+and reaffirmed it in session. Proposal text:
+`docs/proposed_backtest_rule_discovery_2026-09.md` § "Proposal 3".
+
+**Full design: `docs/research_revival_2026-09.md` §C (canonical for
+this phase). Summary:**
+
+**Scope.** A new strategy family `perp-structural` on a genuinely new
+substrate: the Binance USDT-M perpetual public archive (klines,
+`fundingRate`, 5-minute `metrics` OI / long-short / taker ratios, and a
+listing/delisting universe table including delisted symbols). Three
+pre-registered mechanism families, enumerated with their kill tests in
+§C.4: FundingDispersionCarry, DeleveragingReversal, ListingFlow. Each
+names its counterparty and why that counterparty pays — the
+mechanism-first path, replacing the citation-first path that produced
+zero holdout passers across ~44 designs.
+
+**Statistical rationale.** Every prior batch was scored against a
+`trials.log` count inflated by exploration that had nowhere else to go.
+The discovery / confirmation split (§C.2) gives exploration a ledger of
+its own and charges it as an explicit `N_disc` haircut on the
+confirmation DSR, instead of either hiding it or paying for it twice.
+Budget is deliberately small: at most 5 `full_cpcv` rows across the
+three families (1 per family + 2 variation slots), 3-consecutive-failure
+stop; the 20-variation cap is irrelevant at this size.
+
+**Data substrate.** Binance UM archive via `data/binance_vision_um.py`,
+cached under `backtest/cache/binance_um/`. Research substrate is
+Binance; execution venue remains OKX (443 USDT swaps; universe =
+Binance-listed ∩ OKX-listed at signal time, disclosed as a filter and
+applied ex ante). Cross-venue provenance disclosure per the 2026-06-11
+BNB-backfill precedent. Discovery window 2020-01-01 → 2022-12-31;
+confirmation dev 2023-01-01 → 2025-05-01; holdout 2025-05-01 →
+2026-08-31, genuinely virgin for this substrate, with the standing
+disclosure that the agents know the 2025-10-10 cascade happened.
+
+**Engine.** `backtest/engine_cs.py` — a long-short perp book:
+per-bar target weights, funding accrued at 8h settlements (archive
+timestamps floored to the hour before alignment), per-leg
+maintenance-margin / liquidation checks, OKX perp taker fee +
+slippage, and forced closure on delisting. `engine_multi.py` is NOT
+modified — its long-only contract underlies 21 recorded trials.
+
+**Batch-specific gate (locked).** Every trial runs at standard taker
+fees + slippage AND at 2× fees; edge must survive both or the verdict
+is retire. `FundingDispersionCarry` is registered `"neutral": true`, so
+its verdict baseline is PSR vs 0 rather than alpha/IR vs
+same-instrument B&H; the other two are directional.
+
+**Discipline.** Existing rules unchanged except where §C.2 explicitly
+carves out discovery: 3 enumerated starting hypotheses, ≤5 confirmation
+trials, 3-consecutive-failure batch stop, every CONFIRMATION trial
+appends to `trials.log`, no grid searches. Discovery screens append to
+`research/discovery/<family>.md` and never to `trials.log`.
+
+**Sequencing.** (1) Data layer (`data/binance_vision_um.py`) — DONE
+(commit 38e1c32). (2) Engine + discovery scaffolding + proposals —
+DONE. (3) Human pre-authorization of the `.claude/rules/backtest.md`
+and `CLAUDE.md` edits in `docs/proposed_backtest_rule_discovery_2026-09.md`,
+and of the three manifest rows in
+`backtest/proposed_manifest_entries_binance_um.json` — DONE 2026-09-02.
+(4) Discovery screens on real data → ledger rows. (5) Confirmation
+trials, for surviving families only, through the unchanged harness.
+
+**Exit ramp.** If no family shows a discovery spread large enough to
+imply SR ≥ 2 net, that is a clean negative result for retail structural
+edge on perps and §A.6 becomes the plan. That outcome is a success
+condition of this batch, not a failure of it.
 
 #### Phase 4 (paper deploy) — applies only if Phase 4.C produces ≥1 deployable strategy
 
