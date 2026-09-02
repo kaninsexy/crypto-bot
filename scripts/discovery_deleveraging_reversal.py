@@ -81,6 +81,12 @@ LEDGER = _REPO_ROOT / "research" / "discovery" / f"{FAMILY}.md"
 DISCOVERY_END = pd.Timestamp("2023-01-01T00:00:00Z")
 DISCOVERY_START = pd.Timestamp("2020-01-01T00:00:00Z")
 
+#: First day the 5-minute metrics archive covers the ALT cross-section.
+#: BTCUSDT alone reaches back to 2020-09; every other symbol starts 2021-12
+#: (docs/recon_binance_um_2026-09.md section 4). A cross-sectional OI study
+#: therefore has ~13 usable months regardless of how much is downloaded.
+METRICS_START = "2021-12-01"
+
 OI_DROP_THRESHOLD = -0.20        # 24h OI drop ≥ 20 %
 SIGMA_MULTIPLE = 2.0             # price move ≥ 2σ
 SIGMA_LOOKBACK_DAYS = 30
@@ -291,9 +297,27 @@ def load_discovery_panels(cache_dir=None, max_symbols=None, symbols=None) -> dic
         try:
             k = um.fetch_klines(
                 sym, "1d", "2020-01", "2022-12", until=DISCOVERY_END, **kwargs)
+            # CACHE-ONLY, and only over the window the archive actually has.
+            #
+            # Two separate mistakes are being avoided here, both observed
+            # 2026-09-02:
+            #
+            # 1. Requesting 2020-01-01 made the screen SERIALLY download the
+            #    ~700 days before the alt metrics archive begins, at ~1.5
+            #    req/s, almost all of them 404s -- hours of wall clock to
+            #    discover nothing. The archive starts 2021-12 for everything
+            #    except BTCUSDT (docs/recon_binance_um_2026-09.md section 4),
+            #    so METRICS_START is where the data is, not a narrowing.
+            #
+            # 2. max_days=0 makes this strictly cache-only. A screen that can
+            #    reach the network mid-run has a universe that depends on how
+            #    long it was left running and on which days Binance served --
+            #    the sample would not be reproducible from the repo. Prefetch
+            #    is a separate, explicit step
+            #    (scripts/prefetch_um_metrics_fast.py).
             m = um.fetch_metrics(
-                sym, "2020-01-01", "2022-12-31",
-                until=DISCOVERY_END, **kwargs)
+                sym, METRICS_START, "2022-12-31",
+                until=DISCOVERY_END, max_days=0, **kwargs)
         except Exception as exc:                       # noqa: BLE001
             print(f"  skip {sym}: {exc.__class__.__name__}: {exc}")
             continue
@@ -302,9 +326,34 @@ def load_discovery_panels(cache_dir=None, max_symbols=None, symbols=None) -> dic
         assert_discovery_window(f"klines[{sym}]", k.index)
         assert_discovery_window(f"metrics[{sym}]", m.index)
         closes[sym] = k["close"]
+
+        # ── Zero-OI feed artifact (BK-0004) ──────────────────────────────
+        # docs/recon_binance_um_2026-09.md section 4: `sum_open_interest`
+        # drops to a hard 0 for a handful of hours per symbol (16,165 rows
+        # across 85 symbols in this cache). BTC open interest does not
+        # actually go to zero and recover within the hour; it is a feed gap.
+        #
+        # This matters here more than anywhere else in the project, because
+        # `resample_metrics(..., "1D")` takes the LAST 5-minute value of each
+        # day: a glitch at day-end makes that day's OI 0, and the NEXT day's
+        # 24h change reads -100%. The event threshold is -20%, so every one
+        # of those becomes a FALSE collapse event -- 45 such daily bars in
+        # the first 40 symbols alone. Left unfixed, the screen would count
+        # feed gaps as deleveraging events and measure their reversal.
+        #
+        # EXCLUDE rather than repair, deliberately: masking to NaN lets the
+        # daily `last` fall back to the day's last VALID reading, and a day
+        # with no valid reading yields NaN, which produces no event. Repairing
+        # by interpolation would invent open interest that was never observed.
+        m = m.copy()
+        if "sum_open_interest" in m.columns:
+            m.loc[m["sum_open_interest"] <= 0, "sum_open_interest"] = np.nan
+
         daily = um.resample_metrics(m, "1D")
         if "sum_open_interest" in daily.columns and len(daily) > 0:
-            ois[sym] = daily["sum_open_interest"]
+            oi_col = daily["sum_open_interest"]
+            # Belt and braces: a zero must never reach the pct_change.
+            ois[sym] = oi_col.where(oi_col > 0)
 
     if len(closes) == 0 or len(ois) == 0:
         raise SystemExit(
@@ -553,15 +602,35 @@ def main(argv=None) -> int:
     report(result)
 
     if not gate.passes:
-        # REFUSE to ledger. An underpowered screen has not tested anything,
-        # so it must not leave a row that a later reader counts as evidence
-        # (or as an N_disc unit).
+        # A refused run still HAPPENED, and the ledger is the record of what
+        # was run. Writing nothing was the first instinct and it is wrong: a
+        # later session finding an empty ledger cannot tell "never screened"
+        # from "screened and refused", and would burn the compute again to
+        # rediscover the same refusal.
+        #
+        # So the row is written with an explicit REFUSED conclusion. What it
+        # must NOT do is present the statistic as a finding -- at this MDE the
+        # observed value carries no information about the effect, and the
+        # conclusion says so in those words.
+        refusal = (
+            f"**REFUSED — UNDERPOWERED, not killed.** MDE {gate.mde * 100:.4f} % "
+            f"exceeds the pre-registered {THRESHOLD_REVERSAL_PCT} % bar at "
+            f"N={result['n_events']}: a TRUE {THRESHOLD_REVERSAL_PCT} % effect "
+            f"would return t = "
+            f"{THRESHOLD_REVERSAL_PCT / 100.0 / (gate.sigma / (result['n_events'] ** 0.5)):.2f}"
+            f", below the {THRESHOLD_T} bar. N required {gate.n_required}; the "
+            f"whole substrate yields {result['n_events']}. The observed "
+            f"{result['mean_pct']:.4f} % / t={result['t_stat']:.2f} is therefore "
+            f"NOT evidence about the effect and must not be read as a kill."
+        )
+        if args.append_ledger:
+            append_ledger_row(result, refusal)
         raise SystemExit(
             f"POWER GATE REFUSED [{FAMILY}]: MDE {gate.mde * 100:.4f} % > "
             f"pre-registered {THRESHOLD_REVERSAL_PCT} % at N={result['n_events']}. "
-            f"No ledger row written. Widen the universe to N >= "
-            f"{gate.n_required} events and re-run; that COMPLETES the "
-            f"pre-registered test and does not increment N_disc."
+            f"Ledger row written recording the REFUSAL (not a kill). Widen the "
+            f"universe to N >= {gate.n_required} events and re-run; that "
+            f"COMPLETES the pre-registered test and does not increment N_disc."
         )
 
     if args.append_ledger:
