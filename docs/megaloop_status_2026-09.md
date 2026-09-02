@@ -62,7 +62,14 @@ rows (`research/discovery/*.md`), not trials. `N_disc = 1` per family.
 `load_holdout` was never called; `holdout_access.log` gained three
 `phase4f.manifest_add` annotations and no `final_dsr`.
 
-### One lead, recorded and NOT acted on
+### One lead, recorded and NOT acted on — **CLOSED by run 3 (I1)**
+
+> **SUPERSEDED.** This lead did not survive clustering. The 220 events are 43
+> dates / 24 episodes; clustered, |t| falls 7.78 → 1.71 and the robust MDE
+> (11.0 %) exceeds the effect (6.28 %). BK-0016 closed. In particular the
+> claim below that it was "adequately powered" was WRONG — the power check
+> divided by √220 when the effective sample was nearer √24. Kept for the
+> record; see the run-3 section.
 
 deleveraging at **+1 day: −6.28 %, t = −7.78, MDE 2.42 %** — significant,
 adequately powered (unlike the +3 day headline), and the **opposite sign** to
@@ -95,10 +102,12 @@ trials.log row (AST-enforced by a test), scored outside the verdict tree,
 and it would fail gate v2 by construction. Ships with a paper-mode config and
 a monthly monitoring list.
 
-Caveats are in the report, not buried: the drawdown result rests on **one**
-episode (2022); the window **excludes March 2020**, the V-shaped crash case
-trend overlays handle worst, so it is by accident favourable; and beating the
-QuantPedia benchmark is flagged as a warning rather than a win.
+Caveats are in the report, not buried. **Two of them were tested in run 3 (I3)
+and turned out to be wrong:** the drawdown result does NOT rest on one episode
+(8 here, 12 on the longer window) and the deepest drawdown is 2023-03-10, not
+the 2022 bear. The third — that the window excludes March 2020 — was correct,
+and the rule survived that test when run on Binance spot. See the run-3
+section.
 
 ## Governance layer (runs 1–2)
 
@@ -194,3 +203,175 @@ and live capital untouched; `paper_mode` unchanged. The
 was removed from `.claude/settings.local.json` the same day it was added — it
 is a tracked file, so a standing override there was one `git add -A` from
 being pushed.
+
+
+---
+
+# Run 3 — five investigations, no trial budget spent
+
+**Outcome: Phase 4.F has NO LIVE LEAD.** Final status (b): closed 0 passers,
+the §A.6 overlay is the standing deliverable. No trial ran, no `trials.log`
+row was written (still **48**), no `load_holdout` call, no new strategy
+proposed, and `N_disc` is unchanged at 1 for all three families.
+
+| sha | investigation |
+|---|---|
+| `a410b68` | I1 decision rule, **committed before any number existed** |
+| `62da041` | I1 clustered SEs — BK-0016 closed |
+| `3485c4f` | I2 confirmation-stage power |
+| `db31069` | I3 overlay robustness — survives March 2020 |
+| `a98ab6e` | I5 data-defects registry |
+| — | **I4 skipped**, correctly: it was conditional on BK-0016 surviving I1 |
+
+## I1 — the decisive one. The lead was clustered away.
+
+All three screens had computed ordinary standard errors, which assume
+independent observations. None of them satisfies that.
+
+**Deleveraging: 220 "events" are 43 distinct UTC dates, or 24 episodes.** A
+market-wide cascade hits every coin at once, so a cascade day contributes about
+one observation, not one per symbol.
+
+| statistic | cluster | G | t ordinary | **t clustered** | design effect | robust MDE |
+|---|---|---|---|---|---|---|
+| +3d headline | date | 43 | −1.78 | −0.79 | 2.26× | 6.54 % |
+| +3d headline | episode | 24 | −1.78 | −1.98 | 0.90× | 2.59 % |
+| **+1d lead** | date | 43 | −7.78 | **−1.71** | **4.55×** | 11.00 % |
+| **+1d lead** | episode | 24 | −7.78 | **−2.26** | 3.45× | 8.35 % |
+
+The pre-committed rule required **both** clustered `|t| > 3` **and** robust MDE
+below the observed effect (6.28 %). The lead fails **both**, under **both**
+clusterings. **BK-0016 closed.**
+
+Other families, both unchanged and strengthened exactly as the rule said they
+could only be: funding_dispersion HAC(10) moves t 2.94 → 2.50 (1.18×, and its
+lag-1 autocorrelation is only +0.038 — genuinely mild); listing_flow is
+unmoved by date-clustering (1.00×; 166 listings on 154 dates) but weakens to
+1.30× by month and t = −1.92 on a strictly non-overlapping construction.
+
+**Two things I got wrong, now on record:**
+
+- Run 2 called the +1d effect "adequately powered". It was not. The power
+  check divided by √220 when the effective sample was nearer √24.
+- The pre-committed rule asserted clustering "can only widen the interval".
+  That is the standard expectation, not a theorem — the +3d episode variant
+  shows 0.90×. It changes no conclusion, but the wording was too strong.
+
+**New: BK-0018 (high).** The pre-flight power gate assumes independence and
+cannot see clustering. It fixes sample SIZE and is silent on whether the
+observations are independent, so it was optimistic by √4.55 here. **A
+correctly-powered study can still report a t-stat overstated 4.5×.** Until the
+gate takes an effective N or a cluster key, it must not be cited as evidence a
+test is powered unless the observations are plausibly independent.
+
+## I2 — the confirmation stage cannot conclude either
+
+| window | years | MinTRL floor (min SR validatable at 95 %) |
+|---|---|---|
+| dev 2023-01-01 → 2025-05-01 | 2.33 | **SR 1.08** |
+| holdout 2025-05-01 → 2026-08-31 | 1.33 | **SR 1.42** |
+
+Family null `sr_zero` (V[SR] = 1.0 fallback, 0 trials): 0.000 / 0.520 / 0.853 /
+1.052 / 1.193 at N = 1…5. MinTRL binds to N = 4; past that the null takes over.
+
+**Verdict: confirmation cannot validate below SR ≈ 1.1 on dev, or ≈ 1.4 on
+holdout.** A market-neutral perp design is a 0.5–1.0 Sharpe proposition when it
+works. **Both ends of the pipeline are calibrated for effects larger than the
+ones being hunted** — a design could be genuinely profitable at SR 0.8, clear
+every discovery bar, and still be unable to return `keep`, because 2.33 years
+cannot resolve 0.8 from 0 at 95 %. §C.5's dev SR ≥ 2 raises the effective bar
+to 2.0.
+
+Not a harness bug — MinTRL and the Gumbel null are both correct and doing
+their job. It is a fact about the substrate, and it now sits in MASTER_PLAN
+because it constrains every future strategy there, not just Phase 4.F.
+
+## I3 — the overlay survived the harder test, and corrected me twice
+
+Same rule, no parameter changed, on Binance spot back to 2019-12 (reaching
+March 2020, the V-shaped case a 200-day-MA overlay handles worst).
+
+| | Binance 5.37 y | | OKX 3.92 y | |
+|---|---:|---:|---:|---:|
+| | overlay | B&H | overlay | B&H |
+| annualised return | +17.91 % | +67.06 % | +5.19 % | +11.92 % |
+| max drawdown | **−15.98 %** | −76.25 % | −15.97 % | −76.26 % |
+| Calmar | **1.12** | 0.88 | 0.33 | 0.16 |
+| drawdown reduction | **79.0 %** | | 79.1 % | |
+
+**It survived March 2020 — and not for the reason I assumed.** It was invested
+(0.105 total weight on 1 March) and took −11.6 % against buy-and-hold's
+−58.0 %. **The vol target did the work, not the 200-day MA**: realised vol had
+already cut the position to ~30 % by February and ~10 % by March. The two
+components are not interchangeable.
+
+Two corrections to my own run-2 report, made in its body rather than
+footnoted:
+
+1. *"The result rests on ONE episode"* — **wrong.** 8 episodes deeper than 5 %
+   on the original window, 12 on the longer one.
+2. *"The deepest drawdown is the 2022 bear"* — **wrong.** It is **2023-03-10**,
+   on both windows, which is why extending backwards found nothing worse. I
+   stated an assumption as a finding.
+
+What got worse, and it is the honest headline: the return sacrifice rises to
+**73 %** of buy-and-hold on the longer window. Drawdown protection is stable
+across windows; its cost is not. The Calmar of 1.12 is flattered by a start
+near the December 2019 low. Also measured: **zero whipsaws** in 5.37 years,
+6 round trips, 0.83 % total cost.
+
+## I4 — skipped, and correctly
+
+Conditional on the +1d lead surviving I1. It did not, so there is no trade
+whose cascade-day execution cost needs measuring. Running it anyway would have
+been work in service of a closed question.
+
+## I5 — data-defects registry
+
+Six defects with measured counts, detection queries and guards
+(`docs/data_defects_binance_um.md`); `defect_report()` and
+`clean_metrics()` / `fetch_metrics(clean=True)` in the data layer; 14 tests
+including one that reproduces the exact run-2 failure and asserts it happens
+without the guard.
+
+The sharpest one is **D6: all 832 perp symbols are currently flagged
+`delisted`, including BTCUSDT** — a universe rule saying "exclude delisted"
+against this table excludes everything, silently.
+
+Rule item 7 now makes consulting a substrate's registry mandatory: *a defect
+list that exists but is not applied is the same failure as no list.*
+
+## Harness state at close
+
+```
+pytest backtest/tests data/tests -q   ->  512 passed, 6 skipped
+python eval/run_tier1.py              ->  133/133 passed
+backtest/trials.log                   ->  48 rows, unchanged
+holdout_access.log                    ->  3 manifest_add annotations, no final_dsr
+N_disc                                ->  1 per family, unchanged
+```
+
+## What a human should decide next
+
+Unchanged in substance from run 2, but now better evidenced and with one item
+retired:
+
+1. **BK-0015 — direction on the perp substrate.** I2 sharpens it: it is not
+   only that discovery could not resolve these effects, it is that
+   confirmation could not have validated them either. Accept the overlay and
+   stop; or wait, since a year of calendar drops the dev floor 1.08 → 0.90 at
+   no methodological cost; or change what `keep` means for this family, which
+   needs its own pre-registration.
+2. **BK-0018 — teach the power gate about clustering.** The cheapest real
+   improvement available: it currently certifies underpowered tests as
+   powered whenever observations are grouped.
+3. **BK-0017 — partially resolved.** I3 answered the March 2020 question and
+   corrected the single-episode claim. What remains is that one venue pair and
+   one cycle is still one cycle.
+4. **Whether to paper-deploy the overlay.** Now a better-supported decision:
+   it handled the crash the earlier report worried about.
+5. **BK-0001 (critical, untouched) — the Mac/PC `trials.log` split.** Every
+   row before 2026-05-05 lives only on the Mac, so the multiple-testing count
+   is understated for every N-based statistic computed since.
+
+~~BK-0016 (the +1d lead)~~ — closed by I1.

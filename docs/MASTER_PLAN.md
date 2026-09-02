@@ -438,7 +438,23 @@ Kanin 2026-07-03 until a backtest survivor exists.
 
 #### Phase 4.F — Perp-structural batch (added 2026-09-02, human pre-authorized)
 
-> ## CLOSED 2026-09-02 — 0 of 3 families testable, 0 confirmation trials run
+> ## CLOSED 2026-09-02 — 0 passers, NO LIVE LEAD (final, after run 3)
+>
+> **Final status: (b) no live lead; Phase 4.F closed 0 passers; the §A.6
+> overlay is the standing deliverable.** The one candidate lead did not
+> survive dependence correction — see the run-3 note immediately below.
+>
+> **Run 3 (I1) closed the last open question.** The +1d deleveraging
+> continuation, flagged in run 2 as "adequately powered", was an artefact of
+> treating 220 observations as independent when they are **43 dates / 24
+> episodes**: a market-wide cascade hits every coin at once. Clustered, |t|
+> falls 7.78 → 1.71 (design effect 4.55×) and the robust MDE (11.0 %) exceeds
+> the observed effect (6.28 %). BK-0016 is closed as *clustered away*. The
+> other two families' conclusions were unchanged and strengthened.
+>
+> The decision rule for that correction was committed at `a410b68` BEFORE the
+> numbers were computed, and it stated in advance that clustering could only
+> ever make a test stricter — no branch of it could have revived a family.
 >
 > **Not three kills. Three families the sealed discovery window could not
 > resolve at the effect sizes their own kill tests pre-registered.** That
