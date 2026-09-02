@@ -1,8 +1,30 @@
 # Playbooks → crypto-bot port plan
 
+> **SUPERSEDED 2026-09-02** by the siamese-reconcile governance port
+> (commits `6a564ec` S1.1 rules layer, and the S1.2–S1.5 guard/backlog layer).
+> Chunks 1–7 of this plan were never executed. In the intervening two months
+> `siamese-reconcile` matured the *same* components past what this plan
+> describes and pinned them with an eval harness, so the port was taken from
+> there (HEAD `2f13045`) rather than from the 2026-07-03 playbooks snapshot.
+>
+> What landed instead, and where to read it now:
+>
+> | this plan's chunk | superseded by |
+> |---|---|
+> | guard hooks (jq → Python) | `.claude/hooks/*.py`, old→new map in `.claude/hooks/_archive_bash_2026-09/README.md` |
+> | single tier map | `.claude/hooks/file_tiers.py` |
+> | eval harness | `eval/run_tier1.py` + `eval/fixtures/hooks/*.jsonl` |
+> | schemas | `schemas/backlog.schema.json`, `schemas/agent_frontmatter.schema.json` |
+> | backlog (Mandate L) | `.memory/T2_semantic/backlog.jsonl`, `scripts/pre_commit_backlog_check.sh`, `scripts/post_commit_verify.sh`, `scripts/install_git_hooks.sh` |
+> | policy / enforcement layer | `.claude/rules/enforcement.md`, `enforcement_policy.json`, `policies/*.policy` |
+>
+> Kept unedited below for provenance: the four drift bugs it identified were
+> real, and three of them are the same defects the port fixed (jq fail-open,
+> duplicated sacred lists, unwired `sacred-block.sh`).
+
 Date: 2026-07-03
 Author: Chat (planning session)
-Status: planning complete; execution routes to Claude Code, chunk by chunk
+Status: **SUPERSEDED** (was: planning complete; execution routes to Claude Code, chunk by chunk)
 Repo HEAD at planning time: `d6b471f`
 
 > **What this is.** crypto-bot forked from the `playbooks` starter template

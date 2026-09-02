@@ -1,0 +1,45 @@
+# harness_before_commit.policy — crypto-bot's own discipline, mechanized.
+# Ported 2026-09-02 from siamese-reconcile and re-targeted at this repo's gates.
+#
+# ".claude/rules/escalation.md §0: the harness is ground truth" as an ENFORCED
+# rule. Two orderings the per-event hooks could not express before:
+#
+#   1. After any write to the GATE LAYER (.claude/, eval/, schemas/, scripts/),
+#      `git commit` is blocked until `python eval/run_tier1.py` has RUN GREEN —
+#      as its OWN tool call. A run chained into the same command as the commit
+#      is evaluated before its exit code exists, so it cannot satisfy the gate.
+#      This is the mechanized form of escalation.md §13.2: "a stage closes only
+#      when its VERIFY block is green".
+#
+# The pytest gate is deliberately NOT expressed here. crypto-bot's canonical
+# invocation is `python -m pytest ...`, and `effective_exec_target` resolves the
+# module form (`-m`) to the INTERPRETER, not to `pytest` — so a `**/pytest`
+# pattern could never match, and the only pattern that would (`python`) latches
+# on any successful python call, which is a gate in name only. pytest is already
+# gated deterministically one layer down, by .githooks/pre-commit (check 3), so
+# a weak duplicate here would only risk wedging commits. Recorded as a fact in
+# .claude/rules/enforcement.md rather than left as a silent omission.
+#
+# Docs-, memory- and backlog-only commits are NOT gated: with no matching write
+# this session the `unless` holds (documented deviation, .claude/rules/enforcement.md).
+#
+# Policies live under .claude/rules/ deliberately: sacred by pattern
+# (file_tiers.py ^\.claude/rules/.*), so an agent cannot soften its own gate
+# without SACRED_OVERRIDE_FILES. Engine: scripts/policy_engine.py; adapter:
+# .claude/hooks/policy-engine.py; class map: .claude/rules/enforcement_policy.json.
+
+source AGENT = exec "**"
+
+rule tier1-eval-before-commit:
+  block exec "git" "commit"
+    unless after exec "**/run_tier1.py" exits 0
+      since write ".claude/**" or write "eval/**" or write "schemas/**"
+  because "the harness is ground truth; run `python eval/run_tier1.py` green as its own call after guard-layer edits, then commit"
+
+rule literature-lock-reminder:
+  notify write "research/**"
+  because "no-p-hacking rule: Variation #1 is pre-registered in research/<name>-literature.md BEFORE its trial script runs; a threshold or window moved after seeing a statistic is p-hacking regardless of window"
+
+rule trials-log-reminder:
+  notify write "backtest/trials.log"
+  because "backtest/trials.log is written ONLY by backtest.trials.record_trial from a confirmation trial (escalation.md tripwire 1); a discovery screen's record is its research/discovery/<family>.md ledger row"

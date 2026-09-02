@@ -1,0 +1,9 @@
+{
+  "_comment": "Finding-policy map (ported 2026-09-02 from siamese-reconcile). Maps each REGISTERED finding code to its enforcement CLASS (blocking | advisory | off), decoupled from the check's intrinsic severity. Advisory-by-default: blocking is opt-in. Precedence off > blocking > advisory > source-default is implemented in scripts/enforcement_policy.py::resolve_class. Every code in FINDING_REGISTRY MUST appear under 'policy' here, and each is documented in .claude/rules/enforcement.md. This file is Tier-1 sacred (file_tiers.py ^\\.claude/rules/.*): an agent cannot soften its own gate without SACRED_OVERRIDE_FILES authorization.",
+  "policy": {
+    "POLICY_RULE_BLOCK": "blocking",
+    "POLICY_RULE_NOTIFY": "advisory",
+    "POLICY_ENGINE_DISARMED": "advisory",
+    "POLICY_ENGINE_PRODUCER_ERROR": "advisory"
+  }
+}

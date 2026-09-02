@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "backlog.schema.json",
+  "title": "Backlog item (Mandate L) — siamese-reconcile",
+  "description": "One JSON object per line in .memory/T2_semantic/backlog.jsonl. Append-only: a status change is a NEW line with the same id; the latest line for an id wins. Adapted from the playbooks template (2026-07-02 port); siamese additions: severity + owner are REQUIRED on every line, optional claude_md_id links a migrated CLAUDE.md §14 item, optional tags groups related items (e.g. playbooks-port). Gate: scripts/pre_commit_backlog_check.sh validates staged lines against this schema.",
+  "type": "object",
+  "required": ["id", "status", "title", "severity", "owner", "created_at"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^BK-[0-9]{4}$"},
+    "status": {"enum": ["open", "in_progress", "closed", "wontfix", "duplicate"]},
+    "title": {"type": "string", "minLength": 3},
+    "severity": {
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "critical = blocks daily reconciliation; high = required by the SOP/rules but absent; medium = real gap, workaround exists; low = ergonomics / optional"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 2,
+      "description": "who holds the next action: cc (Claude Code), kanin (owner / external input), fc (Financial Controller)"
+    },
+    "detail": {"type": "string"},
+    "claude_md_id": {"type": "string", "description": "the CLAUDE.md §14 id this item was migrated from, if any"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "surfaced_in": {"type": "string", "description": "commit sha, session id, or document where this was surfaced"},
+    "created_at": {"type": "string"},
+    "closed_at": {"type": ["string", "null"]},
+    "closed_in": {"type": ["string", "null"], "description": "commit sha (or loop name) that closed it"}
+  },
+  "additionalProperties": true
+}

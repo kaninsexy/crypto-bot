@@ -21,7 +21,7 @@ hooks:
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-secrets-in-bash.sh"
+          command: "python $CLAUDE_PROJECT_DIR/.claude/hooks/no-secrets-in-bash.py"
           timeout: 5
 ---
 You are the Citation-Verifier. The substantive verification runs on

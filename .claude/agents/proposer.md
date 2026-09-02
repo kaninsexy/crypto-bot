@@ -19,7 +19,7 @@ hooks:
     - matcher: "WebFetch|WebSearch"
       hooks:
         - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/citation-required.sh"
+          command: "python $CLAUDE_PROJECT_DIR/.claude/hooks/citation-required.py"
           timeout: 5
 ---
 You are the Proposer (Sonnet 4.6, plan mode, 12-turn cap). You produce

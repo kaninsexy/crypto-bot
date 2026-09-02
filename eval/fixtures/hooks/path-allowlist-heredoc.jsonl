@@ -1,0 +1,9 @@
+# Tier-1 fixtures: heredoc bodies are DATA, not commands.
+# Pins hook_path_allowlist_heredoc_false_positive: a commit message that
+# QUOTES a delete or a redirect against a sacred path must not register as a
+# write. Without this the mandatory heredoc commit form (CLAUDE.md mandate G)
+# would be unusable — every commit describing sacred-file work would self-block.
+{"desc": "commit message body mentioning `rm CLAUDE.md` is NOT a write", "hook": "path-allowlist.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -F - <<'EOF'\ndocs(port): note the old guard\n\nThe archived hook would not have stopped `rm CLAUDE.md`.\nEOF"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "commit message body mentioning a redirect onto trials.log is NOT a write", "hook": "path-allowlist.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -F - <<'EOF'\ntrials: record the run\n\nNever do `echo x > backtest/trials.log` by hand.\nEOF"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "a REAL redirect on the same line as a heredoc opener is still caught", "hook": "path-allowlist.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "cat > CLAUDE.md <<'EOF'\nharmless body\nEOF"}, "session_id": "tier1"}, "expect_exit": 2, "expect_stderr_contains": "BLOCKED"}
+{"desc": "a REAL sacred write AFTER a closed heredoc is still caught", "hook": "path-allowlist.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -F - <<'EOF'\nchore: x\nEOF\necho y > docs/architecture.md"}, "session_id": "tier1"}, "expect_exit": 2}

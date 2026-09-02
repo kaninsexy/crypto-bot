@@ -22,18 +22,15 @@ hooks:
     - matcher: "Edit|Write"
       hooks:
         - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/sacred-block.sh"
+          command: "python $CLAUDE_PROJECT_DIR/.claude/hooks/path-allowlist.py"
           timeout: 5
     - matcher: "Bash"
       hooks:
         - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/no-deploy.sh"
+          command: "python $CLAUDE_PROJECT_DIR/.claude/hooks/no-deploy.py --strict"
           timeout: 5
         - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-heredoc-required.sh"
-          timeout: 5
-        - type: command
-          command: "$CLAUDE_PROJECT_DIR/.claude/hooks/commit-format.sh"
+          command: "python $CLAUDE_PROJECT_DIR/.claude/hooks/commit-guard.py"
           timeout: 5
   PostToolUse:
     - matcher: "Edit|Write"

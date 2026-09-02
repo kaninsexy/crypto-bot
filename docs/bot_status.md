@@ -1,7 +1,39 @@
 # Bot Status
 
-Last updated: 2026-07-03 (Phase 4.E microstructure batch — closed, 0 passers)
+Last updated: 2026-09-02 (governance port from siamese-reconcile; Phase 4.F
+perp-structural batch pending)
 Supersedes the 2026-04-17 snapshot (preserved in git history).
+
+## Current state (2026-09-02)
+
+**Phase 4.E Microstructure / Order-Flow: CLOSED, 0 of 4 passers** (detail
+below). **Phase 4.F Perp-structural: opening** — Binance USDT-M perpetual
+substrate with a discovery/confirmation split (`.claude/rules/backtest.md`
+§ "Discovery / confirmation split"); no trial has run yet.
+
+**Governance layer replaced (2026-09-02).** The guard layer was ported from
+`siamese-reconcile` (HEAD `2f13045`) because crypto-bot's own layer was not
+running. Two defects, both measured that day:
+
+1. **Every bash hook failed open.** All fifteen parsed stdin with `jq`, which
+   is not installed on this machine. They exited 127, which Claude Code treats
+   as non-blocking — so `sacred-block.sh`, `no-secrets-in-bash.sh`,
+   `no-deploy.sh` and `path-allowlist.sh` blocked nothing, for months.
+2. **`.githooks/` was never activated.** `.githooks/pre-commit` (sacred diff
+   block + magic-number gate + `pytest -m fast`) and `.githooks/commit-msg`
+   (`[mandate-H]` gate) both say "Activated via: git config core.hooksPath
+   .githooks" — but `core.hooksPath` was never set, so git ran `.git/hooks/`,
+   which held only the trial-queue validator.
+
+Now: Python hooks that fail CLOSED, one tier map (`.claude/hooks/file_tiers.py`),
+a fixture-pinned gate (`python eval/run_tier1.py`, 122 fixtures, plus a
+`--self-check` that proves the fixtures can go red), and
+`scripts/install_git_hooks.sh` chaining `.git/hooks/` → `.githooks/` +
+the Mandate L backlog gate without dropping the queue validator. The push
+boundary moved from the push to the GATE (CLAUDE.md mandate G): CC pushes its
+own finished, gated work via `bash scripts/post_commit_sync.sh`.
+
+**Deployment:** paper mode, unchanged. No live capital, no live venue.
 
 ## Phase 4.E — Microstructure / Order-Flow batch (dev CPCV, 2026-07-03)
 

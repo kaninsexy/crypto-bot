@@ -1,0 +1,14 @@
+# Tier-1 fixtures: no-deploy.py — the live-venue and irreversible-git gate.
+# The always-on set is safe to run on EVERY Bash call; the --strict set (ssh,
+# bare `deploy`) stays agent-scoped because it false-blocks ordinary work.
+{"desc": "block doctl", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "doctl compute droplet list"}, "session_id": "tier1"}, "expect_exit": 2, "expect_stderr_contains": "BLOCKED"}
+{"desc": "block kubectl", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "kubectl apply -f k8s.yaml"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "block docker push", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "docker push registry/bot:latest"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "block git push --force (Human-only after the 2026-09-02 boundary move)", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --force origin main"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "block git push --force-with-lease", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push --force-with-lease origin main"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "block branch deletion via push", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push origin --delete feature/x"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "block git reset --hard main", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git reset --hard origin/main"}, "session_id": "tier1"}, "expect_exit": 2}
+{"desc": "ALLOW a plain `git push origin main` — agent-autonomous for gated work (CLAUDE.md mandate G, 2026-09-02)", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git push origin main"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "ALLOW the sanctioned push path", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "bash scripts/post_commit_sync.sh"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "a commit message QUOTING a deploy verb is data, not a command", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -F - <<'EOF'\ndocs(port): record the guard\n\nkubectl and doctl are blocked by no-deploy.py.\nEOF"}, "session_id": "tier1"}, "expect_exit": 0}
+{"desc": "ordinary command allowed by the always-on set", "hook": "no-deploy.py", "eval_type": "checkpoint", "payload": {"tool_name": "Bash", "tool_input": {"command": "grep -rn deploy docs/"}, "session_id": "tier1"}, "expect_exit": 0}
