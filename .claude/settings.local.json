@@ -1,8 +1,41 @@
 {
+  "_comment_env": "DO NOT put SACRED_OVERRIDE_FILES or CLAUDE_HUMAN_OVERRIDE in this file. On 2026-09-02 an env block here was used to carry an in-chat authorization to .claude/hooks/path-allowlist.py (which reads the var from its own process env). It worked, and it was the wrong place: this file IS TRACKED IN GIT (added 102bb0d; it is not in .gitignore), so a standing override here is one `git add -A` away from being pushed, and until removed it silently disarms the Tier 1 guard for every later session on this machine. The correct channel is the megaloop launch line, which scopes the grant to one process for one run: see the launch command in docs/handoff_template.md and .memory/_inbox/human_needed.md. Removed 2026-09-02 the same day it was added; `python eval/run_tier1.py` reconfirms the guard blocks.",
   "permissions": {
     "allow": [
       "Bash(curl:https://openrouter.ai/*)",
-      "Bash(curl -fsS -X POST https://openrouter.ai/api/v1/chat/completions:*)"
+      "Bash(curl -fsS -X POST https://openrouter.ai/api/v1/chat/completions:*)",
+      "Bash(python *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(*.env)",
+      "Read(.crypto-bot.env)",
+      "Read(~/.crypto-bot.env)",
+      "Read(~/.ibkr-bot.env)",
+      "Read(**/.env)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/secrets/*)",
+      "Read(**/credentials*)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Bash(cat:.env*)",
+      "Bash(cat:~/.crypto-bot.env)",
+      "Bash(cat:~/.ibkr-bot.env)",
+      "Bash(cat:*)",
+      "Bash(less:.env*)",
+      "Bash(more:.env*)",
+      "Bash(head:.env*)",
+      "Bash(tail:.env*)",
+      "Bash(printenv:OPENROUTER_API_KEY)",
+      "Bash(printenv:ANTHROPIC_API_KEY)",
+      "Bash(printenv:RESEND_API_KEY)",
+      "Bash(printenv:OKX_*)",
+      "Bash(printenv:BINANCE_*)",
+      "Bash(printenv:POLYGON_PRIVATE_KEY)",
+      "Bash(printenv:POLYMARKET_*)",
+      "Bash(env)"
     ]
   }
 }

@@ -55,7 +55,23 @@ about the threshold, the window, or the statistic changed.
 **N_disc for this family = 1.** The two rows are one screen run, not two.
 
 For the record, 2.939 is close to 3.0, and that is not a reason to pass it —
-"close to the bar" is what the bar exists to refuse. It is a reason to note
-that a longer window or a wider universe could plausibly settle it, which is a
-*new* pre-registered screen (a new row and N_disc = 2), not a re-reading of
-this one.
+"close to the bar" is what the bar exists to refuse.
+
+**This family is CLOSED within the discovery window.** The paragraph above
+originally went on to muse that a wider universe or a longer window "could
+plausibly settle it" as a new N_disc = 2 screen. That was wrong and is
+retracted, because neither lever exists:
+
+- **Universe** — the screen already ran the pre-registered top-150 rule
+  against the ~166 symbols with klines in the window. There is no wider
+  universe to widen to; the rule is already at the substrate's ceiling.
+- **Window** — the only remaining lever is calendar, and more calendar means
+  2023+, which is the CONFIRMATION window. Discovery is forbidden to read it
+  (`.claude/rules/backtest.md`: "discovery never reads 2023+ data", hard-
+  asserted by the screen itself).
+
+So there is no admissible re-run. Leaving the invitation standing would let a
+later session read it as an open door and re-screen the family looking for a
+different number, which is the exact behaviour N_disc exists to price. If this
+family is ever revisited it is as a confirmation-stage decision on fresh
+grounds, not as another discovery row.
