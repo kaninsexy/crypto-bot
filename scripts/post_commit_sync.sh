@@ -6,9 +6,19 @@
 #
 # What it does, in order:
 #   1. Decide whether the last commit touched a repomix-include path. If yes,
-#      regenerate repomix-output.xml and create a chore commit. The include
-#      spec is repomix.config.json — the ONE list; this script reads it rather
-#      than carrying a second copy that could drift.
+#      regenerate repomix-output.xml. The include spec is repomix.config.json —
+#      the ONE list; this script reads it rather than carrying a second copy
+#      that could drift.
+#
+#      NOTE, crypto-bot vs siamese: repomix-output.xml is GITIGNORED here
+#      (.gitignore line 37), so unlike siamese there is no chore commit — the
+#      file is a local artifact each machine regenerates for itself. The
+#      commit branch below is kept for the day it becomes tracked; it is
+#      unreachable while the file is ignored, because `git diff --quiet` on an
+#      untracked path always reports "no change". This matters because
+#      CLAUDE.md's first instruction every chat is to read repomix-output.xml:
+#      a stale one is a silently wrong view of the repo, which is why this
+#      step regenerates rather than assuming.
 #   2. git push origin main — ONLY on a manual run with NO flag. The PostToolUse
 #      hook (.claude/hooks/post-commit-sync.py) calls this script with
 #      --no-push, so routine and intermediate CC commits auto-refresh repomix
@@ -68,6 +78,13 @@ CURATED_SET=(
 # Read from repomix.config.json — the include spec is the single source of
 # truth. A hardcoded second copy here is exactly the drift that made the
 # bash hook layer disagree with itself (see .claude/hooks/_archive_bash_2026-09/README.md).
+#
+# `tr -d '\r'` is load-bearing on Windows: python prints CRLF, and
+# `readarray -t` strips only the \n. Without it every pattern carries a
+# trailing \r, `case "$changed" in "docs/"$'\r'*)` matches nothing, and the
+# script silently reports "no repomix-included files touched" on every commit
+# — a fail-open of exactly the shape this whole port exists to remove. Caught
+# by `bash -x` on the first real run, 2026-09-02.
 readarray -t REPOMIX_PATTERNS < <(
     python -c "
 import json, sys
@@ -78,7 +95,7 @@ except Exception:
 for p in cfg.get('include', []):
     # strip the glob tail: 'docs/**' -> 'docs/', 'config.py' -> 'config.py'
     print(p.split('*', 1)[0])
-" 2>/dev/null || true
+" 2>/dev/null | tr -d '\r' || true
 )
 
 touched_curated() {
