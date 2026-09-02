@@ -7,9 +7,24 @@ Supersedes the 2026-04-17 snapshot (preserved in git history).
 ## Current state (2026-09-02)
 
 **Phase 4.E Microstructure / Order-Flow: CLOSED, 0 of 4 passers** (detail
-below). **Phase 4.F Perp-structural: opening** — Binance USDT-M perpetual
-substrate with a discovery/confirmation split (`.claude/rules/backtest.md`
-§ "Discovery / confirmation split"); no trial has run yet.
+below).
+
+**Phase 4.F Perp-structural: CLOSED same day, 0 of 3 families TESTABLE.**
+Not three kills — three families whose minimum detectable effect exceeded
+their own pre-registered threshold, so a "killed" verdict would have recorded
+the sample size rather than the substrate. `backtest/trials.log` gained ZERO
+rows (discovery screens write ledger rows, not trials) and the holdout was
+never read. Full table in `docs/MASTER_PLAN.md` § Phase 4.F; per-family
+detail and the power arithmetic in `research/discovery/*.md`.
+
+**The standing deliverable is the §A.6 fallback**, `docs/passive_overlay_2026-09.md`:
+passive 50/50 BTC/ETH with a 200-day trend filter and 20 % vol target.
+Drawdown −15.97 % vs −76.26 % buy-and-hold (79 % relative reduction), Calmar
+0.33 vs 0.16, at the cost of 57 % of the return. **It is risk management, not
+alpha** — no trials.log row, scored outside the verdict tree, and it would
+fail gate v2's IR test by construction. A paper-mode config and a monthly
+monitoring list are in that report. Awaiting a human decision on direction
+(BK-0015).
 
 **Governance layer replaced (2026-09-02).** The guard layer was ported from
 `siamese-reconcile` (HEAD `2f13045`) because crypto-bot's own layer was not

@@ -4,7 +4,7 @@ Escalations from autonomous / megaloop runs. Format: `.claude/rules/escalation.m
 Append-only; Kanin clears an entry by acting on it and deleting the block.
 
 === HUMAN NEEDED ===
-id:        sacred-override-absent-2026-09-02
+id:        sacred-override-absent-2026-09-02  [RESOLVED 2026-09-02]
 raised:    2026-09-02 1730 ICT
 stage:     megaloop 2026-09-02 — S1.5 / S1.6 boundary (governance port)
 tripwire:  5.6 — a sacred-path edit outside the effective authorization scope
@@ -76,3 +76,17 @@ Harness:          pytest 446 passed / 6 skipped; eval/run_tier1.py 122/122 passe
                   eval/run_tier1.py --self-check OK (80 fixtures go red against
                   fail-open stubs, so the gate discriminates)
 === END ===
+
+--- RESOLUTION 2026-09-02 ---
+Resolved in-session. Kanin authorized the sacred edits in chat, and the grant
+was carried to the hook through a temporary env block in
+.claude/settings.local.json, which was REMOVED the same day (that file is
+tracked in git, so a standing override there was one `git add -A` from being
+pushed). Every blocked stage completed: S1.6 architecture.md at b5797ea, S2 at
+ed87e06, and the run went on to reach terminal state T2 at 3a70e3f.
+
+Nothing here is outstanding. The durable fix remains the megaloop launch line,
+which scopes the grant to one process for one run. Keeping the block above for
+the record rather than deleting it: the failure mode it describes -- an
+authorization that exists in the prompt but has no transport to the hook --
+will recur in any session not started from that launch line.
