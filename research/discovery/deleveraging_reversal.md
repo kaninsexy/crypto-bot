@@ -75,5 +75,5 @@ ledgered, this would instead be a second row and N_disc = 2.
 
 ## Ledger
 
-| date | family | signal | universe rule | horizon | statistic | value | t-stat | N | data range used | script + git commit | conclusion |
-|---|---|---|---|---|---|---|---|---|---|---|---|
+| date | family | signal | universe rule | horizon | statistic | value | t-stat | N | MDE | data range used | script + git commit | conclusion |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|

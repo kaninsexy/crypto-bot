@@ -22,10 +22,10 @@ result.
 
 ## Ledger
 
-| date | family | signal | universe rule | horizon | statistic | value | t-stat | N | data range used | script + git commit | conclusion |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-09-02 | funding_dispersion_carry | trailing 3x8h funding sum, decile 10 minus decile 1 (short top / long bottom) | top-150 by trailing 30d quote volume | next 1 day | mean daily net 10-1 spread, %/day (net of 0.05%x2) | 0.2748 %/day | 2.94 | 1043 | 2020-02-22 → 2022-12-30 | scripts/discovery_funding_dispersion.py @ ed87e06 | ~~survives — net 0.2748 %/day >= 0.15 %/day threshold~~ **SUPERSEDED 2026-09-02 by the row below — the script's `verdict()` ignored the pre-registered t-stat bar** |
-| 2026-09-02 | funding_dispersion_carry | trailing 3x8h funding sum, decile 10 minus decile 1 (short top / long bottom) | top-150 by trailing 30d quote volume | next 1 day | mean daily net 10-1 spread, %/day (net of 0.05%x2) | 0.2748 %/day | 2.94 | 1043 | 2020-02-22 → 2022-12-30 | scripts/discovery_funding_dispersion.py @ ed87e06 (verdict fix) | **killed — \|t\|=2.94 <= 3.0.** Same numbers, corrected conclusion: the effect-size bar clears (0.2748 >= 0.15 %/day) but the pre-registered t > 3 bar does not. Supersedes the row above (README rule 4). |
+| date | family | signal | universe rule | horizon | statistic | value | t-stat | N | MDE | data range used | script + git commit | conclusion |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-02 | funding_dispersion_carry | trailing 3x8h funding sum, decile 10 minus decile 1 (short top / long bottom) | top-150 by trailing 30d quote volume | next 1 day | mean daily net 10-1 spread, %/day (net of 0.05%x2) | 0.2748 %/day | 2.94 | 1043 | 0.2805 %/day | 2020-02-22 → 2022-12-30 | scripts/discovery_funding_dispersion.py @ ed87e06 | ~~survives — net 0.2748 %/day >= 0.15 %/day threshold~~ **SUPERSEDED 2026-09-02 by the row below — the script's `verdict()` ignored the pre-registered t-stat bar** |
+| 2026-09-02 | funding_dispersion_carry | trailing 3x8h funding sum, decile 10 minus decile 1 (short top / long bottom) | top-150 by trailing 30d quote volume | next 1 day | mean daily net 10-1 spread, %/day (net of 0.05%x2) | 0.2748 %/day | 2.94 | 1043 | 0.2805 %/day | 2020-02-22 → 2022-12-30 | scripts/discovery_funding_dispersion.py @ ed87e06 (verdict fix) | **killed — \|t\|=2.94 <= 3.0.** Same numbers, corrected conclusion: the effect-size bar clears (0.2748 >= 0.15 %/day) but the pre-registered t > 3 bar does not. Supersedes the row above (README rule 4). |
 
 ### Correction note — 2026-09-02
 
@@ -75,3 +75,42 @@ later session read it as an open door and re-screen the family looking for a
 different number, which is the exact behaviour N_disc exists to price. If this
 family is ever revisited it is as a confirmation-stage decision on fresh
 grounds, not as another discovery row.
+
+### Retrospective power — 2026-09-02, and it changes the classification
+
+The pre-flight power gate (`.claude/rules/backtest.md`, discovery split item 5)
+was written after this screen ran. Applied retrospectively:
+
+| quantity | value |
+|---|---|
+| realised sample sd of the daily net spread | 3.0197 %/day |
+| N (rebalance days) | 1043 |
+| **MDE at t > 3** | **0.2805 %/day** |
+| pre-registered effect threshold | 0.15 %/day |
+| N required for MDE ≤ threshold | 3648 days (~10 years) |
+
+(sd is recovered exactly from the reported triple, sd = mean·√N / t. Here the
+outcome variable is the daily net spread itself — every rebalance day is an
+observation and none is an "event" — so the sample sd *is* the unconditional
+dispersion the gate asks for.)
+
+**MDE 0.2805 %/day exceeds the 0.15 %/day bar, so this screen was
+UNDERPOWERED for its own pre-registered threshold.** A TRUE effect of exactly
+0.15 %/day would have returned **t ≈ 1.60** and been logged as a null. The
+screen could only ever have confirmed effects ≥ 0.28 %/day; the observed
+0.2748 %/day sits just under its own detection floor, which is why t landed at
+2.94 rather than clearing 3.
+
+**So "killed" overstates what was learned, and the correct classification is
+`untestable on the available discovery data`.** The distinction matters and is
+not pedantic: "killed" says *the effect is not there*, and this run cannot
+support that. What it supports is *this window cannot resolve an effect of the
+size we pre-registered*.
+
+Under item 5 the run would now be REFUSED rather than concluded, and the
+remedy — widen until MDE ≤ threshold — is unavailable here for the reasons
+already given above: the universe is at the substrate ceiling (top-150 of ~166)
+and reaching N = 3648 rebalance days needs ~10 years, where the sealed
+discovery window offers 3. **The family is closed as untestable, not as
+disproved.** N_disc remains 1; this note re-reads an existing row, it does not
+add one.

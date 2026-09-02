@@ -198,6 +198,47 @@ forward test decisive (SR ≥ 2) proceed. Paper deploy on OKX perps;
 success = PSR ≥ 0.9 after 12 months; fail-fast if realised SR < 0.5
 after 6.
 
+**5. Pre-flight power gate.** No screen or confirmation trial may run until
+its minimum detectable effect (MDE) at the pre-registered significance bar is
+computed and recorded beside the pre-registration.
+
+    MDE = t_bar × σ / √N_expected
+
+with σ the UNCONDITIONAL dispersion of the outcome variable over the same
+window and universe — a design input, never the conditional statistic the
+test is about. If MDE exceeds the pre-registered effect threshold, the test
+CANNOT pass at the effect size it was designed to detect: the run is
+REFUSED, and the universe, horizon or window is widened until MDE ≤
+threshold, or the family is closed as untestable on the available data.
+
+Widening scope to satisfy this gate is COMPLETING the pre-registered test,
+not a new screen — `N_disc` is unchanged. Narrowing scope for cost is what
+this gate exists to catch.
+
+*Worked example, 2026-09-02 (deleveraging reversal).* The screen was about to
+run on 30 symbols to bound a download cost. Unconditional 3-day return σ over
+the window was 9.69 %, giving ~189 events and MDE = 3 × 9.69 / √189 =
+**2.11 %** against a pre-registered **1.5 %** bar. A TRUE 1.5 % effect would
+have returned t ≈ 2.13 and been logged "killed" — the ledger row would have
+recorded the sample size, not the substrate. At 100 symbols (~630 events) MDE
+is 1.16 % and the same true effect returns t ≈ 3.88. The screen ran at ≥ 100.
+
+An underpowered null is the most expensive kind of wrong answer this project
+can produce: it looks exactly like evidence, it is cheap to generate, and it
+closes a question that was never actually asked. It is also invisible to
+every other gate — CPCV, DSR and the verdict tree all take N as given.
+
+**6. Fetch standard.** Archive prefetches use a `ThreadPoolExecutor`
+(~24 workers) against
+`https://s3-ap-northeast-1.amazonaws.com/data.binance.vision`, one task per
+zip. These are independent GETs of static objects, so the serial bottleneck is
+round-trip latency, not the archive or any rate limit. **A serial fetch that
+would exceed one hour is a bug, not a budget** — measured 2026-09-02, the same
+job ran at 1.5 req/s serially (~11 h) and 39 req/s threaded (~18 min). Treat a
+multi-hour download estimate as a signal to fix the fetcher, never as a reason
+to shrink the universe: shrinking the universe to fit a slow fetcher is
+precisely how item 5's underpowered null gets created.
+
 **What this does NOT relax.** The 20-variation cap, the
 3-consecutive-failure escalation, the no-p-hacking rule for
 confirmation-stage variations, the archive-by-default rule, the

@@ -48,10 +48,13 @@ Usage
     python3 scripts/discovery_deleveraging_reversal.py            # real data
     python3 scripts/discovery_deleveraging_reversal.py --append-ledger
 
-**Status 2026-09-02:** the discovery / confirmation split is PROPOSED,
-not approved (`docs/proposed_backtest_rule_discovery_2026-09.md`).
-Until the human pre-authorizes the `.claude/rules/backtest.md` edit,
-run `--selftest` only.
+**Status 2026-09-02 (updated later the same day):** the discovery /
+confirmation split is APPROVED and IN FORCE. The rule text landed in
+`.claude/rules/backtest.md` § "Discovery / confirmation split" at commit
+`6a564ec`, under the human pre-authorization in that day's megaloop
+prompt. Real-data screens and ledger rows are authorised; `--selftest`
+is no longer the only permitted mode. The paragraph this replaces said
+the opposite and was written hours before the rule landed.
 """
 
 from __future__ import annotations
@@ -69,6 +72,8 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.screen_power_check import compute_power, require_power  # noqa: E402
 
 FAMILY = "deleveraging_reversal"
 LEDGER = _REPO_ROOT / "research" / "discovery" / f"{FAMILY}.md"
@@ -250,7 +255,7 @@ def screen_deleveraging_reversal(
 
 # ── Real-data loading (Binance UM archive; discovery window only) ────────────
 
-def load_discovery_panels(cache_dir=None, max_symbols=None) -> dict:
+def load_discovery_panels(cache_dir=None, max_symbols=None, symbols=None) -> dict:
     """Build daily close + open-interest panels from
     `backtest/cache/binance_um/`, capped strictly before 2023-01-01."""
     from data import binance_vision_um as um
@@ -263,6 +268,21 @@ def load_discovery_panels(cache_dir=None, max_symbols=None) -> dict:
             "first (this screen does no network fetching of its own)."
         )
     listed = universe[universe["first_month"] < "2023-01"]["symbol"].tolist()
+    if symbols is not None:
+        # Explicit universe (plumbing, not design; added 2026-09-02).
+        #
+        # `max_symbols` truncates the head of the universe table, which is in
+        # LISTING order — so it selects an arbitrary slice, not a defensible
+        # universe, and it says nothing about which symbols have the 5-minute
+        # metrics this screen needs. Left as the only option, the screen would
+        # call `fetch_metrics` for every symbol without a cached archive and
+        # SERIALLY DOWNLOAD ~22k daily zips mid-screen.
+        #
+        # `--symbols` lets the caller state the universe explicitly, so the
+        # ledger's "universe rule" field is the list that actually ran. It
+        # changes no threshold, statistic, window, or event definition.
+        wanted = [s.strip() for s in symbols if s and s.strip()]
+        listed = [s for s in listed if s in set(wanted)]
     if max_symbols is not None:
         listed = listed[:max_symbols]
 
@@ -336,6 +356,7 @@ def append_ledger_row(result: dict, conclusion: str) -> None:
         f"{result['mean_pct']:.4f} %",
         f"{result['t_stat']:.2f}",
         str(result["n_events"]),
+        f"{result.get('mde_pct', float('nan')):.4f} %",
         rng,
         f"scripts/discovery_deleveraging_reversal.py @ {_git_commit()}",
         conclusion,
@@ -470,6 +491,15 @@ def main(argv=None) -> int:
     ap.add_argument("--append-ledger", action="store_true",
                     help="append the result row to the discovery ledger")
     ap.add_argument("--max-symbols", type=int, default=None)
+    ap.add_argument("--symbols", default=None,
+                    help="explicit comma-separated universe (plumbing, not "
+                         "design: restricts which symbols are read, changes "
+                         "no threshold/statistic/window/event definition)")
+    ap.add_argument("--symbols-from-metrics-cache", action="store_true",
+                    help="universe = every symbol with a cached 5-minute "
+                         "metrics archive. Avoids the screen serially "
+                         "downloading ~22k daily zips for symbols the "
+                         "prefetch did not cover.")
     ap.add_argument("--cache-dir", default=None)
     args = ap.parse_args(argv)
 
@@ -480,10 +510,60 @@ def main(argv=None) -> int:
         "NOTE: discovery screen, NOT a trial — no trials.log row is "
         "written (docs/research_revival_2026-09.md §C.2)."
     )
+    symbols = None
+    if args.symbols:
+        symbols = args.symbols.split(",")
+    elif args.symbols_from_metrics_cache:
+        from pathlib import Path as _P
+        from data.binance_vision_um import DEFAULT_CACHE_DIR as _D
+        base = _P(args.cache_dir) if args.cache_dir else _P(_D)
+        symbols = sorted(
+            p.name[: -len(".parquet")]
+            for p in (base / "metrics_5m").glob("*.parquet")
+        )
+        print(f"universe = {len(symbols)} symbols with a cached metrics archive")
     panels = load_discovery_panels(
-        cache_dir=args.cache_dir, max_symbols=args.max_symbols)
+        cache_dir=args.cache_dir, max_symbols=args.max_symbols,
+        symbols=symbols)
     result = screen_deleveraging_reversal(**panels)
+
+    # ── Pre-flight power gate (.claude/rules/backtest.md, split item 5) ──
+    #
+    # sigma is the UNCONDITIONAL 3-day return dispersion over the same window
+    # and universe -- computed from the close panel the screen just loaded, and
+    # explicitly NOT the conditional event statistic (feeding the conditional
+    # statistic here would make the gate circular).
+    #
+    # N is the realised event count. The rule says N_expected; the realised
+    # count is strictly more accurate and is available before any conditional
+    # mean is READ, so the gate still fires before the result is believed or
+    # ledgered. What it protects against is a null that records the sample
+    # size rather than the substrate.
+    uncond_3d = (panels["close"].pct_change(HEADLINE_HORIZON)
+                 .to_numpy().ravel())
+    gate = compute_power(
+        sigma=float(np.nanstd(uncond_3d[np.isfinite(uncond_3d)], ddof=1)),
+        n_expected=max(int(result["n_events"]), 2),
+        t_bar=THRESHOLD_T,
+        effect_threshold=THRESHOLD_REVERSAL_PCT / 100.0,
+    )
+    result["mde_pct"] = gate.mde * 100.0
+    print(gate.render(FAMILY))
+
     report(result)
+
+    if not gate.passes:
+        # REFUSE to ledger. An underpowered screen has not tested anything,
+        # so it must not leave a row that a later reader counts as evidence
+        # (or as an N_disc unit).
+        raise SystemExit(
+            f"POWER GATE REFUSED [{FAMILY}]: MDE {gate.mde * 100:.4f} % > "
+            f"pre-registered {THRESHOLD_REVERSAL_PCT} % at N={result['n_events']}. "
+            f"No ledger row written. Widen the universe to N >= "
+            f"{gate.n_required} events and re-run; that COMPLETES the "
+            f"pre-registered test and does not increment N_disc."
+        )
+
     if args.append_ledger:
         append_ledger_row(result, verdict(result))
     return 0

@@ -45,10 +45,13 @@ Usage
     python3 scripts/discovery_funding_dispersion.py            # real data
     python3 scripts/discovery_funding_dispersion.py --append-ledger
 
-**Status 2026-09-02:** the discovery / confirmation split is PROPOSED,
-not approved (`docs/proposed_backtest_rule_discovery_2026-09.md`).
-Until the human pre-authorizes the `.claude/rules/backtest.md` edit,
-run `--selftest` only.
+**Status 2026-09-02 (updated later the same day):** the discovery /
+confirmation split is APPROVED and IN FORCE. The rule text landed in
+`.claude/rules/backtest.md` § "Discovery / confirmation split" at commit
+`6a564ec`, under the human pre-authorization in that day's megaloop
+prompt. Real-data screens and ledger rows are authorised; `--selftest`
+is no longer the only permitted mode. The paragraph this replaces said
+the opposite and was written hours before the rule landed.
 """
 
 from __future__ import annotations
