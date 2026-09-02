@@ -59,18 +59,74 @@ def test_entries_use_existing_schema_only():
 
 
 def test_symbols_never_collide_with_okx_entries():
-    # The dispatch invariant: Phase 4.E symbols carry no "/", every OKX
-    # entry does.  Guarantees cache.py per-symbol enforcement stays disjoint.
+    """Phase 4.E symbols carry no "/", every OKX entry does.
+
+    Updated 2026-09-02 (Phase 4.F). This test used to ALSO assert that no
+    non-4.E entry may name a 4.E symbol — i.e. that "BTCUSDT" belonged
+    exclusively to the Binance Vision spot substrate, so symbol SHAPE alone
+    was a sufficient substrate discriminator.
+
+    Phase 4.F breaks that deliberately: the Binance USDT-M perp archive uses
+    the same concatenated-ticker form, and its three entries carry
+    `symbol: "BTCUSDT"` as a dev/holdout boundary ANCHOR (the manifest schema
+    cannot express their dynamic universe). Shape is therefore no longer
+    sufficient, and `notes: substrate=<name>` is the explicit discriminator —
+    see `holdout._entry_substrate` and `test_binance_um_substrate.py`.
+
+    What survives is the shape half, split out below into the two properties
+    the prohibition was standing in for.
+    """
     m = load_manifest()
-    p4e_syms = {"BTCUSDT"}
+    for sid, tf in PHASE_4E:
+        syms = m[sid].get("symbols", [m[sid]["symbol"]])
+        assert all("/" not in s for s in syms)
     for sid, e in m.items():
-        syms = e.get("symbols", [e["symbol"]] if "symbol" in e else [])
         if sid in dict(PHASE_4E):
-            assert all("/" not in s for s in syms)
-        else:
-            # legs entries have no symbol/symbols; skip those
-            for s in syms:
-                assert s not in p4e_syms
+            continue
+        syms = e.get("symbols", [e["symbol"]] if "symbol" in e else [])
+        for s in syms:
+            if "/" not in s:
+                # A non-4.E entry in the concatenated form MUST declare its
+                # substrate, or dispatch would silently send it to the 4.E
+                # spot cache.
+                assert H._entry_substrate(e) is not None, (
+                    f"{sid} uses the concatenated symbol form {s!r} without a "
+                    "`substrate=` tag in notes; dispatch would silently load "
+                    "the Phase 4.E spot substrate"
+                )
+
+
+def test_shared_symbol_space_does_not_loosen_cache_enforcement():
+    """The property the old prohibition was really protecting.
+
+    `cache._earliest_holdout_start(symbol)` takes the MINIMUM holdout_start
+    across every entry naming that symbol, and clips the dev window there. So
+    a second family sharing a symbol can only ever TIGHTEN that cutoff — never
+    loosen it — which is why sharing "BTCUSDT" between Phase 4.E and 4.F is
+    safe. Asserting it directly is stronger than banning the sharing, because
+    it keeps holding as more families join the symbol space.
+
+    (Today every BTCUSDT entry declares the same 2025-05-01 split, so the
+    minimum is unchanged; this test is what would catch a future entry that
+    quietly pushed a shared symbol's cutoff later.)
+    """
+    from backtest import cache as C
+
+    m = load_manifest()
+    per_symbol: dict[str, list] = {}
+    for e in m.values():
+        syms = e.get("symbols", [e["symbol"]] if "symbol" in e else [])
+        for s in syms:
+            if "holdout_start" in e:
+                per_symbol.setdefault(s, []).append(pd.Timestamp(e["holdout_start"]))
+
+    for sym, starts in per_symbol.items():
+        enforced = C._earliest_holdout_start(sym)
+        assert enforced == min(starts), (
+            f"cache enforcement for {sym} is {enforced}, not the minimum "
+            f"{min(starts)} across the {len(starts)} entries naming it"
+        )
+        assert enforced <= min(starts), "enforcement must never loosen"
 
 
 # ── Substrate dispatch ────────────────────────────────────────────────────────

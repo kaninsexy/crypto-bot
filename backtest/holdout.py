@@ -85,6 +85,10 @@ _MANIFEST_PATH: Path = Path("backtest/holdout_manifest.json")
 _ACCESS_LOG_PATH: Path = Path("backtest/holdout_access.log")
 _CACHE_DIR: Path = Path("backtest/cache/ohlcv")
 _PERP_CACHE_DIR: Path = Path("backtest/cache/perp")
+# Phase 4.F (2026-09-02): the Binance USDT-M perpetual archive, written by
+# scripts/prefetch_binance_um.py and read here CACHE-ONLY (see
+# `_load_binance_um_df`).
+_UM_CACHE_DIR: Path = Path("backtest/cache/binance_um")
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -293,38 +297,155 @@ def _load_perp_df(symbol_manifest: str, timeframe: str) -> pd.DataFrame:
     return pd.read_parquet(best)
 
 
-def _load_substrate_df(symbol: str, timeframe: str) -> pd.DataFrame:
+_SUBSTRATE_RE = re.compile(r"\bsubstrate=([A-Za-z0-9_]+)")
+
+
+def _entry_substrate(entry: dict) -> str | None:
+    """Return the explicit substrate tag declared in an entry's `notes`.
+
+    Phase 4.F (2026-09-02).  Until now the substrate was inferred from the
+    SHAPE of the symbol: "BASE/QUOTE" meant the OKX cache, anything else meant
+    the Phase 4.E Binance Vision SPOT 1m cache.  That inference is exhausted —
+    the Binance USDT-M PERP archive uses the same concatenated-ticker form
+    ("BTCUSDT"), so shape alone can no longer tell a perp entry from a spot
+    one, and a Phase 4.F entry would silently load spot bars.
+
+    Rather than add a manifest field (a schema change, human-only per
+    CLAUDE.md), the tag rides in `notes` as `substrate=<name>`, which the three
+    Phase 4.F rows already carry and which
+    `backtest/proposed_manifest_entries_binance_um.json` documents as their
+    intended discriminator.  Entries with no tag fall through to the shape
+    inference below, so every pre-existing entry is bit-for-bit unaffected.
+
+    Returns None when the entry has no notes or no tag.
+    """
+    notes = entry.get("notes")
+    if not isinstance(notes, str):
+        return None
+    m = _SUBSTRATE_RE.search(notes)
+    return m.group(1) if m is not None else None
+
+
+def _load_binance_um_df(symbol: str, timeframe: str) -> pd.DataFrame:
+    """Load one Binance USDT-M perp symbol from the local archive. CACHE-ONLY.
+
+    Reads the parquet files written by `scripts/prefetch_binance_um.py`:
+
+        backtest/cache/binance_um/klines/{SYM}_{timeframe}.parquet   (required)
+        backtest/cache/binance_um/funding/{SYM}.parquet              (optional)
+        backtest/cache/binance_um/metrics_5m/{SYM}.parquet           (optional)
+
+    Deliberately NOT routed through `data.binance_vision_um.fetch_*`.  Those
+    functions download any month that is absent from the cache, and a
+    validation-harness accessor that can silently reach the network is a
+    different function than the one the manifest describes: a trial's inputs
+    would depend on when it ran and whether Binance served that month.  A
+    missing archive here is a loud FileNotFoundError naming the prefetch
+    command, not a quiet fetch.
+
+    Columns: the kline set (open/high/low/close/volume/quote_volume/count/
+    taker_buy_volume/taker_buy_quote_volume), plus — when the optional caches
+    exist — `last_funding_rate` and `funding_interval_hours` forward-filled
+    onto bars from their settlement stamps, and the 5-minute metrics
+    (open interest, long/short and taker ratios) resampled to the bar.
+
+    Two data caveats are honoured here rather than left to each caller (BK-0004):
+      * funding settlement stamps carry millisecond jitter, so they are
+        floored to the hour before alignment;
+      * `funding_interval_hours` is NOT always 8 — five symbols run 2h and
+        four run 4h at some point — so the column is carried through rather
+        than assumed, and a funding-carry design must read it per settlement.
+    """
+    sym = symbol.replace("/", "").upper()
+    klines_path = _UM_CACHE_DIR / "klines" / f"{sym}_{timeframe}.parquet"
+    if not klines_path.exists():
+        raise FileNotFoundError(
+            f"No Binance UM kline cache for {sym} {timeframe} at {klines_path}. "
+            "This loader is cache-only by design; populate the archive with "
+            "`python scripts/prefetch_binance_um.py --all --start 2020-01 "
+            "--until 2026-08-31 --intervals 1d,1h --funding --metrics` first."
+        )
+    df = pd.read_parquet(klines_path)
+
+    funding_path = _UM_CACHE_DIR / "funding" / f"{sym}.parquet"
+    if funding_path.exists():
+        fund = pd.read_parquet(funding_path)
+        if len(fund) > 0:
+            fund = fund.copy()
+            # Settlement stamps jitter by milliseconds; floor before aligning.
+            fund.index = pd.DatetimeIndex(fund.index).floor("h")
+            fund = fund[~fund.index.duplicated(keep="last")]
+            for col in ("last_funding_rate", "funding_interval_hours"):
+                if col in fund.columns:
+                    df[col] = fund[col].reindex(df.index, method="ffill")
+
+    metrics_path = _UM_CACHE_DIR / "metrics_5m" / f"{sym}.parquet"
+    if metrics_path.exists():
+        met = pd.read_parquet(metrics_path)
+        if len(met) > 0:
+            # Local import: the data layer owns the resampling convention.
+            from data.binance_vision_um import resample_metrics
+
+            met = resample_metrics(met, freq=timeframe)
+            for col in met.columns:
+                if col not in df.columns:
+                    df[col] = met[col].reindex(df.index, method="ffill")
+
+    return df
+
+
+def _load_substrate_df(
+    symbol: str, timeframe: str, substrate: str | None = None
+) -> pd.DataFrame:
     """Load the raw substrate frame for a symbol, dispatching by substrate.
 
-    Manifest symbols in "BASE/QUOTE" form (every OKX entry) use the OKX
-    OHLCV parquet cache via `_load_symbol_df`.  Symbols in the Binance
-    concatenated ticker form — no "/", e.g. "BTCUSDT" — use the Phase 4.E
-    Binance Vision 1m substrate (resampled to the signal timeframe and
-    enriched with microstructure features) via
-    `cache.load_binance_vision_signal_frame`.
+    Dispatch order, most specific first:
 
-    Because EVERY existing manifest entry uses the "/" form, the "/" test is
-    an unambiguous substrate discriminator that requires no new manifest
-    schema field.  The two symbol spaces never collide, so cache.py's
-    per-symbol holdout enforcement (`_earliest_holdout_start`) sees the two
-    substrates as disjoint and existing OKX enforcement is unchanged.
+    1. An EXPLICIT `substrate=` tag from the manifest entry's notes
+       (`_entry_substrate`).  Currently only `binance_um` is defined; it
+       routes to the Binance USDT-M perp archive.
+    2. Otherwise, the historical SHAPE inference: manifest symbols in
+       "BASE/QUOTE" form (every OKX entry) use the OKX OHLCV parquet cache via
+       `_load_symbol_df`; symbols in the Binance concatenated ticker form —
+       no "/", e.g. "BTCUSDT" — use the Phase 4.E Binance Vision SPOT 1m
+       substrate via `cache.load_binance_vision_signal_frame`.
+
+    The shape inference is preserved exactly, so every entry that predates
+    Phase 4.F loads the same bytes it always did.  What changed is that shape
+    is no longer the ONLY discriminator: the perp archive shares the
+    concatenated-ticker form with the spot one, so an explicit tag is the only
+    thing that can separate them.  An unknown tag is an error rather than a
+    silent fallback — guessing the substrate is how a trial ends up
+    describing data it did not read.
     """
+    if substrate is not None:
+        if substrate == "binance_um":
+            return _load_binance_um_df(symbol, timeframe)
+        raise ManifestSchemaError(
+            f"Unknown substrate tag 'substrate={substrate}' for symbol "
+            f"{symbol!r}. Known tags: 'binance_um'. Remove the tag to use the "
+            "symbol-shape inference, or add a branch in _load_substrate_df."
+        )
     if "/" in symbol:
         return _load_symbol_df(symbol, timeframe)
     return load_binance_vision_signal_frame(symbol, timeframe)
 
 
 def _build_df(symbols: list[str], timeframe: str, after_ts: pd.Timestamp | None,
-              before_ts: pd.Timestamp | None) -> pd.DataFrame:
+              before_ts: pd.Timestamp | None,
+              substrate: str | None = None) -> pd.DataFrame:
     """Load and filter OHLCV for one or more symbols.
 
     Returns a DataFrame with a 'symbol' column always present.
     For a single symbol the column is a constant.  For multi-symbol the
     rows are concatenated and sorted by timestamp.
+
+    `substrate` is the optional explicit tag from the manifest entry
+    (`_entry_substrate`); None keeps the historical symbol-shape inference.
     """
     frames = []
     for sym in symbols:
-        part = _load_substrate_df(sym, timeframe)
+        part = _load_substrate_df(sym, timeframe, substrate)
         if after_ts is not None:
             part = part[part.index >= after_ts]
         if before_ts is not None:
@@ -414,6 +535,7 @@ def load_dev(strategy_id: str) -> pd.DataFrame | dict[str, pd.DataFrame]:
         entry["timeframe"],
         after_ts=data_start,
         before_ts=holdout_start,
+        substrate=_entry_substrate(entry),
     )
 
 
@@ -452,19 +574,47 @@ def _regen_resets_access(event: dict) -> bool:
     return isinstance(caller, str) and bool(caller.strip())
 
 
+def _is_non_read_annotation(event: dict) -> bool:
+    """True for a log event that ANNOTATES a strategy without reading holdout data.
+
+    Added 2026-09-02 (Phase 4.F). The log gained a third event kind: a
+    manifest-entry ADDITION (`scripts/add_binance_um_manifest_entries.py`,
+    caller `phase4f.manifest_add`), written so each new strategy's provenance
+    is greppable by `strategy_id` like every other event.
+
+    Without this predicate those rows would be catastrophic rather than
+    informational. `_has_prior_access` treats every non-`regenerated` event as
+    a read, so three "we added an entry" rows would have consumed the
+    single-access flag for all three Phase 4.F strategies before any of them
+    ran — `load_holdout` would refuse their first and only `final_gate`. The
+    manifest addition would have destroyed the guarantee it exists to record.
+
+    The test is a CONJUNCTION, deliberately: `added is True` **and** no
+    `n_rows` key. A real read always carries `n_rows` (it is written in the
+    same dict literal as the access event and there is no path that omits it),
+    so a future caller cannot wave a genuine holdout read past the guard by
+    tacking on `added: true`. Every one of the 49 events predating this change
+    lacks `added`, so historical behaviour is bit-identical.
+    """
+    return event.get("added") is True and "n_rows" not in event
+
+
 def _has_prior_access(strategy_id: str) -> bool:
     """Return True if strategy has an uncleared access in the log.
 
     Scans events in file order (chronological).  A regenerated=true
     event clears the flag — IF it passes `_regen_resets_access`
     (attributed, or grandfathered pre-2026-06-11); a normal access
-    event sets it.
+    event sets it.  A non-read annotation (`_is_non_read_annotation`)
+    does neither — it is provenance, not an access.
     """
     has_access = False
     for event in iter_jsonl_filtered(
         _ACCESS_LOG_PATH,
         lambda e: e.get("strategy_id") == strategy_id,
     ):
+        if _is_non_read_annotation(event):
+            continue
         if event.get("regenerated") is True:
             if _regen_resets_access(event):
                 has_access = False
@@ -547,6 +697,7 @@ def load_holdout(
                 entry["timeframe"],
                 after_ts=holdout_start,
                 before_ts=data_end,
+                substrate=_entry_substrate(entry),
             )
             n_rows = len(result)
     finally:

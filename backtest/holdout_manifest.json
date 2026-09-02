@@ -727,5 +727,38 @@
     "holdout_start": "2025-05-01T00:00:00+00:00",
     "symbol": "BTCUSDT",
     "notes": "Phase 4.E microstructure substrate: Binance spot 1m via data/binance_vision.py (taker buy/sell aggressor split); the engine iterates at the signal timeframe (resample) while volume-profile features (POC/VAH/VAL, HVN/LVN) are computed from the 1m data per research/breakout-delta-confirmed-literature.md. Backtest substrate ONLY; execution venue remains OKX. Cross-venue provenance disclosure per the 2026-06-11 BNB-backfill precedent. dev/holdout split human-locked 2026-07-03 (Kanin): data_start 2021-01-01, dev_end/holdout_start 2025-05-01, data_end 2026-05-31. Single-pair BTCUSDT (Variation #1); basket ETH/SOL/XRP/ADA deferred to future variations."
+  },
+  "FundingDispersionCarry": {
+    "timeframe": "1d",
+    "data_start": "2020-01-01T00:00:00+00:00",
+    "data_end": "2026-08-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "strategy_warmup_candles": 30,
+    "min_tradeable_candles_per_block": 30,
+    "notes": "Phase 4.F perp-structural, family 1 (docs/research_revival_2026-09.md §C.4 row 1). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 is the sealed discovery window; screens write research/discovery/funding_dispersion_carry.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 is genuinely virgin for this substrate (no prior trial read Binance UM data). universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: top-150 by trailing 30d quote volume, Binance-listed n OKX-listed at signal time, applied ex ante); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only, not the traded instrument, because the manifest schema has no dynamic-universe specifier. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural with \"neutral\": true (PSR-vs-0 verdict baseline). Gate: must survive standard fees AND 2x fee stress."
+  },
+  "DeleveragingReversal": {
+    "timeframe": "1h",
+    "data_start": "2020-01-01T00:00:00+00:00",
+    "data_end": "2026-08-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "strategy_warmup_candles": 720,
+    "min_tradeable_candles_per_block": 30,
+    "notes": "Phase 4.F perp-structural, family 2 (docs/research_revival_2026-09.md §C.4 row 2). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 sealed; screens write research/discovery/deleveraging_reversal.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 genuinely virgin for this substrate. universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: all UM symbols with both klines and 5-minute metrics in window, Binance-listed n OKX-listed at signal time); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only. strategy_warmup_candles=720 is the 30-day trailing-sigma window at 1h bars. CAVEAT: the metrics (open-interest) archive begins 2020-09-01, so OI is absent for the first ~8 months of data_start. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural, directional. Gate: must survive standard fees AND 2x fee stress."
+  },
+  "ListingFlow": {
+    "timeframe": "1d",
+    "data_start": "2020-01-01T00:00:00+00:00",
+    "data_end": "2026-08-31T00:00:00+00:00",
+    "dev_end": "2025-05-01T00:00:00+00:00",
+    "holdout_start": "2025-05-01T00:00:00+00:00",
+    "symbol": "BTCUSDT",
+    "strategy_warmup_candles": 25,
+    "min_tradeable_candles_per_block": 30,
+    "notes": "Phase 4.F perp-structural, family 3 (docs/research_revival_2026-09.md §C.4 row 3). substrate=binance_um. discovery_end=2023-01-01 (2020-01-01 -> 2022-12-31 sealed; screens write research/discovery/listing_flow.md, never trials.log). Confirmation dev = 2023-01-01 -> 2025-05-01; holdout 2025-05-01 -> 2026-08-31 genuinely virgin for this substrate. universe_ref=backtest/cache/binance_um/universe.parquet (dynamic: every UM listing and delisting event in window, first_month/last_month/delisted columns; Binance-listed n OKX-listed at signal time); symbol 'BTCUSDT' is the dev/holdout BOUNDARY ANCHOR only. strategy_warmup_candles=25 is the -5..+20 day event window. provenance: Binance UM archive; execution OKX; agents aware of the 2025-10-10 cascade. Engine backtest/engine_cs.py; family perp-structural, directional. Gate: must survive standard fees AND 2x fee stress."
   }
 }
