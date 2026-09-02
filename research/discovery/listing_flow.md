@@ -46,8 +46,6 @@ The operational lesson, worth more than the row: capture a screen's full
 output on its first run. A re-run is cheap in compute and expensive in ledger
 integrity.
 
-### Result
-
 ### Retrospective power — 2026-09-02, and it changes the classification
 
 The pre-flight power gate (`.claude/rules/backtest.md`, discovery split item 5)
@@ -90,3 +88,42 @@ from noise at the pre-registered bar. Note also the SIGN: the CAR is
 days — which is the opposite of the "attention / index inventory buying"
 mechanism the kill test was written to detect. A confirmation design built on
 this would be trading a different mechanism than the one pre-registered.
+
+
+### Dependence correction — 2026-09-02
+
+Decision rule pre-committed at `a410b68`, before these numbers existed.
+Method: CR1 cluster-robust SE, `scripts/cluster_robust_check.py`. **Not a new
+screen** — same signal, universe, horizon, window and point estimate; only the
+standard error changes. **`N_disc` unchanged at 1.**
+
+| variant | G | mean CAR | t ordinary | **t clustered** | design effect | robust MDE |
+|---|---|---|---|---|---|---|
+| cluster by listing date | 154 | −7.05 % | −2.42 | **−2.43** | 1.00× | 8.71 % |
+| cluster by listing month | 32 | −7.05 % | −2.42 | **−1.86** | 1.30× | 11.39 % |
+| non-overlapping (one CAR per month) | 32 | −8.16 % | −1.92 | **−1.92** | 1.00× | 12.73 % |
+
+**Clustering by DATE barely moves anything (1.00×), and that is a real finding
+rather than a null result.** 166 listings fall on 154 distinct dates: Binance
+rarely listed several perps on the same day in this window, so same-day
+clustering has almost nothing to group. The dependence that matters here is
+not same-day — it is the **overlapping [+0, +20] windows** of listings a few
+weeks apart, which share a market path.
+
+The two variants that address overlap both weaken the result: clustering by
+month gives **1.30×** and pushes `t` to −1.86, and the strictly
+non-overlapping construction (one CAR per calendar month, so no two
+observations share a window) gives 32 observations at `t` = −1.92.
+
+*Small-G caveat: both month-level variants have G = 32, only just above the
+G = 30 threshold; treat them as indicative.*
+
+**Conclusion unchanged, and strengthened.** The family was already untestable
+at MDE 8.73 % against a 3 % bar; under every dependence-corrected variant the
+robust MDE is **8.71 %–12.73 %**, still multiples of the bar, and `|t|` never
+approaches 3.
+
+The negative SIGN observed in run 2 — new listings *underperforming* the
+listed cohort, opposite to the pre-registered "attention buying" mechanism —
+survives every variant, but so does its insignificance. It remains an
+observation, not a finding.

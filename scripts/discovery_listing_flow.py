@@ -216,6 +216,10 @@ def screen_listing_flow(
     return {
         "profile": pd.DataFrame(profile),
         "car_series": car,
+        # Event dates aligned 1:1 with `car_series`, added 2026-09-02 so the
+        # dependence correction (scripts/cluster_robust_screens.py) can cluster
+        # by listing date. Additive only -- no statistic here changes.
+        "event_dates": list(used_dates),
         "mean_car_pct": float(car.mean()) * 100.0 if n else float("nan"),
         "t_stat": t_stat,
         "n_events": n,

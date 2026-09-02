@@ -379,6 +379,17 @@ def _git_commit() -> str:
         return "unknown"
 
 
+def _esc(cell: str) -> str:
+    """Escape pipes so a cell cannot break the markdown table.
+
+    Added 2026-09-02: the signal description contains `|r|` (absolute return),
+    which markdown read as two extra column separators -- the row rendered with
+    15 cells against a 13-cell header, silently shifting every field after it.
+    A ledger whose columns do not line up is a ledger a reader can misread.
+    """
+    return str(cell).replace("|", "\|")
+
+
 def append_ledger_row(result: dict, conclusion: str) -> None:
     """Append one row to `research/discovery/deleveraging_reversal.md`."""
     if not LEDGER.exists():
@@ -397,8 +408,8 @@ def append_ledger_row(result: dict, conclusion: str) -> None:
         "",
         date.today().isoformat(),
         FAMILY,
-        f"24h OI drop <= {OI_DROP_THRESHOLD:.0%} AND |r| >= "
-        f"{SIGMA_MULTIPLE:g}x trailing {SIGMA_LOOKBACK_DAYS}d sigma",
+        _esc(f"24h OI drop <= {OI_DROP_THRESHOLD:.0%} AND |r| >= "
+             f"{SIGMA_MULTIPLE:g}x trailing {SIGMA_LOOKBACK_DAYS}d sigma"),
         "all UM symbols with klines AND metrics in window",
         f"+{HEADLINE_HORIZON} days",
         "mean 3-day reversal, % (sign-adjusted against the event move)",
@@ -408,7 +419,7 @@ def append_ledger_row(result: dict, conclusion: str) -> None:
         f"{result.get('mde_pct', float('nan')):.4f} %",
         rng,
         f"scripts/discovery_deleveraging_reversal.py @ {_git_commit()}",
-        conclusion,
+        _esc(conclusion),
         "",
     ]).strip()
     with LEDGER.open("a", encoding="utf-8") as fh:

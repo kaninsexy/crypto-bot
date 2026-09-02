@@ -114,3 +114,37 @@ and reaching N = 3648 rebalance days needs ~10 years, where the sealed
 discovery window offers 3. **The family is closed as untestable, not as
 disproved.** N_disc remains 1; this note re-reads an existing row, it does not
 add one.
+
+
+### Dependence correction — 2026-09-02
+
+Decision rule pre-committed at `a410b68`, before these numbers existed.
+Method: Newey–West HAC (Bartlett kernel) on the daily net 10-1 spread,
+`scripts/cluster_robust_check.py`. **Not a new screen** — same signal,
+universe, horizon, window and point estimate; only the standard error
+changes. **`N_disc` unchanged at 1.**
+
+| lag | t ordinary | **t HAC** | design effect | robust MDE | bar |
+|---|---|---|---|---|---|
+| 5 | 2.94 | **2.63** | 1.12× | 0.314 %/day | 0.15 %/day |
+| **10 (headline)** | 2.94 | **2.50** | **1.18×** | 0.330 %/day | 0.15 %/day |
+| 20 | 2.94 | **2.33** | 1.26× | 0.354 %/day | 0.15 %/day |
+
+Measured lag-1 autocorrelation of the net spread series: **+0.038** — close to
+zero. The correction is correspondingly mild (18 % at the headline lag),
+which is the honest answer: this family's dependence problem is real but
+small, unlike deleveraging's.
+
+Worth separating two different persistences that are easy to conflate: the
+funding SIGNAL is persistent cross-sectionally (a coin paying high funding
+tends to keep paying it), but the daily 10-1 SPREAD RETURN — which is what the
+statistic averages — is close to serially independent. Only the latter affects
+this standard error.
+
+**Conclusion unchanged, and strengthened.** The family was already recorded as
+untestable: MDE 0.2805 %/day against a 0.15 %/day bar. Under HAC the MDE rises
+to **0.330 %/day**, so the gap widens. `t` falls from 2.94 to **2.50**, further
+from the 3.0 bar it already missed.
+
+Per the pre-committed rule, a family already recorded untestable stays
+untestable; clustering could only widen the interval, and here it did.

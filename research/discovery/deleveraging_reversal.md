@@ -92,7 +92,7 @@ ledgered, this would instead be a second row and N_disc = 2.
 
 | date | family | signal | universe rule | horizon | statistic | value | t-stat | N | MDE | data range used | script + git commit | conclusion |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-09-02 | deleveraging_reversal | 24h OI drop <= -20% AND |r| >= 2x trailing 30d sigma | all UM symbols with klines AND metrics in window | +3 days | mean 3-day reversal, % (sign-adjusted against the event move) | -1.7122 % | -1.78 | 220 | 2.6235 % | 2020-01-01 → 2022-12-31 | scripts/discovery_deleveraging_reversal.py @ ba52939 | **REFUSED — UNDERPOWERED, not killed.** MDE 2.6235 % exceeds the pre-registered 1.5 % bar at N=220: a TRUE 1.5 % effect would return t = 1.72, below the 3.0 bar. N required 674; the whole substrate yields 220. The observed -1.7122 % / t=-1.78 is therefore NOT evidence about the effect and must not be read as a kill. |
+| 2026-09-02 | deleveraging_reversal | 24h OI drop <= -20% AND \|r\| >= 2x trailing 30d sigma | all UM symbols with klines AND metrics in window | +3 days | mean 3-day reversal, % (sign-adjusted against the event move) | -1.7122 % | -1.78 | 220 | 2.6235 % | 2020-01-01 → 2022-12-31 | scripts/discovery_deleveraging_reversal.py @ ba52939 | **REFUSED — UNDERPOWERED, not killed.** MDE 2.6235 % exceeds the pre-registered 1.5 % bar at N=220: a TRUE 1.5 % effect would return t = 1.72, below the 3.0 bar. N required 674; the whole substrate yields 220. The observed -1.7122 % / t=-1.78 is therefore NOT evidence about the effect and must not be read as a kill. |
 
 
 ### Run provenance — 2026-09-02
@@ -148,6 +148,15 @@ reversal exists.
 
 ### A powered observation, recorded as a LEAD — not a result
 
+> **SUPERSEDED 2026-09-02 by the "Dependence correction" section at the end of
+> this file. This lead is CLOSED — it did not survive clustering.** The
+> analysis below divided by √220 when the effective sample was 43 dates / 24
+> episodes; clustered, |t| falls from 7.78 to 1.71 and the robust MDE (11.0 %)
+> exceeds the observed effect (6.28 %). Kept in place because the reasoning
+> about WHY it was flagged as a lead rather than a finding is still correct,
+> and because the error it contains — treating a correctly-sized sample as an
+> independent one — is the lesson.
+
 The per-horizon profile contains something the headline hides. Re-running the
 power check at each horizon:
 
@@ -180,3 +189,64 @@ precisely when spreads are widest, depth is thinnest and a taker fill is worst.
 Any confirmation design would have to clear that cost bar before the sign
 matters, and this substrate's ~0.05 % taker + slippage assumption is calibrated
 to normal conditions, not cascade conditions.
+
+
+### Dependence correction — 2026-09-02. **THE LEAD IS CLUSTERED AWAY.**
+
+Decision rule pre-committed at `a410b68`, before these numbers existed
+(`research/discovery/README.md` § "Dependence-corrected significance").
+Method: `scripts/cluster_robust_check.py` (CR1 cluster-robust SE of the mean),
+applied by `scripts/cluster_robust_screens.py`. **Not a new screen** — same
+signal, same universe, same horizon, same window, same point estimate; only
+the standard error changes. **`N_disc` is unchanged at 1.**
+
+**The 220 events are not 220 independent observations.** They are **43
+distinct UTC dates**, or **24 episodes** once dates within 5 days are merged.
+A market-wide deleveraging hits every coin at once, so a cascade day
+contributes roughly one piece of information, not one per symbol.
+
+| statistic | cluster | G | t ordinary | **t clustered** | design effect | robust MDE | \|effect\| |
+|---|---|---|---|---|---|---|---|
+| +3d headline | event date | 43 | −1.78 | **−0.79** | 2.26× | 6.54 % | 1.71 % |
+| +3d headline | episode (5d) | 24 | −1.78 | **−1.98** | 0.90× | 2.59 % | 1.71 % |
+| **+1d lead** | event date | 43 | −7.78 | **−1.71** | **4.55×** | 11.00 % | 6.28 % |
+| **+1d lead** | episode (5d) | 24 | −7.78 | **−2.26** | 3.45× | 8.35 % | 6.28 % |
+
+*Small-G caveat applies to both episode variants (G = 24 < 30): with few
+clusters the robust estimator is itself noisy and typically remains
+anti-conservative, so those figures are a lower bound on the correction.*
+
+### Verdict on BK-0016 — CLOSED, clustered away
+
+The pre-committed rule required **both** clustered `|t| > 3` **and** clustered
+MDE below the observed effect. The +1d lead fails **both**, under **both**
+clusterings:
+
+- `|t|` falls from 7.78 to **1.71** (by date) or **2.26** (by episode) — not
+  close to 3;
+- robust MDE rises to **11.00 %** / **8.35 %**, above the observed **6.28 %**.
+
+**Phase 4.F has no live lead.** The apparent +1d continuation was, to a first
+approximation, ~24 market-wide cascade episodes counted 220 times.
+
+### What this changes about how the earlier result should be read
+
+The run-2 ledger flagged +1d as "adequately powered, unlike the +3 day
+headline". **That was wrong, and the reason is worth keeping.** The power
+check divided by √220 when the effective sample was closer to √24 — it fixed
+sample SIZE while silently assuming independence. A correctly-powered study
+can still report a t-stat overstated by 4.5×, and nothing in the pre-flight
+gate could have caught it.
+
+One honest anomaly: the +3d **episode** variant shows a design effect of
+**0.90** — the clustered t is marginally *larger* than the ordinary one. The
+pre-committed rule asserted clustering "can only widen the interval", which is
+the standard expectation but not a theorem: with G = 24 and mild negative
+within-episode correlation the estimate can move the other way. It changes no
+conclusion here (|t| = 1.98 < 3, and MDE 2.59 % still exceeds the 1.71 %
+effect), and it is recorded rather than smoothed over because the rule's
+wording was too strong.
+
+**The family's classification is unchanged: untestable on the available
+discovery data.** Per the pre-committed rule, nothing in this exercise could
+have revived it, and nothing did.
