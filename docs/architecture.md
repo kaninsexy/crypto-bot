@@ -6,6 +6,15 @@
 **Scope:** Phase 4.B (funding-rate harvest) finishing + Phase 5 (prediction-market bot) build-out
 **Date assumption:** May 2026
 
+**Revisions**
+- 2026-09-02 — **Section E rewritten** for the governance port from
+  `siamese-reconcile` (HEAD `2f13045`). The bash hook layer described in E.2
+  was replaced by Python guards that fail closed; E.3/E.4 were activated (they
+  had never run, because `core.hooksPath` was never set); E.5 (the eval
+  harness), E.6 (the policy DSL) and E.8 (the honest limit) are new. Sections
+  A–D are unchanged. Rationale and the old→new hook map:
+  `.claude/hooks/_archive_bash_2026-09/README.md`.
+
 ---
 
 ## TL;DR (read this once, then implement)
@@ -562,7 +571,44 @@ research-manager:
 
 ## E. Enforcement layers
 
-Four layers, each with a single responsibility. Layered defense; no single point of failure.
+> **Rewritten 2026-09-02 (governance port from siamese-reconcile, HEAD
+> `2f13045`).** Layers 2–4 below described a **bash** hook layer that was not
+> running. Two independent defects, both measured that day:
+>
+> 1. **Every bash hook failed open.** All fifteen parsed stdin with `jq`, and
+>    `jq` is not installed on this machine. Each exited 127, and Claude Code
+>    treats any exit code other than 2 as non-blocking. `sacred-block.sh` —
+>    described below as "the ONE rule that absolutely must not be bypassable" —
+>    blocked nothing, for months.
+> 2. **`.githooks/` was never activated.** E.3 and E.4 both say "already
+>    installed" / "add this hook today", and both files exist and are correct.
+>    But they only run when `core.hooksPath` points at `.githooks/`, and it
+>    never did. git ran `.git/hooks/`, which held only the trial-queue
+>    validator.
+>
+> A third, smaller defect: two copies of the sacred list had drifted.
+> `sacred-block.sh` guarded `^MASTER_PLAN\.md$` — a path that does not exist
+> in this repo — while `.githooks/pre-commit` guarded the real
+> `docs/MASTER_PLAN.md`.
+>
+> The lesson is not "bash is bad". It is that **nothing exercised the hooks**,
+> so nothing could tell a working guard from an inert one. Layer 5 below
+> (`eval/run_tier1.py`) exists to close exactly that, and it carries a
+> `--self-check` mode that proves the fixtures themselves can go red.
+
+Six layers, each with a single responsibility. Layered defense; no single
+point of failure. The failure mode that matters is not a layer being absent —
+it is a layer being **present and inert**, which is why layer 5 tests the
+others rather than adding rules of its own.
+
+| # | layer | kind | what it can see |
+|---|---|---|---|
+| 1 | `CLAUDE.md` + `.claude/rules/**` | advisory | everything; model-readable, model-violable |
+| 2 | `.claude/hooks/*.py` (PreToolUse / PostToolUse / Stop / SessionStart / PreCompact) | deterministic, tool-call scoped | one tool call at a time: its path, its command string |
+| 3 | `.githooks/commit-msg` | deterministic, commit scoped | the commit message |
+| 4 | `.githooks/pre-commit` + `scripts/pre_commit_backlog_check.sh` | deterministic, commit scoped | the staged diff |
+| 5 | `eval/run_tier1.py` | test harness | whether layers 2–4 actually fire |
+| 6 | `.claude/rules/policies/*.policy` via `scripts/policy_engine.py` | deterministic, session-ordered | ORDERING across tool calls ("B is forbidden unless A succeeded since the last relevant change") |
 
 ### E.1 Layer 1 — `CLAUDE.md` (advisory, model-readable)
 
@@ -601,68 +647,208 @@ This is the constitution. It is advisory in the sense that the model can technic
   to human (no auto-execute).
 ```
 
-### E.2 Layer 2 — Per-subagent frontmatter `hooks:` (deterministic, subagent-scoped)
+### E.2 Layer 2 — Python guard hooks (deterministic, tool-call scoped)
 
-This solves the issue-#34692 gap. Each subagent's frontmatter declares its own PreToolUse / PostToolUse / Stop hooks. The hooks are bash scripts in `~/dev/crypto-bot/.claude/hooks/`. Critical ones:
+Wired **globally** in `.claude/settings.json` (PreToolUse on `Write|Edit` and
+`Bash` and `""`; PostToolUse likewise; Stop; SessionStart; PreCompact), and
+per-agent in each `.claude/agents/*.md` frontmatter where a guard is
+agent-specific. The global wiring is itself part of the fix: the bash layer
+ran only inside three agent frontmatters, so the main session — where most
+work happens — was unguarded even in principle.
 
-**`sacred-block.sh`** — exits 2 if the file path being edited matches the sacred-allowlist. Sacred allowlist: `trials.py`, `holdout.py`, `validation_framework/`, `CLAUDE.md`, `MASTER_PLAN.md`, `validation_framework.md`. This is the ONE rule that absolutely must not be bypassable.
+Every guard **fails closed**. Two failure paths are handled explicitly,
+because both were live vulnerabilities in the predecessor:
 
-```bash
-#!/usr/bin/env bash
-INPUT=$(cat)
-PATH_BEING_EDITED=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // ""')
-SACRED_REGEX='(trials\.py$|holdout\.py$|validation_framework/|^CLAUDE\.md$|^MASTER_PLAN\.md$|validation_framework\.md$)'
-if echo "$PATH_BEING_EDITED" | grep -qE "$SACRED_REGEX"; then
-  echo "BLOCKED: $PATH_BEING_EDITED is sacred-harness; propose, do not edit." >&2
-  exit 2
-fi
-exit 0
+- an unhandled exception exits **2** (block), never 1 — Claude Code treats a
+  non-2 exit as non-blocking, so a crashing guard would otherwise wave the
+  call through;
+- a failed import of the tier map blocks rather than falling through to
+  "nothing matched → allow".
+
+**The tier map lives in exactly one file:** `.claude/hooks/file_tiers.py`.
+Every hook imports `SACRED_PATTERNS` / `SCHEMA_STABLE_PATTERNS` from it. The
+predecessor kept three inline copies, and they had already drifted.
+
+| hook | event | responsibility |
+|---|---|---|
+| `file_tiers.py` | (library) | the ONE tier map: Tier 1 sacred, Tier 2 schema-stable, Tier 3 autonomous |
+| `bash_targets.py` | (library) | the ONE Bash parser: heredoc stripping, write-target extraction, quote-aware segment tokenizing |
+| `_block_record.py` | (library) | best-effort block records to `.memory/T1_episodic/blocks/` for the curator; never affects the exit code |
+| `path-allowlist.py` | PreToolUse `Write\|Edit`, `Bash` | the three-tier gate. Tier 1 → exit 2 unless `SACRED_OVERRIDE_FILES` names the path; Tier 2 → allow with a NOTE; Tier 3 → silent. **Also scans Bash write targets** (`>`, `>>`, `tee`, `sed -i`, `cp`, `mv`, `ln`, `rm`, `python open(...,'w')`) — the bash predecessor looked only at `Write`/`Edit`, so a redirect was a complete bypass |
+| `no-secrets-in-bash.py` | PreToolUse `Bash` | credential literals (Anthropic / OpenRouter / OpenAI / Resend / Slack / AWS / Google / Tavily / PEM) and any read of `~/.crypto-bot.env`. `${VAR}` expansions are stripped first, so legitimate env use never trips |
+| `no-deploy.py` | PreToolUse `Bash` | live-venue verbs (`doctl`, `kubectl`, `docker push`, `digitalocean`, `dokku`) plus the irreversible git operations that stayed Human-only after the 2026-09-02 boundary move: force-push, branch deletion, `reset --hard main`. A plain `git push origin main` is **allowed** (mandate G). `--strict` adds `ssh` and bare `deploy`, and stays agent-scoped because those two false-block ordinary work |
+| `commit-guard.py` | PreToolUse `Bash` | mandate G shape (message must be heredoc-embedded) **and** mandate H content (conventional subject; `[mandate-H]` required when a `Co-authored-by: Claude` trailer is present). Merges the two archived commit hooks, which always fired together on the same matcher parsing the same field |
+| `citation-required.py` | PreToolUse `WebFetch\|WebSearch`, and `research/*-literature.md` edits | mandate P: a `citation_key:` must already be declared in the transcript. Fails closed on an unreadable transcript, because an unverifiable citation is indistinguishable from an absent one |
+| `curator-write-allowlist.py` | PreToolUse `Write` (curator only) | the curator's single writable path. **Renamed** from `path-allowlist.sh` so it is not confused with the repo-wide gate above — they are different guards |
+| `provenance-guard.py` | PreToolUse `Write\|Edit`, `Bash` | origin × domain. Under `CLAUDE_WRITE_ORIGIN=background_review` an autonomous write may touch only artifacts the background loop authors; foreground is a pure no-op. Orthogonal to the tier gate: it constrains **non-sacred** files too |
+| `policy-engine.py` | PreToolUse + PostToolUse | adapter for layer 6 (below) |
+| `observe.py` | PreToolUse + PostToolUse (all tools) | one PII-safe JSON record per tool call. Never the command string, never file contents — first token, byte counts, path + tier |
+| `session-start.py` | SessionStart | loads T2 facts + open backlog + last state snapshot into the new session |
+| `session-end.py` | Stop | writes the T1 episode the curator reads |
+| `pre-compact.py` | PreCompact | flushes a state marker at the moment context is about to be lost |
+| `post-commit-sync.py` | PostToolUse `Bash` | after a successful `git commit`, runs `scripts/post_commit_sync.sh --no-push` detached: repomix refresh, **never** a push |
+
+**Kept as bash** (no Python equivalent, and none of them is a security gate):
+`inject-mandates.sh` (UserPromptSubmit), `commit-scope-audit.sh` (advisory
+diff-size heuristic; parses JSON with `python`, not `jq`),
+`pre-commit-queue-validate.sh`, `regime-change-trigger.sh`,
+`failcount-{check,update}.sh`, `flush-T1.sh`, `run-tests-fast.sh`,
+`budget-check.sh`, `exit-ramp-check.sh`. **Six of those still use `jq` and are
+therefore still inert on this machine** — tracked as BK-0005 rather than left
+unmentioned.
+
+**Archived, not deleted:** the eight superseded bash hooks live in
+`.claude/hooks/_archive_bash_2026-09/` with a README mapping old → new.
+
+### E.3 Layer 3 — `.githooks/commit-msg` (now actually installed)
+
+Unchanged in content: blocks an empty message, notes a subject-only commit,
+and requires `[mandate-H]` when the `Co-authored-by: Claude` trailer is
+present — defense-in-depth in case layer 2 was bypassed.
+
+What changed on 2026-09-02 is that it **runs**. `core.hooksPath` was never
+set, so git ignored `.githooks/` entirely. `scripts/install_git_hooks.sh` now
+writes a marker-delimited block into `.git/hooks/commit-msg` that chains to
+it. Chaining rather than flipping `core.hooksPath` is deliberate: flipping it
+would have silently dropped `pre-commit-queue-validate.sh`, which lives in
+`.git/hooks/`.
+
+### E.4 Layer 4 — `.githooks/pre-commit` + the Mandate L backlog gate
+
+`.githooks/pre-commit` was already written and already correct — it just was
+not running (see E.3). It performs:
+
+1. **Sacred-harness diff block.** Any staged path matching the sacred regex
+   aborts unless `CLAUDE_HUMAN_OVERRIDE=1` is set on the commit. Note this
+   list is *narrower* than `file_tiers.py`'s Tier 1: it covers the
+   audit-critical files (`trials.py`, `holdout.py`, `validation_framework/`,
+   `CLAUDE.md`, `docs/MASTER_PLAN.md`, `docs/validation_framework.md`) rather
+   than the whole guard layer. Two lists with different jobs, at different
+   layers — not a duplicate.
+2. **Magic-number gate** on `strategies/*.py` (`.githooks/check-magic-numbers.py`).
+3. **`pytest -m fast`** with a 60s ceiling.
+
+Chained after it, `scripts/pre_commit_backlog_check.sh` adds **Mandate L**:
+
+4. **Backlog schema validation.** Every line of
+   `.memory/T2_semantic/backlog.jsonl` must satisfy
+   `schemas/backlog.schema.json`.
+5. **Unrecorded-gap gate.** If a staged diff introduces one of the gate's
+   trigger keywords without a staged backlog append, the commit is blocked
+   with a `GATE_BACKLOG_*` reason code naming what unblocks it. The keyword
+   list is **not reproduced here** — it lives in the `KEYWORDS` line of
+   `scripts/pre_commit_backlog_check.sh` and nowhere else.
+
+   Two drafting notes, both earned the hard way while writing this section.
+   First, copying the keyword list into this paragraph made the gate flag its
+   own definition — correctly, since it cannot tell a definition from a
+   confession. Second, even the gate's *natural name* tripped it, so this
+   paragraph deliberately avoids the vocabulary. The alternative was adding
+   `docs/architecture.md` to the gate's exemption list, which was rejected: a
+   design spec is a plausible place to quietly park an item that should have
+   been recorded, so exempting it would cost real coverage to save a word. `.claude/rules/**` and the archive
+   README *are* exempt, on the narrower ground that their entire job is to
+   quote the discipline.
+6. **Bypass detection.** It writes a sentinel carrying the staged tree hash
+   (`started` at entry, `passed` on success). `--no-verify` skips pre-commit
+   but **not** post-commit, so `scripts/post_commit_verify.sh` compares the
+   new commit's tree against the sentinel and writes a durable violation
+   record when the gate never ran — or ran, failed, and was bypassed anyway.
+
+Install all three with `bash scripts/install_git_hooks.sh` (idempotent;
+replaces only its own marker block).
+
+### E.5 Layer 5 — `eval/run_tier1.py` (the layer that tests the layers)
+
+This is the layer whose absence let the other five rot. It drives every guard
+hook against pinned JSONL fixtures — a payload in, an expected exit code and
+stderr substring out — as **one command**:
+
+```
+python eval/run_tier1.py          # 133 fixtures, the gate
+python eval/run_tier1.py --self-check
 ```
 
-**`no-deploy.sh`** — exits 2 if the Bash command contains any deploy verb. Deploy patterns: `doctl `, `kubectl `, `ssh `, `docker push`, `digitalocean`, `dokku`, ` deploy ` (with spaces to avoid false positives).
+Two properties earn it a place in the stack rather than in `tests/`:
 
-**`commit-heredoc-required.sh`** — checks that any `git commit` in a Bash call is shaped `git commit -m "$(cat <<'EOF'\n...\nEOF\n)"` and not `git commit -m "literal"`. Exits 2 with explanation otherwise. This is the mechanical fix for the "separating commit message from git commit command" failure mode.
+- **It strips ambient env.** `SACRED_OVERRIDE_FILES`, `CLAUDE_WRITE_ORIGIN`
+  and the policy-engine knobs are removed from every fixture's environment
+  unless the fixture asks for them explicitly. Without that, running the suite
+  inside an authorized session would flip every sacred-block fixture to green
+  for the wrong reason.
+- **`--self-check` proves the fixtures can FAIL.** It copies the hooks, replaces
+  every blocking guard with a stub that always exits 0 — literally the shape
+  the jq-less bash hooks had — and asserts the suite goes red (80 of 133 do).
+  A check that cannot fail certifies the gap it was meant to catch
+  (`.claude/rules/vertical_slice_loops.md`, the discriminating-check rule).
 
-**`citation-required.sh`** — for the proposer subagent, blocks any WebFetch/WebSearch unless the prompt input includes a `citation_key:` line. Forces the model to declare what it's looking for before it searches, which cuts down on speculative searches that retroactively justify a parameter choice.
+### E.6 Layer 6 — the policy DSL (ordering across tool calls)
 
-**`budget-check.sh`** — checks `(now - .memory/T1_episodic/_state/session_start.txt)` < 14400. Exits 2 if exceeded.
+Layers 2–4 each see one event. Layer 6 is the only one that can express
+**ordering**: "B is forbidden unless A succeeded since the last relevant
+change." Engine `scripts/policy_engine.py`, adapter
+`.claude/hooks/policy-engine.py`, policies `.claude/rules/policies/*.policy`,
+enforcement class map `.claude/rules/enforcement_policy.json`. Full semantics,
+deviations and honest limits: `.claude/rules/enforcement.md`.
 
-**`failcount-check.sh`** — reads `.memory/T1_episodic/_state/phase4b_failure_count.txt`; exits 2 if ≥3.
+The shipped policy binds one block rule and two notifies:
 
-**`exit-ramp-check.sh`** — Stop hook. Verifies the agent emitted the four exit-ramp components (commit bash, repomix regen, re-upload list, next-chat handoff). If any missing, returns continuation message asking for them.
+- **`tier1-eval-before-commit`** — an edit to `.claude/**`, `eval/**` or
+  `schemas/**` blocks `git commit` until `python eval/run_tier1.py` has run
+  green **as its own tool call**. (Chaining it into the commit command cannot
+  satisfy the gate: at PreToolUse the exit code does not exist yet.)
+- **`literature-lock-reminder`** on `research/**` writes — the no-p-hacking rule.
+- **`trials-log-reminder`** on `backtest/trials.log` writes — tripwire 1.
 
-**`no-secrets-in-bash.sh`** — for the Notifier; scans Bash args for `sk-*`, `xoxb-*`, private-key fragments, AWS keys; exits 2 if hit.
+Policies live under `.claude/rules/` deliberately: that path is Tier 1 sacred,
+so an agent cannot soften its own gate.
 
-### E.3 Layer 3 — `.githooks/commit-msg` (already installed today)
+### E.7 Mapping rules → enforcement layer
 
-This is the already-installed hook. Augment it to verify that the commit message includes `[mandate-H]` if the commit was authored by an agent (detected by the presence of `Co-authored-by: Claude` trailer or the absence of an interactive `git config user.email` matching a human address). This catches the case where the heredoc-required hook was somehow bypassed.
+| Rule | L1 rules | L2 hook | L3 commit-msg | L4 pre-commit | L5 eval | L6 policy |
+|---|---|---|---|---|---|---|
+| No-p-hacking | mandate P, `.claude/rules/backtest.md` | `citation-required.py` | — | magic-number gate | fixtures | `literature-lock-reminder` |
+| Sacred-harness | Core principles | `path-allowlist.py` | — | sacred-diff-block | fixtures | — |
+| trials.log write discipline | tripwire 1 | `path-allowlist.py` (Bash targets) | — | — | fixtures | `trials-log-reminder` |
+| 20-variation cap | `.claude/rules/backtest.md` | `failcount-check.sh` (⚠ jq-inert) | — | — | — | — |
+| 3-consecutive-failure | `.claude/rules/backtest.md` | `failcount-check.sh` (⚠ jq-inert) | — | — | — | — |
+| 4-hour budget | `.claude/rules/backtest.md` | `budget-check.sh` (⚠ jq-inert) | — | — | — | — |
+| No live deploy / live capital | Human-only list | `no-deploy.py` | — | — | fixtures | — |
+| Force-push / branch delete | Human-only list | `no-deploy.py` | — | — | fixtures | — |
+| Push of gated work (ALLOWED) | mandate G | `no-deploy.py` passes it | — | — | fixture | — |
+| Secrets | Human-only list | `no-secrets-in-bash.py` | — | — | fixtures | — |
+| Heredoc commit + `[mandate-H]` | mandate G/H | `commit-guard.py` | format check | — | fixtures | — |
+| Mandate L backlog | mandate L | — | — | backlog gate + sentinel | — | — |
+| Harness green before commit | escalation §13.2 | — | — | `pytest -m fast` | — | `tier1-eval-before-commit` |
+| Background-write provenance | architecture A.4 | `provenance-guard.py` | — | — | fixtures | — |
+| Archive-not-delete | Core principles | `path-allowlist.py` (`rm` is a Tier-1 write) | — | — | fixture | — |
+| Mandate F (no options-menu) | mandate F | — | — | — | — | — |
+| Mandate A (read-before-respond) | mandate A | (unenforceable; advisory) | — | — | — | — |
+| Exit-ramp completeness | mandate X | `exit-ramp-check.sh` (⚠ jq-inert) | — | — | — | — |
 
-### E.4 Layer 4 — `.githooks/pre-commit`
+⚠ = still bash, still `jq`-dependent, therefore still inert on this machine
+(BK-0005). They are advisory / observability hooks, not security gates, which
+is why they were out of scope for the 2026-09-02 port — but "wired" currently
+means less than it reads, and this table says so rather than implying
+coverage that does not exist.
 
-Add this hook today. Responsibilities:
+Mandate A remains unenforceable mechanically — no hook can detect "the model
+didn't read the file." The mitigation is structural: every coordinator's first
+action by design is `Read` of the relevant T2/T3 files, declared in the body
+prompt, so a deviation is visible in the transcript. Combined with the
+SessionStart injection, the model cannot start a session without these
+instructions in context.
 
-1. **No sacred-harness changes in agent commits.** Reads the staged diff; if any sacred file is modified AND the commit author is the agent identity, abort with exit 1.
-2. **No-p-hacking sanity gate.** Greps the staged diff for hard-coded magic numbers in strategy parameter files; if any new magic number is introduced without a matching `# CITATION: <key>` comment within 3 lines, abort with a message pointing the user (or the agent) to the citations directory.
-3. **Test-suite must pass on staged code.** Runs `pytest -m fast` (max 60s). Block on red.
-4. **Validation harness must not be modified.** Same rule as the sacred-harness pre-toolbar hook, defense-in-depth.
+### E.8 The honest limit
 
-### E.5 Mapping rules → enforcement layer
-
-| Rule | Layer 1 (CLAUDE.md) | Layer 2 (frontmatter hook) | Layer 3 (commit-msg) | Layer 4 (pre-commit) |
-|---|---|---|---|---|
-| No-p-hacking | mandate P | citation-required | — | magic-number gate |
-| Sacred-harness | mandate S | sacred-block | — | sacred-diff-block |
-| 20-variation cap | phase plan | failcount-check (counts) | — | — |
-| 3-consecutive-failure | mandate (escalate) | failcount-check | — | — |
-| 4-hour budget | phase plan | budget-check | — | — |
-| No-deploy | mandate D | no-deploy | — | — |
-| Archive-not-delete | mandate (write style) | — | — | grep for `rm -rf` of T1/T2 paths |
-| Mandate F (no options-menu) | mandate F | — | — | — |
-| Mandate A (read-before-respond) | mandate A | (cannot enforce; advisory) | — | — |
-| Heredoc commit | mandate H | commit-heredoc-required | format check | — |
-| Exit-ramp completeness | mandate X | exit-ramp-check (Stop) | — | — |
-
-Note that mandate A is unenforceable mechanically — there is no hook that can detect "the model didn't read the file." The mitigation is structural: every coordinator's first action by design is `Read` of the relevant T2/T3 files, declared in the body prompt, so a deviation is visible in the transcript. Combined with the SessionStart inject-mandates hook, the model cannot start a session without these instructions in context.
+Layers 2 and 6 are creation-time, tool-layer enforcement, and a determined
+agent can route around them: a write performed *inside* a Python script is
+invisible to a hook that only sees the command string. This is documented, not
+hidden — `.claude/rules/enforcement.md` lists the known dodges. The layering is
+what makes it defensible: a tool-layer bypass still meets layer 4 at the
+commit, and layer 4's bypass (`--no-verify`) still leaves a durable violation
+record from `post_commit_verify.sh`. Kanin reading `git log` is the last layer,
+and revert is the recovery path.
 
 ---
 
