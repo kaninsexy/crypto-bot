@@ -141,6 +141,34 @@ predates — so `schemas/` needs adding to the scope on relaunch.
 | BK-0013 | critical | S1.6/S2–S7 blocked on `SACRED_OVERRIDE_FILES` (this document). |
 | BK-0001..BK-0010 | — | seeded from `docs/open_questions.md` OPEN items. |
 
+## Commits (all on `main`, all pushed; `main == origin/main`)
+
+| sha | subject |
+|---|---|
+| `6a564ec` | `governance(S1.1): port rules layer from siamese-reconcile` (pre-existing at run start) |
+| `fd7bcf3` | `governance(S1.2-S1.6): python guard layer, eval harness, Mandate L backlog` — 70 files, +6156/−27 |
+| `e325f5d` | `fix(sync): strip CR from repomix include patterns (CRLF fail-open)` |
+| `383dd78` | `docs(megaloop): close the 2026-09-02 run` (this document) |
+
+`origin/main` moved `03b31cd -> e325f5d`: the run also pushed the 14 commits
+that were sitting unpushed at start, which is what the mandate-G boundary move
+is for. Two pushes, both `git push origin main` via
+`bash scripts/post_commit_sync.sh`. No force-push, no branch deletion, no
+non-`main` branch.
+
+### One more fail-open found and fixed mid-run
+
+`scripts/post_commit_sync.sh` read the repomix include spec through a
+`python -c` call into `readarray -t`. Windows python prints CRLF; `readarray
+-t` strips only the `\n`. Every pattern therefore carried a trailing `\r`,
+matched nothing, and the script reported "no repomix-included files touched"
+on every commit while regenerating nothing — the same shape as the jq-less
+hooks: a step that reports success while doing nothing. Found with `bash -x`
+on the first real run, not by reading the source. It mattered:
+`repomix-output.xml` is what CLAUDE.md tells every chat to read first, and the
+copy on disk predated `engine_cs.py` and the whole Phase 4.F scaffolding. It
+is now regenerated (2.57 MB, `engine_cs.py` present).
+
 ## Resuming
 
 `.memory/_inbox/human_needed.md` carries the exact relaunch line. S0–S1.5 are

@@ -71,7 +71,7 @@ Stages completed: S0 (preflight), S1.1 (rules layer, commit 6a564ec),
                   S1.4 (Mandate L backlog discipline + chained git hooks),
                   S1.5 (agent frontmatter + validators)
 Blocked:          S1.6 (architecture.md only), S2, and therefore S3–S7
-Last commit:      see docs/megaloop_status_2026-09.md
+Last commit:      e325f5d (pushed; main == origin/main)
 Harness:          pytest 446 passed / 6 skipped; eval/run_tier1.py 122/122 passed;
                   eval/run_tier1.py --self-check OK (80 fixtures go red against
                   fail-open stubs, so the gate discriminates)
