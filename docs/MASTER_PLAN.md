@@ -476,6 +476,18 @@ Kanin 2026-07-03 until a backtest survivor exists.
 > reduction), Calmar 0.33 vs 0.16, at the cost of 57 % of the return. Awaiting
 > a human decision on direction.
 >
+> **Structural constraint on this substrate, measured 2026-09-02 (I2).** The
+> confirmation stage cannot validate an annualised Sharpe below **≈ 1.1** on
+> dev (2.33 y → MinTRL floor 1.08; family null 1.19 at N=5), and the holdout
+> cannot confirm below **≈ 1.4** (1.33 y). A market-neutral perp design is a
+> 0.5–1.0 Sharpe proposition when it works. **Both ends of the pipeline are
+> calibrated for effects larger than the ones being hunted** — a design could
+> be genuinely profitable at SR 0.8, clear every discovery bar, and still be
+> unable to return `keep`, because 2.33 years cannot resolve 0.8 from 0 at
+> 95 %. §C.5's forward-test requirement of dev SR ≥ 2 raises it further. This
+> constrains EVERY future strategy on this substrate, not just Phase 4.F. Full
+> derivation: `docs/confirmation_power_2026-09.md`.
+>
 > **What the phase actually established:** the Binance UM discovery window
 > (2020-01→2022-12, and effectively 2021-12→2022-12 for anything
 > cross-sectional in open interest) is too small to test structural effects at

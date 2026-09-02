@@ -1,0 +1,45 @@
+{
+  "family": "perp-structural",
+  "sr_var": 1.0,
+  "used_fallback": true,
+  "existing_family_trials": 0,
+  "windows": [
+    {
+      "strategy": "FundingDispersionCarry",
+      "timeframe": "1d",
+      "dev_years": 2.329911019849418,
+      "dev_bars": 850,
+      "dev_mintrl_sr": 1.0776959097325596,
+      "holdout_years": 1.3333333333333333,
+      "holdout_bars": 486,
+      "holdout_mintrl_sr": 1.4246117892254018
+    },
+    {
+      "strategy": "DeleveragingReversal",
+      "timeframe": "1h",
+      "dev_years": 2.329911019849418,
+      "dev_bars": 20410,
+      "dev_mintrl_sr": 1.0776959097325596,
+      "holdout_years": 1.3333333333333333,
+      "holdout_bars": 11680,
+      "holdout_mintrl_sr": 1.4246117892254018
+    },
+    {
+      "strategy": "ListingFlow",
+      "timeframe": "1d",
+      "dev_years": 2.329911019849418,
+      "dev_bars": 850,
+      "dev_mintrl_sr": 1.0776959097325596,
+      "holdout_years": 1.3333333333333333,
+      "holdout_bars": 486,
+      "holdout_mintrl_sr": 1.4246117892254018
+    }
+  ],
+  "sr_zero_by_n": {
+    "1": 0.0,
+    "2": 0.5197553442805939,
+    "3": 0.8528044961506949,
+    "4": 1.0521228241893006,
+    "5": 1.1925940010147893
+  }
+}
